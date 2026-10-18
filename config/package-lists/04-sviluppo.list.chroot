@@ -1,0 +1,13 @@
+# Programmazione
+git
+build-essential
+python3-pip
+python3-venv
+nodejs
+npm
+default-jdk
+docker.io
+docker-compose
+curl
+wget
+htop

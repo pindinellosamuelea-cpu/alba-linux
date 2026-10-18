@@ -1,0 +1,14 @@
+# Sicurezza
+# Firewall attivo all'avvio (blocca tutte le connessioni in entrata)
+ufw
+gufw
+# Aggiornamenti di sicurezza automatici
+unattended-upgrades
+apt-listchanges
+# Isolamento delle applicazioni
+apparmor
+apparmor-utils
+apparmor-profiles-extra
+# Antivirus su richiesta (nessun processo pesante in background)
+clamav
+clamtk

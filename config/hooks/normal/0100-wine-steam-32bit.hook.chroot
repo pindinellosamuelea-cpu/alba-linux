@@ -1,0 +1,27 @@
+#!/bin/sh
+# Aggiunge l'architettura a 32 bit e installa Wine (per aprire i .exe
+# con doppio clic) e Steam (con Proton per i giochi Windows).
+set -e
+export DEBIAN_FRONTEND=noninteractive
+
+dpkg --add-architecture i386
+apt-get update
+
+# Accetta in automatico la licenza di Steam durante la costruzione
+echo "steam steam/question select I AGREE" | debconf-set-selections
+echo "steam steam/license note ''" | debconf-set-selections
+echo "steam-installer steam/question select I AGREE" | debconf-set-selections
+echo "steam-installer steam/license note ''" | debconf-set-selections
+
+# Wine: wine-binfmt registra Wine come "interprete" dei file .exe nel kernel,
+# quindi i programmi Windows partono come programmi normali.
+apt-get install -y --install-recommends \
+  wine wine64 wine32:i386 wine-binfmt winetricks fonts-wine \
+  libgl1-mesa-dri:i386 mesa-vulkan-drivers:i386 libgl1:i386 \
+  icoutils binfmt-support
+
+# Steam (contrib): installato a parte perché richiede i386
+apt-get install -y steam-installer || echo "ATTENZIONE: Steam non installato"
+
+# Abilita la registrazione automatica del formato .exe all'avvio
+update-binfmts --enable wine || true

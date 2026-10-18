@@ -1,0 +1,4 @@
+# Gaming (Steam e Wine vengono installati dall'hook 0100 perché
+# richiedono le librerie a 32 bit)
+gamemode
+mangohud

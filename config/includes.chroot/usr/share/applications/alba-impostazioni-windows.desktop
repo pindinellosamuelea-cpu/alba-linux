@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Impostazioni compatibilità Windows
+Comment=Versione di Windows simulata, grafica, audio e unità
+Exec=winecfg
+Icon=wine
+Terminal=false
+Categories=System;Settings;

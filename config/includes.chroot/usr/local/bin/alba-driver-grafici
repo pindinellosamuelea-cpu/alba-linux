@@ -1,0 +1,59 @@
+#!/bin/bash
+# Alba Linux - rileva la scheda grafica e propone il driver migliore.
+# AMD, Intel e le vecchie ATI/NVIDIA funzionano già con i driver liberi
+# inclusi. Per le NVIDIA si può installare il driver ufficiale, scelto
+# automaticamente in base al modello (anche per schede datate).
+set -u
+TITOLO="Alba · Driver grafici"
+
+GPU="$(lspci -nn | grep -Ei 'vga|3d|display' | sed -E 's/^[^ ]+ [^:]+: //')"
+[ -z "$GPU" ] && GPU="(nessuna scheda rilevata)"
+
+if ! echo "$GPU" | grep -qi nvidia; then
+  zenity --info --title="$TITOLO" --width=460 \
+    --text="<b>Scheda grafica rilevata:</b>\n$GPU\n\n✔ È già supportata dai driver inclusi in Alba, con accelerazione 3D e Vulkan.\nNon serve installare altro." 2>/dev/null
+  exit 0
+fi
+
+CONSIGLIO="$(nvidia-detect 2>/dev/null | grep -Eo '^ *nvidia-[a-z0-9-]*driver' | tr -d ' ' | head -1)"
+if [ -z "$CONSIGLIO" ]; then
+  zenity --info --title="$TITOLO" --width=460 \
+    --text="<b>Scheda grafica rilevata:</b>\n$GPU\n\nQuesta scheda NVIDIA è troppo vecchia per il driver ufficiale: continua a usare il driver libero già incluso (nouveau), che la supporta." 2>/dev/null
+  exit 0
+fi
+
+zenity --question --title="$TITOLO" --width=480 \
+  --text="<b>Scheda grafica rilevata:</b>\n$GPU\n\nFunziona già con il driver libero incluso. Per giochi e prestazioni massime puoi installare il driver ufficiale NVIDIA consigliato per il tuo modello:\n\n<b>$CONSIGLIO</b>\n\nServe una connessione a Internet e un riavvio. Consigliato dopo aver installato Alba sul computer." \
+  --ok-label="Installa" --cancel-label="Non ora" 2>/dev/null || exit 0
+
+# Secure Boot: il driver va firmato con una chiave che confermerai al riavvio
+SB=no
+mokutil --sb-state 2>/dev/null | grep -qi enabled && SB=yes
+if [ "$SB" = yes ]; then
+  PW="$(zenity --password --title="Secure Boot: scegli una password temporanea" 2>/dev/null)" || exit 0
+fi
+
+(
+  echo "# Installazione di $CONSIGLIO in corso…"
+  pkexec bash -c "
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update &&
+    apt-get install -y linux-headers-\$(uname -r) $CONSIGLIO firmware-misc-nonfree
+  "
+  echo "ESITO:$?"
+) | tee /tmp/alba-driver.log | zenity --progress --pulsate --auto-close --no-cancel \
+      --title="$TITOLO" --width=460 2>/dev/null
+
+if ! grep -q 'ESITO:0' /tmp/alba-driver.log; then
+  zenity --error --title="$TITOLO" --text="Installazione non riuscita. Controlla la connessione e riprova." 2>/dev/null
+  exit 1
+fi
+
+if [ "$SB" = yes ] && [ -f /var/lib/dkms/mok.pub ]; then
+  printf '%s\n%s\n' "$PW" "$PW" | pkexec mokutil --import /var/lib/dkms/mok.pub
+  zenity --info --title="$TITOLO" --width=460 \
+    --text="Al riavvio comparirà una schermata blu (MOK Manager):\nscegli <b>Enroll MOK</b> → <b>Continue</b> → <b>Yes</b> e inserisci la password appena scelta." 2>/dev/null
+fi
+
+zenity --question --title="$TITOLO" --text="Driver installato. Riavviare ora?" \
+  --ok-label="Riavvia" --cancel-label="Più tardi" 2>/dev/null && systemctl reboot

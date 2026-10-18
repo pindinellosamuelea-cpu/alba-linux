@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Programmi Windows installati
+Comment=Vedi e disinstalla i programmi Windows
+Exec=wine uninstaller
+Icon=wine
+Terminal=false
+Categories=System;Settings;

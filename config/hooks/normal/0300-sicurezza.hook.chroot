@@ -1,0 +1,35 @@
+#!/bin/sh
+# Impostazioni di sicurezza predefinite
+set -e
+
+# 1. Firewall attivo: blocca tutto in entrata, permette tutto in uscita
+sed -i 's/^ENABLED=.*/ENABLED=yes/' /etc/ufw/ufw.conf
+sed -i 's/^DEFAULT_INPUT_POLICY=.*/DEFAULT_INPUT_POLICY="DROP"/' /etc/default/ufw
+sed -i 's/^DEFAULT_OUTPUT_POLICY=.*/DEFAULT_OUTPUT_POLICY="ACCEPT"/' /etc/default/ufw
+sed -i 's/^DEFAULT_FORWARD_POLICY=.*/DEFAULT_FORWARD_POLICY="DROP"/' /etc/default/ufw
+systemctl enable ufw.service
+
+# 2. Aggiornamenti di sicurezza automatici ogni giorno
+cat > /etc/apt/apt.conf.d/20auto-upgrades <<'EOF'
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
+APT::Periodic::AutocleanInterval "7";
+EOF
+
+# 3. AppArmor (isolamento dei programmi) sempre attivo
+systemctl enable apparmor.service || true
+
+# 4. Firme antivirus aggiornate in automatico (servizio leggero)
+systemctl enable clamav-freshclam.service || true
+
+# 5. Nessun servizio di accesso remoto in ascolto
+systemctl disable ssh.service 2>/dev/null || true
+systemctl mask ssh.service 2>/dev/null || true
+systemctl disable cups-browsed.service 2>/dev/null || true
+
+# 6. Docker parte solo quando serve (risparmia RAM, meno superficie d'attacco)
+systemctl disable docker.service containerd.service 2>/dev/null || true
+systemctl enable docker.socket 2>/dev/null || true
+
+# 7. La sessione si blocca chiedendo la password dopo la sospensione
+#    (impostato per utente in alba-primo-avvio)

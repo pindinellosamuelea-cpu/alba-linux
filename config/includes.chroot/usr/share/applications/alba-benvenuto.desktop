@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Benvenuto in Alba
+Comment=Primi passi, installazione, driver e aspetto
+Exec=/usr/local/bin/alba-benvenuto
+Icon=alba-logo
+Terminal=false
+Categories=System;Settings;

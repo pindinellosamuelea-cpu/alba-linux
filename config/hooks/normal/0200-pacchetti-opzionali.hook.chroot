@@ -1,0 +1,48 @@
+#!/bin/sh
+# Pacchetti utili ma non indispensabili: se uno manca nei repository
+# la costruzione dell'ISO continua comunque.
+set -e
+export DEBIAN_FRONTEND=noninteractive
+
+prova() {
+  for p in "$@"; do
+    if apt-get install -y "$p"; then
+      echo "OK: $p"
+    else
+      echo "ATTENZIONE: pacchetto opzionale non disponibile: $p"
+    fi
+  done
+}
+
+# Icona di rete nel pannello (il nome è cambiato tra le versioni)
+prova network-manager-applet || true
+dpkg -s network-manager-applet >/dev/null 2>&1 || prova network-manager-gnome
+
+# Grafica: firmware per schede NVIDIA recenti (driver libero nouveau),
+# accelerazione video hardware per Intel (vecchie e nuove), AMD e NVIDIA
+prova firmware-nvidia-graphics firmware-intel-graphics \
+      intel-media-va-driver-non-free i965-va-driver mesa-va-drivers \
+      mesa-vdpau-drivers vdpau-driver-all va-driver-all
+
+# Rete: firmware MediaTek/Qualcomm recenti e driver per chiavette Wi-Fi
+# Realtek non incluse nel kernel standard. (broadcom-sta è escluso di
+# proposito: disattiva i driver Broadcom moderni già funzionanti.)
+prova firmware-mediatek firmware-qcom-soc firmware-intel-misc \
+      realtek-rtl88xxau-dkms
+
+# Miniature con l'icona vera dei file .exe, info di sistema, giochi
+prova gnome-exe-thumbnailer fastfetch lutris lightdm-gtk-greeter-settings \
+      mugshot menulibre catfish
+
+# VSCodium: editor di codice in stile VS Code, completamente open source
+if curl -fsSL https://gitlab.com/paulcarroll/vscodium-deb-rpm-repo/raw/master/pub.gpg \
+     | gpg --dearmor -o /usr/share/keyrings/vscodium-archive-keyring.gpg; then
+  echo "deb [signed-by=/usr/share/keyrings/vscodium-archive-keyring.gpg] https://download.vscodium.com/debs vscodium main" \
+    > /etc/apt/sources.list.d/vscodium.list
+  apt-get update && prova codium
+else
+  echo "ATTENZIONE: VSCodium non installato (repository non raggiungibile)"
+fi
+
+# Flathub nel negozio di app
+flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo || true

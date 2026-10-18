@@ -1,0 +1,4 @@
+#!/bin/sh
+set -e
+apt-get clean
+rm -rf /tmp/* /root/.cache 2>/dev/null || true

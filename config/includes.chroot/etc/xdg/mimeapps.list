@@ -1,0 +1,19 @@
+[Default Applications]
+application/x-ms-dos-executable=alba-programma-windows.desktop
+application/x-msdownload=alba-programma-windows.desktop
+application/vnd.microsoft.portable-executable=alba-programma-windows.desktop
+application/x-dosexec=alba-programma-windows.desktop
+application/x-msi=alba-programma-windows.desktop
+application/x-ms-shortcut=alba-programma-windows.desktop
+application/x-bat=alba-programma-windows.desktop
+x-scheme-handler/http=firefox-esr.desktop
+x-scheme-handler/https=firefox-esr.desktop
+text/html=firefox-esr.desktop
+application/pdf=atril.desktop
+inode/directory=thunar.desktop
+
+[Added Associations]
+application/x-ms-dos-executable=alba-programma-windows.desktop;
+application/x-msdownload=alba-programma-windows.desktop;
+application/vnd.microsoft.portable-executable=alba-programma-windows.desktop;
+application/x-msi=alba-programma-windows.desktop;

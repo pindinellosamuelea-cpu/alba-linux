@@ -1,0 +1,72 @@
+#!/bin/bash
+# Alba Linux - impostazioni applicate al primo accesso di ogni utente:
+# scorciatoie da tastiera in stile Windows, sfondo, blocco schermo,
+# e preparazione silenziosa della compatibilità con i programmi Windows.
+set -u
+CONF="${XDG_CONFIG_HOME:-$HOME/.config}/alba"
+FATTO="$CONF/primo-avvio-v1"
+mkdir -p "$CONF"
+
+# La compatibilità Windows si prepara in background (anche se il resto è già fatto)
+[ -f "$CONF/windows-pronto" ] || nice -n 10 /usr/local/bin/alba-prepara-windows &
+
+[ -f "$FATTO" ] && exit 0
+
+# Aspetta che il desktop sia pronto
+sleep 3
+
+imposta() {  # canale proprietà tipo valore
+  xfconf-query -c "$1" -p "$2" -n -t "$3" -s "$4" 2>/dev/null || \
+  xfconf-query -c "$1" -p "$2" -s "$4" 2>/dev/null
+}
+comando() { imposta xfce4-keyboard-shortcuts "/commands/custom/$1" string "$2"; }
+finestra() { imposta xfce4-keyboard-shortcuts "/xfwm4/custom/$1" string "$2"; }
+
+# --- Scorciatoie come su Windows ---------------------------------------
+comando "Super_L"                 "xfce4-popup-whiskermenu"      # tasto Windows = Start
+comando "Super_R"                 "xfce4-popup-whiskermenu"
+comando "<Super>e"                "thunar"                       # Esplora file
+comando "<Super>r"                "xfce4-appfinder --collapsed"  # Esegui
+comando "<Super>l"                "xflock4"                      # Blocca
+comando "<Super>i"                "xfce4-settings-manager"       # Impostazioni
+comando "<Super>a"                "xfce4-notifyd-config"         # Notifiche
+comando "<Primary><Shift>Escape"  "xfce4-taskmanager"            # Gestione attività
+comando "<Primary><Alt>Delete"    "xfce4-taskmanager"
+comando "<Super><Shift>s"         "xfce4-screenshooter -r"       # Cattura area
+comando "Print"                   "xfce4-screenshooter -f"       # Stamp
+comando "<Super>period"           "xfce4-appfinder"              # cerca app/emoji
+comando "<Primary><Alt>t"         "xfce4-terminal"               # Terminale
+finestra "<Super>d"               "show_desktop_key"             # Mostra desktop
+finestra "<Super>Left"            "tile_left_key"                # Affianca a sinistra
+finestra "<Super>Right"           "tile_right_key"               # Affianca a destra
+finestra "<Super>Up"              "maximize_window_key"          # Ingrandisci
+finestra "<Super>Down"            "hide_window_key"              # Riduci a icona
+finestra "<Alt>Tab"               "cycle_windows_key"
+finestra "<Alt>F4"                "close_window_key"
+
+# --- Sfondo Alba su tutti gli schermi ------------------------------------
+SFONDO=/usr/share/backgrounds/alba/alba.png
+for i in $(seq 1 10); do
+  PROPS="$(xfconf-query -c xfce4-desktop -l 2>/dev/null | grep -E '/last-image$')"
+  [ -n "$PROPS" ] && break
+  sleep 1
+done
+for p in $PROPS; do
+  xfconf-query -c xfce4-desktop -p "$p" -s "$SFONDO"
+  xfconf-query -c xfce4-desktop -p "${p%/last-image}/image-style" -n -t int -s 5 2>/dev/null || \
+  xfconf-query -c xfce4-desktop -p "${p%/last-image}/image-style" -s 5
+done
+
+# --- Sicurezza: blocco dello schermo ---------------------------------------
+imposta xfce4-session /shutdown/LockScreen bool true
+imposta xfce4-power-manager /xfce4-power-manager/lock-screen-suspend-hibernate bool true
+imposta xfce4-screensaver /lock/enabled bool true
+imposta xfce4-screensaver /saver/idle-activation/delay int 10
+
+# --- Thunar: comportamento familiare --------------------------------------
+imposta thunar /misc-single-click bool false
+imposta thunar /misc-thumbnail-mode string THUNAR_THUMBNAIL_MODE_ALWAYS
+imposta thunar /last-view string ThunarIconView
+imposta thunar /misc-middle-click-in-tab bool true
+
+touch "$FATTO"

@@ -1,0 +1,36 @@
+#!/bin/bash
+# Prepara l'ambiente Windows (Wine) dell'utente una sola volta.
+# Viene lanciato in background al primo accesso, così il primo .exe
+# si apre subito. Se è già in corso, chi lo richiama aspetta la fine.
+set -u
+CONF="${XDG_CONFIG_HOME:-$HOME/.config}/alba"
+PRONTO="$CONF/windows-pronto"
+LOCK="$CONF/windows.lock"
+LOG="${XDG_CACHE_HOME:-$HOME/.cache}/alba/wine.log"
+export WINEPREFIX="${WINEPREFIX:-$HOME/.wine}"
+export WINEDEBUG=-all
+mkdir -p "$CONF" "$(dirname "$LOG")"
+
+exec 9>"$LOCK"
+flock 9
+[ -f "$PRONTO" ] && exit 0
+
+{
+  echo "== Preparazione ambiente Windows $(date)"
+  wineboot -i
+  wineserver -w
+
+  # Librerie Visual C++ incluse nell'ISO
+  for f in /usr/share/alba/windows/vc_redist.x64.exe /usr/share/alba/windows/vc_redist.x86.exe; do
+    [ -f "$f" ] && wine "$f" /install /quiet /norestart
+  done
+  wineserver -w
+
+  # DirectX tramite Vulkan (DXVK), se presente
+  for s in dxvk-setup setup_dxvk; do
+    if command -v "$s" >/dev/null 2>&1; then "$s" install && break; fi
+  done
+  wineserver -w
+} >>"$LOG" 2>&1
+
+touch "$PRONTO"

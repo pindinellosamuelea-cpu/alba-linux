@@ -1,0 +1,44 @@
+#!/bin/sh
+# Integra nell'ISO i componenti che Wine di solito scarica alla prima
+# esecuzione, così i .exe funzionano subito senza scaricare nulla:
+#  - Wine Mono  -> programmi .NET Framework
+#  - Wine Gecko -> finestre con contenuti web (installer, guide)
+#  - Visual C++ Redistributable 2015-2022 -> moltissimi programmi e giochi
+#  - DXVK -> DirectX 9/10/11 tradotto in Vulkan (giochi più fluidi)
+set -e
+export DEBIAN_FRONTEND=noninteractive
+
+VER="$(wine --version 2>/dev/null | sed -E 's/^wine-([0-9]+).*/\1/')"
+echo "Versione di Wine: ${VER:-sconosciuta}"
+
+# Versioni dei componenti richieste da ciascuna versione di Wine
+case "$VER" in
+  9)  MONO=8.1.0;  GECKO=2.47.4 ;;
+  10) MONO=9.4.0;  GECKO=2.47.4 ;;
+  11) MONO=10.3.0; GECKO=2.47.4 ;;
+  *)  MONO=9.4.0;  GECKO=2.47.4 ;;
+esac
+
+scarica() {  # url destinazione
+  curl -fL --retry 3 -o "$2" "$1" || { echo "ATTENZIONE: impossibile scaricare $1"; return 1; }
+}
+
+mkdir -p /usr/share/wine/mono /usr/share/wine/gecko /usr/share/alba/windows
+cd /tmp
+
+if scarica "https://dl.winehq.org/wine/wine-mono/$MONO/wine-mono-$MONO-x86.tar.xz" mono.tar.xz; then
+  tar -xJf mono.tar.xz -C /usr/share/wine/mono/ && rm -f mono.tar.xz
+fi
+for a in x86 x86_64; do
+  if scarica "https://dl.winehq.org/wine/wine-gecko/$GECKO/wine-gecko-$GECKO-$a.tar.xz" gecko.tar.xz; then
+    tar -xJf gecko.tar.xz -C /usr/share/wine/gecko/ && rm -f gecko.tar.xz
+  fi
+done
+
+# Visual C++ (installati in silenzio nell'ambiente Windows di ogni utente
+# al primo accesso, da alba-primo-avvio)
+scarica "https://aka.ms/vs/17/release/vc_redist.x64.exe" /usr/share/alba/windows/vc_redist.x64.exe || true
+scarica "https://aka.ms/vs/17/release/vc_redist.x86.exe" /usr/share/alba/windows/vc_redist.x86.exe || true
+
+# DXVK dal repository Debian, se disponibile
+apt-get install -y dxvk || echo "ATTENZIONE: DXVK non disponibile nei repository"

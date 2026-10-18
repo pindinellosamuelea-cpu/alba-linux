@@ -1,0 +1,40 @@
+#!/bin/sh
+# Tema di avvio, sfondo predefinito, RAM compressa
+set -e
+
+# Logo Alba nella schermata di avvio
+if [ -d /usr/share/plymouth/themes/spinner ]; then
+  cp /usr/share/alba/logo-avvio.png /usr/share/plymouth/themes/spinner/watermark.png
+  plymouth-set-default-theme spinner || true
+fi
+
+# Sfondo predefinito di XFCE sostituito con quello di Alba
+# (vale anche per schermi e utenti nuovi)
+for f in /usr/share/backgrounds/xfce/xfce-shapes.svg \
+         /usr/share/backgrounds/xfce/xfce-x.svg \
+         /usr/share/backgrounds/xfce/xfce-verticals.png; do
+  [ -e "$f" ] && ln -sf /usr/share/backgrounds/alba/alba.png "$f"
+done
+
+# zram: usa fino al 50% della RAM come memoria compressa
+if [ -f /etc/default/zramswap ]; then
+  sed -i 's/^#\?PERCENT=.*/PERCENT=50/' /etc/default/zramswap
+  sed -i 's/^#\?ALGO=.*/ALGO=zstd/' /etc/default/zramswap
+fi
+
+# Nome del sistema
+cat > /etc/alba-release <<'EOF'
+NAME="Alba Linux"
+VERSION="1.0"
+BASE="Debian 13 trixie"
+EOF
+
+# Associazioni file (.exe -> Alba) valide anche per XFCE
+cp /etc/xdg/mimeapps.list /etc/xdg/xfce-mimeapps.list
+
+# Script eseguibili
+chmod 755 /usr/local/bin/alba-* 2>/dev/null || true
+
+update-desktop-database /usr/share/applications || true
+update-mime-database /usr/share/mime || true
+gtk-update-icon-cache -f /usr/share/icons/hicolor || true

@@ -1,12 +1,14 @@
 # Costruisce l'ISO di Alba Linux sui server di GitHub: non serve un PC Linux.
-# Avvio: scheda "Actions" del repository -> "Costruisci ISO Alba" -> "Run workflow".
+# Parte da sola a ogni modifica del progetto. Avvio manuale: scheda "Actions" del repository -> "Costruisci ISO Alba" -> "Run workflow".
 # Al termine (circa 1 ora) l'ISO si scarica dalla sezione "Artifacts".
 name: Costruisci ISO Alba
 
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     tags: ["v*"]
+    paths-ignore: ["README.md"]
 
 jobs:
   iso:

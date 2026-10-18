@@ -13,6 +13,9 @@ Basata su **Debian 13 "trixie"** (la base più stabile e compatibile), con deskt
 | **Uso quotidiano** | Firefox, LibreOffice, VLC, visualizzatore immagini e PDF, scanner, stampanti, negozio di app (Flathub). |
 | **Programmazione** | VSCodium, Git, Python, Node.js, Java, compilatori C/C++, Docker. |
 | **Gaming** | Steam con Proton, Lutris, GameMode, MangoHud, driver Vulkan a 32 e 64 bit. |
+| **Editing** | Kdenlive (video), Krita e GIMP (immagini), Inkscape (grafica vettoriale), Blender (3D), Darktable (foto), Audacity (audio), OBS (registrazione e dirette), con accelerazione OpenCL/Vulkan sulla scheda grafica. |
+| **Scheda grafica dedicata** | Nei portatili con due schede, giochi, `.exe` ed editor usano in automatico quella dedicata. Per qualsiasi altro file: tasto destro → *Avvia con scheda grafica dedicata*. |
+| **Lingue** | Italiano predefinito, tutte le altre lingue disponibili: si scelgono dalla schermata di accesso o durante l'installazione. |
 | **PC poco potenti** | XFCE leggero, RAM compressa (zram), servizi pesanti avviati solo quando servono. |
 | **Grafica** | AMD, Intel e NVIDIA (anche modelli vecchi) funzionano subito con i driver liberi. Per NVIDIA, *Driver grafici* sceglie e installa il driver ufficiale adatto al modello. Voce di avvio "grafica sicura" per i casi difficili. |
 | **Rete e Bluetooth** | Firmware per Wi‑Fi interno e chiavette USB (Intel, Realtek, Broadcom, Atheros/Qualcomm, MediaTek, Marvell…), Ethernet, modem USB, Bluetooth. |
@@ -51,6 +54,7 @@ Puoi provarla anche in una macchina virtuale (VirtualBox, VMware, GNOME Boxes) c
 ## Limiti da conoscere (in modo onesto)
 - **Processori:** PC con processore x86 a 64 bit (Intel/AMD, praticamente tutti dal 2008 in poi). Debian 13 non supporta più i vecchi processori solo a 32 bit; Mac con chip Apple e dispositivi ARM richiedono una versione diversa.
 - **Programmi .exe:** la grande maggioranza funziona, ma non il 100%. Non funzionano driver Windows, alcuni antivirus/anti‑cheat a livello di kernel e qualche software molto recente (es. alcune versioni di Adobe). Per i giochi usa Steam con Proton.
+- **Editing Windows:** le app di editing Windows più leggere funzionano, ma Adobe Premiere, After Effects e Photoshop recenti funzionano male o per niente, e le accelerazioni come CUDA nei programmi Windows sono limitate. Per questo Alba include editor nativi equivalenti. Per l'editing video professionale c'è anche **DaVinci Resolve**, che ha una versione nativa Linux gratuita (si scarica dal sito di Blackmagic Design, la licenza non permette di includerlo nell'ISO).
 - **NVIDIA recenti:** il driver ufficiale si installa con un clic dopo l'installazione (serve Internet). Con Secure Boot attivo ti verrà chiesto di confermare una chiave al riavvio.
 - **Zero bug garantiti non esistono** in nessun sistema operativo: Alba usa la versione stabile di Debian, la più collaudata, proprio per ridurli al minimo.
 

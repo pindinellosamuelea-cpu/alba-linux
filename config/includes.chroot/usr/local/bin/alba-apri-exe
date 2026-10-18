@@ -78,6 +78,6 @@ fi
 # --- 3. Avvio del programma ----------------------------------------------
 cd "$(dirname "$FILE")" || exit 1
 case "${NOME,,}" in
-  *.bat|*.cmd) exec wine cmd /c "$FILE" >>"$LOG" 2>&1 ;;
-  *)           exec wine start /unix "$FILE" >>"$LOG" 2>&1 ;;
+  *.bat|*.cmd) exec /usr/local/bin/alba-gpu-dedicata wine cmd /c "$FILE" >>"$LOG" 2>&1 ;;
+  *)           exec /usr/local/bin/alba-gpu-dedicata wine start /unix "$FILE" >>"$LOG" 2>&1 ;;
 esac

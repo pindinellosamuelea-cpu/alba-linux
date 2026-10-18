@@ -10,6 +10,11 @@ on:
     tags: ["v*"]
     paths-ignore: ["README.md"]
 
+# Se arriva una modifica nuova, la costruzione vecchia si ferma
+concurrency:
+  group: costruisci-iso
+  cancel-in-progress: true
+
 jobs:
   iso:
     runs-on: ubuntu-latest

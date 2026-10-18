@@ -1,0 +1,18 @@
+# Editing con accelerazione della scheda grafica, app native Linux
+kdenlive
+krita
+gimp
+inkscape
+blender
+audacity
+darktable
+obs-studio
+ffmpeg
+
+# Calcolo sulla scheda grafica (OpenCL) per editor e rendering
+ocl-icd-libopencl1
+mesa-opencl-icd
+clinfo
+
+# Passaggio automatico alla scheda grafica dedicata nei portatili
+switcheroo-control

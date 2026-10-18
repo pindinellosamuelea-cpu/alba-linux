@@ -29,6 +29,20 @@ VERSION="1.0"
 BASE="Debian 13 trixie"
 EOF
 
+# Giochi ed editor partono sulla scheda grafica dedicata (se presente)
+for app in steam lutris net.lutris.Lutris blender org.kde.kdenlive kdenlive \
+           org.kde.krita krita gimp org.gimp.GIMP obs com.obsproject.Studio \
+           org.darktable.darktable darktable org.shotcut.Shotcut shotcut; do
+  f="/usr/share/applications/$app.desktop"
+  [ -f "$f" ] || continue
+  grep -q 'alba-gpu-dedicata' "$f" && continue
+  sed -i -E 's#^Exec=(.*)$#Exec=/usr/local/bin/alba-gpu-dedicata \1#' "$f"
+  # la voce PrefersNonDefaultGPU è letta anche da altri ambienti desktop
+  grep -q '^PrefersNonDefaultGPU' "$f" || \
+    sed -i '0,/^\[Desktop Entry\]/s//[Desktop Entry]\nPrefersNonDefaultGPU=true/' "$f"
+done
+systemctl enable switcheroo-control.service 2>/dev/null || true
+
 # Associazioni file (.exe -> Alba) valide anche per XFCE
 cp /etc/xdg/mimeapps.list /etc/xdg/xfce-mimeapps.list
 

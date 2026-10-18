@@ -1,0 +1,34 @@
+# Tutte le lingue del mondo. L'italiano è predefinito; le altre si
+# scelgono dalla schermata di accesso (icona lingua) o nell'installazione.
+locales-all
+firefox-esr-l10n-all
+
+# LibreOffice nelle lingue più diffuse (interfaccia + correttore)
+libreoffice-l10n-it
+libreoffice-l10n-en-gb
+libreoffice-l10n-de
+libreoffice-l10n-fr
+libreoffice-l10n-es
+libreoffice-l10n-pt
+libreoffice-l10n-pt-br
+libreoffice-l10n-ru
+libreoffice-l10n-pl
+libreoffice-l10n-nl
+libreoffice-l10n-ro
+libreoffice-l10n-uk
+libreoffice-l10n-zh-cn
+libreoffice-l10n-ja
+libreoffice-l10n-ar
+libreoffice-l10n-tr
+hunspell-it
+hunspell-en-us
+hunspell-de-ch
+hunspell-de-de
+hunspell-fr
+hunspell-es
+hunspell-pt-pt
+hunspell-pt-br
+
+# Caratteri per lingue asiatiche, arabo, ebraico, indiano…
+fonts-noto-cjk
+fonts-noto-extra

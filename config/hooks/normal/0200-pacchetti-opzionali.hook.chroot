@@ -30,6 +30,11 @@ prova firmware-nvidia-graphics firmware-intel-graphics \
 prova firmware-mediatek firmware-qcom-soc firmware-intel-misc \
       realtek-rtl88xxau-dkms
 
+# Editing: OpenCL per Intel, componenti extra per app Windows di grafica
+# (autenticazione di rete usata da alcuni installer, codec, DirectX 12)
+prova intel-opencl-icd winbind gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
+      gstreamer1.0-libav libvkd3d1 libvkd3d-shader1 shotcut
+
 # Miniature con l'icona vera dei file .exe, info di sistema, giochi
 prova gnome-exe-thumbnailer fastfetch lutris lightdm-gtk-greeter-settings \
       mugshot menulibre catfish

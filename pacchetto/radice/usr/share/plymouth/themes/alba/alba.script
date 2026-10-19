@@ -25,8 +25,11 @@ for (i = 0; i < 5; i++) {
 }
 
 tempo = 0;
+logo.sprite.SetOpacity(0);
 fun aggiorna() {
   tempo++;
+  # il logo compare dolcemente (circa mezzo secondo)
+  if (tempo <= 25) logo.sprite.SetOpacity(tempo / 25);
   for (i = 0; i < 5; i++) {
     o = 0.5 + 0.5 * Math.Sin(tempo * 0.09 - i * 0.8);
     punti[i].SetOpacity(0.2 + 0.8 * o * o);

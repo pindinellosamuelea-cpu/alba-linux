@@ -1,0 +1,5 @@
+# Alba Linux: passaggio morbido dalla schermata di accesso al desktop
+# (parte prima di tutto il resto della sessione; se manca non succede niente)
+if [ -x /usr/bin/alba-transizione ]; then
+  /usr/bin/alba-transizione >/dev/null 2>&1 &
+fi

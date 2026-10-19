@@ -3,6 +3,9 @@
 
   alba-rapido wifi        reti disponibili, collegati con un clic
   alba-rapido bluetooth   dispositivi, cerca e collega
+  alba-rapido audio       volume, casse/cuffie e microfono
+  alba-rapido batteria    carica, modalità di alimentazione, luminosità
+  alba-rapido controlli   impostazioni rapide (tutto insieme, Super+A)
   alba-rapido notifiche   calendario, notifiche, Non disturbare
 """
 import configparser
@@ -59,11 +62,17 @@ calendar { border: none; background: none; }
 .cursore-rapido highlight { background-color: #ff8a4c; border-radius: 3px; }
 .cursore-rapido slider { min-width: 18px; min-height: 18px; border-radius: 9px; background-color: #ffffff;
                          border: 1px solid alpha(#000000, 0.15); }
+.batteria-grande { font-size: 24pt; font-weight: 800; }
+.modo-energia { border-radius: 10px; padding: 8px 4px; border: none; box-shadow: none; background-image: none;
+                background-color: alpha(@theme_fg_color, 0.08); }
+.modo-energia:hover { background-color: alpha(@theme_fg_color, 0.14); }
+.modo-energia:checked { background-color: #ff8a4c; color: #ffffff; }
+.modo-energia:checked image, .modo-energia:checked label { color: #ffffff; }
 .voce-audio:checked { background-color: alpha(#ff8a4c, 0.18); }
 calendar:selected { background-color: #ff8a4c; color: #ffffff; border-radius: 6px; }
 """
 
-SEGNALE = lambda s: ("excellent" if s > 75 else "good" if s > 50 else "ok" if s > 25 else "weak")
+TACCHE = lambda s: 4 if s > 75 else 3 if s > 50 else 2 if s > 25 else 1
 
 
 class Rapido(Gtk.Window):
@@ -224,7 +233,7 @@ class Rapido(Gtk.Window):
         if attiva:
             b.get_style_context().add_class("voce-attiva")
         riga = Gtk.Box(spacing=10)
-        riga.pack_start(Gtk.Image.new_from_icon_name(f"network-wireless-signal-{SEGNALE(segnale)}-symbolic",
+        riga.pack_start(Gtk.Image.new_from_icon_name(f"alba-wifi-{TACCHE(segnale)}-symbolic",
                                                      Gtk.IconSize.LARGE_TOOLBAR), False, False, 0)
         testi = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         nome = etichetta(ssid)
@@ -423,9 +432,9 @@ class Rapido(Gtk.Window):
 
         griglia = Gtk.Grid(column_spacing=12, row_spacing=12, column_homogeneous=True)
         self.tessere = {}
-        voci = [("wifi", "Wi-Fi", "network-wireless-signal-excellent-symbolic", True),
-                ("bluetooth", "Bluetooth", "bluetooth-active-symbolic", True),
-                ("risparmio", "Risparmio", "battery-level-50-symbolic", False),
+        voci = [("wifi", "Wi-Fi", "alba-wifi-4-symbolic", True),
+                ("bluetooth", "Bluetooth", "alba-bluetooth-symbolic", True),
+                ("risparmio", "Risparmio", "alba-batteria-50-symbolic", False),
                 ("dnd", "Non disturbare", "alba-campanella-spenta-symbolic", False),
                 ("aereo", "Modalità aereo", "airplane-mode-symbolic", False),
                 ("scuro", "Tema scuro", "weather-clear-night-symbolic", False)]
@@ -436,7 +445,7 @@ class Rapido(Gtk.Window):
         self.cursori = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         principale.pack_start(self.cursori, False, False, 0)
         self.riga_luce = self._riga_cursore("display-brightness-symbolic", self._luce, None)
-        self.riga_volume = self._riga_cursore("audio-volume-high-symbolic", self._volume, lambda: self._apri("audio"),
+        self.riga_volume = self._riga_cursore("alba-volume-3-symbolic", self._volume, lambda: self._apri("audio"),
                                               clic_icona=self._muto)
         self.cursori.pack_start(self.riga_luce[0], False, False, 0)
         self.cursori.pack_start(self.riga_volume[0], False, False, 0)
@@ -571,14 +580,11 @@ class Rapido(Gtk.Window):
         if st.get("volume") is not None:
             cur.imposta(st["volume"])
             v = st["volume"]
-            livello = "muted" if st.get("muto") or v == 0 else "low" if v < 34 else "medium" if v < 67 else "high"
-            img.set_from_icon_name(f"audio-volume-{livello}-symbolic", Gtk.IconSize.LARGE_TOOLBAR)
+            img.set_from_icon_name(icona_volume(v, st.get("muto")), Gtk.IconSize.LARGE_TOOLBAR)
         bat = st.get("batteria")
         if bat:
             livello, stato, tempo = bat
-            carica = "-charging" if stato in ("Charging", "Full") else ""
-            icona = f"battery-level-{min(100, round(livello / 10) * 10)}{carica}-symbolic"
-            self.icona_batteria.set_from_icon_name(icona, Gtk.IconSize.LARGE_TOOLBAR)
+            self.icona_batteria.set_from_icon_name(icona_batteria(livello, stato), Gtk.IconSize.LARGE_TOOLBAR)
             extra = " · in carica" if stato == "Charging" else (f" · {tempo}" if tempo else "")
             self.testo_batteria.set_text(f"{livello}%{extra}")
         else:
@@ -609,11 +615,17 @@ class Rapido(Gtk.Window):
         esegui(["pactl", "set-sink-mute", "@DEFAULT_SINK@", "0"])
         esegui(["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{v}%"])
         esegui(["canberra-gtk-play", "-i", "audio-volume-change"])
-        self._carica_controlli()
+        self._aggiorna_stato()
 
     def _muto(self):
         esegui(["pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle"])
-        self._carica_controlli()
+        self._aggiorna_stato()
+
+    def _aggiorna_stato(self):
+        if hasattr(self, "tessere"):
+            self._carica_controlli()
+        elif hasattr(self, "volume_solo"):
+            self._leggi_volume()
 
     def _apri(self, pagina):
         if pagina not in self.sottopagine:
@@ -636,6 +648,11 @@ class Rapido(Gtk.Window):
 
     def costruisci_audio(self):
         self.intestazione("Audio")
+        if not self.indietro:   # aperto dall'icona del volume: tutto qui, senza sottomenu
+            riga, cur, img = self._riga_cursore("alba-volume-3-symbolic", self._volume, None, clic_icona=self._muto)
+            self.volume_solo = (cur, img)
+            self.contenitore.pack_start(riga, False, False, 0)
+            self._leggi_volume()
         self.contenitore.pack_start(etichetta("RIPRODUCI DA", "etichetta-sezione"), False, False, 0)
         uscite = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         self.contenitore.pack_start(uscite, False, False, 0)
@@ -669,6 +686,133 @@ class Rapido(Gtk.Window):
                     box.pack_start(b, False, False, 0)
                 box.show_all()
         riempi()
+
+    def _leggi_volume(self):
+        def leggi():
+            if DEMO:
+                return 45, False
+            v = re.search(r"(\d+)%", uscita(["pactl", "get-sink-volume", "@DEFAULT_SINK@"])) if esiste("pactl") else None
+            return (int(v.group(1)) if v else None), "yes" in uscita(["pactl", "get-sink-mute", "@DEFAULT_SINK@"])
+
+        def mostra(r):
+            v, muto = r or (None, False)
+            cur, img = self.volume_solo
+            if v is None:
+                cur.set_sensitive(False)
+                return
+            cur.imposta(v)
+            img.set_from_icon_name(icona_volume(v, muto), Gtk.IconSize.LARGE_TOOLBAR)
+        in_sottofondo(leggi, mostra)
+
+    # --------------------------------------------------------------- Batteria
+    MODI = [("power-saver", "Risparmio", "power-profile-power-saver-symbolic"),
+            ("balanced", "Bilanciata", "power-profile-balanced-symbolic"),
+            ("performance", "Prestazioni", "power-profile-performance-symbolic")]
+
+    def costruisci_batteria(self):
+        alto = Gtk.Box(spacing=14)
+        self.bat_icona = Gtk.Image.new_from_icon_name("alba-batteria-100-symbolic", Gtk.IconSize.DIALOG)
+        self.bat_icona.set_pixel_size(52)
+        alto.pack_start(self.bat_icona, False, False, 0)
+        testi = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        testi.set_valign(Gtk.Align.CENTER)
+        self.bat_percento = etichetta("", "batteria-grande")
+        self.bat_stato = etichetta("", "piccolo")
+        testi.pack_start(self.bat_percento, False, False, 0)
+        testi.pack_start(self.bat_stato, False, False, 0)
+        alto.pack_start(testi, True, True, 0)
+        self.contenitore.pack_start(alto, False, False, 0)
+
+        self.contenitore.pack_start(etichetta("MODALITÀ DI ALIMENTAZIONE", "etichetta-sezione"), False, False, 4)
+        modi = Gtk.Box(spacing=8, homogeneous=True)
+        self.bottoni_modo = {}
+        for chiave, nome, icona in self.MODI:
+            b = Gtk.ToggleButton()
+            b.get_style_context().add_class("modo-energia")
+            box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+            box.pack_start(Gtk.Image.new_from_icon_name(icona, Gtk.IconSize.LARGE_TOOLBAR), False, False, 0)
+            box.pack_start(etichetta(nome, "nome-tessera", xalign=0.5), False, False, 0)
+            b.add(box)
+            b.connect("toggled", lambda w, k=chiave: self._scegli_modo(k, w))
+            modi.pack_start(b, True, True, 0)
+            self.bottoni_modo[chiave] = b
+        self.contenitore.pack_start(modi, False, False, 0)
+        self.nota_modo = etichetta("", "piccolo", wrap=True)
+        self.contenitore.pack_start(self.nota_modo, False, False, 0)
+
+        self.riga_luce = self._riga_cursore("display-brightness-symbolic", self._luce, None)
+        self.riga_luce[0].set_no_show_all(True)
+        self.contenitore.pack_start(self.riga_luce[0], False, False, 4)
+        self.piede("Impostazioni batteria e consumi…", "batteria")
+        self._muto_agg = False
+        self._carica_batteria()
+        GLib.timeout_add_seconds(10, lambda: (self._carica_batteria(), True)[1])
+
+    def _carica_batteria(self):
+        def leggi():
+            st = {"batteria": A.dati_batteria()}
+            if DEMO:
+                st.update(modo="balanced", modi=["power-saver", "balanced", "performance"], luce=70)
+                return st
+            st["modo"] = uscita(["powerprofilesctl", "get"]) if esiste("powerprofilesctl") else ""
+            elenco = uscita(["powerprofilesctl", "list"]) if esiste("powerprofilesctl") else ""
+            st["modi"] = [k for k, *_ in self.MODI if re.search(rf"^\s*\*?\s*{k}:", elenco, re.M)]
+            b = uscita(["brightnessctl", "-m", "-c", "backlight"]) if esiste("brightnessctl") else ""
+            try:
+                st["luce"] = int(b.split(",")[3].rstrip("%"))
+            except (IndexError, ValueError):
+                st["luce"] = None
+            return st
+        in_sottofondo(leggi, self._mostra_batteria)
+
+    def _mostra_batteria(self, st):
+        if not st:
+            return
+        d = st.get("batteria")
+        if d:
+            self.bat_icona.set_from_icon_name(icona_batteria(d["livello"], d["stato"]), Gtk.IconSize.DIALOG)
+            self.bat_percento.set_text(f"{d['livello']}%")
+            if d["stato"] == "Charging":
+                testo = "In carica" + (f" · {d['tempo']}" if d.get("tempo") else "")
+            elif d["stato"] in ("Full", "Not charging"):
+                testo = "Carica completa, collegato alla corrente"
+            else:
+                testo = d.get("tempo") or "In uso a batteria"
+            self.bat_stato.set_text(testo)
+        else:
+            self.bat_icona.set_from_icon_name("ac-adapter-symbolic", Gtk.IconSize.DIALOG)
+            self.bat_percento.set_text("Alimentazione")
+            self.bat_stato.set_text("Collegato alla corrente")
+        self._muto_agg = True
+        for chiave, b in self.bottoni_modo.items():
+            b.set_sensitive(chiave in st.get("modi", []))
+            b.set_active(chiave == st.get("modo"))
+        self._muto_agg = False
+        if not st.get("modi"):
+            self.nota_modo.set_text("Le modalità non sono disponibili su questo computer.")
+            self.nota_modo.show()
+        else:
+            self.nota_modo.set_text({"power-saver": "La batteria dura di più: schermo e processore consumano meno.",
+                                     "balanced": "Il giusto equilibrio fra durata e velocità.",
+                                     "performance": "Massima velocità per giochi e montaggio video. Consuma di più."
+                                     }.get(st.get("modo"), ""))
+        riga, cur, _ = self.riga_luce
+        if st.get("luce") is not None:
+            riga.show_all()
+            cur.imposta(st["luce"])
+        self.resize(1, 1)
+        GLib.idle_add(self._posiziona)
+
+    def _scegli_modo(self, chiave, bottone):
+        if self._muto_agg:
+            return
+        if not bottone.get_active():   # non si può "spegnere" la modalità scelta
+            self._muto_agg = True
+            bottone.set_active(True)
+            self._muto_agg = False
+            return
+        esegui(["powerprofilesctl", "set", chiave])
+        self._carica_batteria()
 
     # --------------------------------------------------------------- Notifiche
     def costruisci_notifiche(self):
@@ -739,6 +883,17 @@ class Rapido(Gtk.Window):
         self.notifiche.show_all()
         self.resize(1, 1)
         GLib.idle_add(self._posiziona)
+
+
+def icona_volume(v, muto=False):
+    if muto:
+        return "alba-volume-muto-symbolic"
+    return f"alba-volume-{0 if v == 0 else 1 if v < 34 else 2 if v < 67 else 3}-symbolic"
+
+
+def icona_batteria(livello, stato):
+    carica = "-carica" if stato in ("Charging", "Full") else ""
+    return f"alba-batteria-{min(100, int(round(livello / 10.0)) * 10)}{carica}-symbolic"
 
 
 # ---------------------------------------------------------------------------
@@ -818,23 +973,26 @@ def cancella_notifiche():
 
 
 if __name__ == "__main__":
-    modo = sys.argv[1] if len(sys.argv) > 1 else "wifi"
-    if modo in ("wifi", "bluetooth", "audio", "batteria"):
-        modo = "controlli"   # come su Windows 11: un solo pannello per tutto
-    if modo not in ("controlli", "notifiche"):
+    modo = sys.argv[1] if len(sys.argv) > 1 else "controlli"
+    # Ogni icona apre il SUO menu (Wi-Fi -> reti, batteria -> batteria...);
+    # le impostazioni rapide con tutto insieme restano su Super+A.
+    if modo not in ("wifi", "bluetooth", "audio", "batteria", "controlli", "notifiche"):
         print(__doc__)
         sys.exit(1)
-    # Un solo menu alla volta: se è già aperto, il secondo clic lo chiude
+    # Un solo menu alla volta: un secondo clic sulla stessa icona lo chiude,
+    # un clic su un'altra icona apre subito l'altro menu.
     blocco = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "alba-rapido.pid")
     try:
-        vecchio = int(open(blocco).read())
+        parti = open(blocco).read().split()
+        vecchio, vecchio_modo = int(parti[0]), (parti[1] if len(parti) > 1 else "")
         if b"alba-rapido" in open(f"/proc/{vecchio}/cmdline", "rb").read():
             os.kill(vecchio, 15)
             os.remove(blocco)
-            sys.exit(0)
-    except (OSError, ValueError):
+            if vecchio_modo == modo:
+                sys.exit(0)
+    except (OSError, ValueError, IndexError):
         pass
-    open(blocco, "w").write(str(os.getpid()))
+    open(blocco, "w").write(f"{os.getpid()} {modo}")
     try:
         finestra = Rapido(modo)
         finestra.connect("destroy", Gtk.main_quit)

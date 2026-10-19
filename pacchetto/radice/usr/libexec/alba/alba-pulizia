@@ -1,0 +1,61 @@
+#!/bin/bash
+# Alba Linux - pulizia dopo ogni aggiornamento: toglie i residui delle
+# versioni vecchie (registri di errori già risolti, cache vecchie, pacchetti
+# non più usati) così la nuova versione riparte pulita.
+#
+#   alba-pulizia sistema   (root, dall'aggiornamento) registri e file vecchi
+#   alba-pulizia apt       (root, poco dopo) pacchetti inutili e download vecchi
+#   alba-pulizia utente    (all'accesso, se c'è stato un aggiornamento)
+set -u
+STATO=/var/lib/alba
+VERSIONE="$(cat /usr/share/alba/versione 2>/dev/null || echo 0)"
+
+case "${1:-}" in
+  sistema)
+    mkdir -p "$STATO"
+    # errori e riparazioni delle versioni vecchie: si riparte da zero
+    for f in riparazioni.log diagnosi.json driver-auto.log extra.log; do
+      [ -f "$STATO/$f" ] && : > "$STATO/$f"
+    done
+    rm -f "$STATO"/diagnosi-fallita-* 2>/dev/null
+    # collegamenti a comandi che non esistono più
+    for l in /usr/local/bin/alba-*; do
+      [ -L "$l" ] && [ ! -e "$l" ] && rm -f "$l"
+    done
+    # temi e icone delle versioni vecchie non più usati (non di altri pacchetti)
+    for d in /usr/share/icons/WhiteSur /usr/share/icons/WhiteSur-dark /usr/share/icons/WhiteSur-light; do
+      [ -d "$d" ] && ! dpkg -S "$d" >/dev/null 2>&1 && rm -rf "$d"
+    done
+    # registro di sistema: niente vecchi errori nei riepiloghi
+    journalctl --rotate >/dev/null 2>&1 && journalctl --vacuum-time=1s >/dev/null 2>&1
+    date +%s > "$STATO/aggiornato-il"
+    echo "$VERSIONE" > "$STATO/pulizia-versione"
+    ;;
+  apt)
+    # aspetta che l'aggiornamento sia finito davvero
+    for _ in $(seq 1 120); do
+      fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || break
+      sleep 5
+    done
+    DEBIAN_FRONTEND=noninteractive apt-get -y -q autoremove --purge >/dev/null 2>&1
+    apt-get -q clean >/dev/null 2>&1
+    ;;
+  utente)
+    C="${XDG_CONFIG_HOME:-$HOME/.config}/alba"
+    K="${XDG_CACHE_HOME:-$HOME/.cache}"
+    mkdir -p "$C"
+    [ "$(cat "$C/pulizia-versione" 2>/dev/null)" = "$(cat "$STATO/pulizia-versione" 2>/dev/null)" ] && exit 0
+    # avvisi già mostrati per problemi vecchi
+    rm -f "$C/riparazioni-viste" "$C/avvisi-problemi" "$C/ultimo-avviso"
+    # cache che possono tenere grafica o menu della versione vecchia
+    rm -rf "$K/alba" "$K/sessions" "$K/xfce4/desktop" "$K/icon-cache.kcache" \
+           "$K/xfce4/xfce4-appfinder" "$K/menus" 2>/dev/null
+    rm -f "$K"/xfce4/panel/*.cache 2>/dev/null
+    [ -f "$HOME/.xsession-errors" ] && : > "$HOME/.xsession-errors"
+    [ -f "$HOME/.xsession-errors.old" ] && rm -f "$HOME/.xsession-errors.old"
+    cat "$STATO/pulizia-versione" > "$C/pulizia-versione" 2>/dev/null
+    ;;
+  *)
+    echo "Uso: alba-pulizia sistema|apt|utente"; exit 1 ;;
+esac
+exit 0

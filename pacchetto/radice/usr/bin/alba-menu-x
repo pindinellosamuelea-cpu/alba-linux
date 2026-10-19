@@ -1,0 +1,70 @@
+#!/usr/bin/python3
+"""Alba Linux - menu veloce come Windows+X (tasto Super+X):
+Gestione attività, Impostazioni, File, programmi, spegnimento."""
+import subprocess
+
+import gi
+gi.require_version("Gtk", "3.0")
+gi.require_version("Gdk", "3.0")
+from gi.repository import Gdk, GLib, Gtk  # noqa: E402
+
+VOCI = [
+    ("Gestione attività", "utilities-system-monitor", ["alba-gestione-attivita"], "Ctrl+Maiusc+Esc"),
+    ("Impostazioni", "preferences-system", ["alba-impostazioni"], "Super+I"),
+    ("File", "system-file-manager", ["thunar"], "Super+E"),
+    ("Programmi installati", "system-software-install", ["gnome-software", "--mode=installed"], ""),
+    None,
+    ("Wi-Fi e rete", "network-wireless", ["alba-rapido", "wifi"], ""),
+    ("Batteria e alimentazione", "battery", ["alba-rapido", "batteria"], ""),
+    ("Risoluzione problemi", "help-faq", ["alba-impostazioni", "--pagina", "problemi"], ""),
+    None,
+    ("Blocca lo schermo", "system-lock-screen", ["xflock4"], "Super+L"),
+    ("Spegni o esci…", "system-shutdown", ["xfce4-session-logout"], ""),
+]
+
+
+def avvia(cmd):
+    try:
+        subprocess.Popen(cmd, start_new_session=True)
+    except OSError:
+        pass
+    Gtk.main_quit()
+
+
+def main():
+    menu = Gtk.Menu()
+    for v in VOCI:
+        if v is None:
+            menu.append(Gtk.SeparatorMenuItem())
+            continue
+        nome, icona, cmd, tasto = v
+        voce = Gtk.MenuItem()
+        riga = Gtk.Box(spacing=10)
+        riga.pack_start(Gtk.Image.new_from_icon_name(icona, Gtk.IconSize.MENU), False, False, 0)
+        riga.pack_start(Gtk.Label(label=nome, xalign=0), True, True, 0)
+        if tasto:
+            t = Gtk.Label(label=tasto)
+            t.get_style_context().add_class("dim-label")
+            riga.pack_end(t, False, False, 12)
+        voce.add(riga)
+        voce.connect("activate", lambda _w, c=cmd: avvia(c))
+        menu.append(voce)
+    menu.connect("deactivate", lambda *_: GLib.timeout_add(200, Gtk.main_quit))
+    menu.show_all()
+
+    # piccola finestra invisibile sotto il puntatore: il menu si aggancia lì
+    _, x, y = Gdk.Display.get_default().get_default_seat().get_pointer().get_position()
+    ancora = Gtk.Window(type=Gtk.WindowType.POPUP)
+    ancora.set_default_size(1, 1)
+    ancora.move(x, y)
+    ancora.show()
+
+    def apri():
+        menu.popup_at_widget(ancora, Gdk.Gravity.NORTH_WEST, Gdk.Gravity.NORTH_WEST, None)
+        return False
+    GLib.idle_add(apri)
+    Gtk.main()
+
+
+if __name__ == "__main__":
+    main()

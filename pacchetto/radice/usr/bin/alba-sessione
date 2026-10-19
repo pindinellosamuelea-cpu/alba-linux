@@ -15,6 +15,9 @@ if ! pgrep -u "$(id -u)" -f 'polkit-gnome-authentication-agent|polkit-mate-authe
   done
 fi
 
+# 1b. Dopo un aggiornamento: via i residui della versione vecchia
+/usr/libexec/alba/alba-pulizia utente >/dev/null 2>&1
+
 # 2. Prime impostazioni (scorciatoie, sfondo) e aspetto aggiornato
 /usr/bin/alba-applica-aspetto --se-serve
 /usr/bin/alba-primo-avvio

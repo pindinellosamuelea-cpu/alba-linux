@@ -171,6 +171,15 @@ if sistema_avviato; then
   systemctl start --no-block alba-driver-auto.service >/dev/null 2>&1 || true
 fi
 
+# --- Pulizia dei residui delle versioni vecchie --------------------------------
+# Ogni aggiornamento riparte pulito: errori vecchi, cache e pacchetti inutili via.
+if [ -n "${2:-}" ] && [ "$(cat "$STATO/pulizia-versione" 2>/dev/null)" != "$(cat /usr/share/alba/versione 2>/dev/null)" ]; then
+  "$LIB/alba-pulizia" sistema || true
+  if sistema_avviato; then
+    systemd-run --no-block --quiet --unit="alba-pulizia-$$" "$LIB/alba-pulizia" apt >/dev/null 2>&1 || true
+  fi
+fi
+
 # --- Nome e versione ---------------------------------------------------------------
 VERSIONE="$(cat /usr/share/alba/versione 2>/dev/null || echo 1)"
 cat > /etc/alba-release <<EOF

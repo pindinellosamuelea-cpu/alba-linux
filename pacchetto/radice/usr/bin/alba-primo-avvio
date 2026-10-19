@@ -38,6 +38,7 @@ comando "XF86AudioLowerVolume"    "alba-volume giu"
 comando "XF86AudioMute"           "alba-volume muto"
 comando "<Super>a"                "alba-rapido controlli"        # Impostazioni rapide
 comando "<Super>n"                "alba-rapido notifiche"        # Notifiche e calendario
+comando "<Super>x"                "alba-menu-x"                  # Menu veloce (come Windows+X)
 comando "<Super>period"           "xfce4-appfinder"              # cerca app/emoji
 comando "<Primary><Alt>t"         "xfce4-terminal"               # Terminale
 finestra "<Super>d"               "show_desktop_key"             # Mostra desktop

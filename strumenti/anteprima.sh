@@ -69,6 +69,20 @@ PID=$!
 foto 20-impostazioni-chiaro 5
 kill $PID 2>/dev/null
 
+# Schermata "Sto applicando l'aggiornamento" (tema di avvio, renderer finestra X11)
+if apt-get install -y -q plymouth-x11 >/dev/null 2>&1 && [ -e /usr/lib/x86_64-linux-gnu/plymouth/renderers/x11.so ]; then
+  plymouth-set-default-theme alba >/dev/null 2>&1
+  pkill -x xfce4-panel; pkill -x xfdesktop
+  plymouthd --no-daemon --debug-file=/tmp/plymouth.log >/dev/null 2>&1 &
+  sleep 1
+  plymouth show-splash; plymouth change-mode --system-upgrade 2>/dev/null
+  plymouth system-update --progress=45
+  plymouth display-message --text="Installo le novità…"
+  foto 35-aggiornamento-al-riavvio 2
+  plymouth quit 2>/dev/null; sleep 1
+  grep -iE "error|script" /tmp/plymouth.log | tail -15
+fi
+
 # Schermata di accesso
 pkill -x xfce4-panel; pkill -x xfdesktop; pkill -x xfwm4
 HOME=/tmp/accesso-prova python3 /usr/libexec/alba/alba-accesso --prova >/tmp/accesso.log 2>&1 &

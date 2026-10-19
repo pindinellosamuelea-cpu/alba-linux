@@ -58,7 +58,46 @@ fun mostra_messaggio(testo) {
   img = Image.Text(testo, 1, 0.94, 0.9);
   messaggio.sprite.SetImage(img);
   messaggio.sprite.SetX(cx - img.GetWidth() / 2);
-  messaggio.sprite.SetY(base_y + 50);
+  if (agg.attivo) messaggio.sprite.SetY(base_y + 132);
+  else messaggio.sprite.SetY(base_y + 50);
   messaggio.sprite.SetOpacity(1);
 }
 Plymouth.SetMessageFunction(mostra_messaggio);
+
+# --- Aggiornamento al riavvio ("Sto applicando l'aggiornamento") -----------
+agg.attivo = 0;
+agg.titolo = Sprite();
+agg.titolo.SetZ(20);
+agg.vuota = Sprite(Image("barra-vuota.png"));
+agg.vuota.SetZ(20);
+agg.vuota.SetOpacity(0);
+barra_piena_img = Image("barra-piena.png");
+agg.piena = Sprite();
+agg.piena.SetZ(21);
+agg.perc = Sprite();
+agg.perc.SetZ(20);
+
+fun mostra_aggiornamento(progresso) {
+  if (!agg.attivo) {
+    agg.attivo = 1;
+    t = Image.Text("Sto applicando l'aggiornamento", 1, 1, 1, 1, "Sans Bold 15");
+    agg.titolo.SetImage(t);
+    agg.titolo.SetX(cx - t.GetWidth() / 2);
+    agg.titolo.SetY(base_y + 48);
+    agg.vuota.SetX(cx - 160);
+    agg.vuota.SetY(base_y + 88);
+    agg.vuota.SetOpacity(1);
+  }
+  larghezza = Math.Int(320 * progresso / 100);
+  if (larghezza < 6) larghezza = 6;
+  agg.piena.SetImage(barra_piena_img.Scale(larghezza, 6));
+  agg.piena.SetX(cx - 160);
+  agg.piena.SetY(base_y + 88);
+  p = Image.Text("" + Math.Int(progresso) + "%  ·  non spegnere il computer", 0.85, 0.85, 0.9, 1, "Sans 11");
+  agg.perc.SetImage(p);
+  agg.perc.SetX(cx - p.GetWidth() / 2);
+  agg.perc.SetY(base_y + 104);
+  # i messaggi (es. "Tolgo i file della versione vecchia") vanno sotto la barra
+  messaggio.sprite.SetY(base_y + 132);
+}
+Plymouth.SetSystemUpdateFunction(mostra_aggiornamento);

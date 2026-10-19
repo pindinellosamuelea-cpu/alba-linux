@@ -12,6 +12,16 @@ case "${1:-}" in
   aggiorna-lista)
     apt-get update -q
     ;;
+  aggiorna-prepara)
+    # scarica ora, installa al riavvio (prima dell'accesso)
+    /usr/libexec/alba/alba-aggiornamento prepara
+    esito=$?
+    /usr/libexec/alba/alba-driver-auto --aggiornamento >/dev/null 2>&1
+    exit $esito
+    ;;
+  aggiorna-annulla)
+    /usr/libexec/alba/alba-aggiornamento annulla
+    ;;
   aggiorna-installa)
     apt-get update -q || true
     apt-get -y -q -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \

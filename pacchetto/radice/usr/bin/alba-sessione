@@ -42,6 +42,10 @@ if [ -n "$ICONE_GIUSTE" ] && [ -d "/usr/share/icons/$ICONE_GIUSTE" ] && \
   gsettings set org.gnome.desktop.interface icon-theme "$ICONE_GIUSTE" 2>/dev/null
 fi
 
+# 2a-ter. "Software" non scarica/installa aggiornamenti per conto suo (li gestisce Alba)
+gsettings set org.gnome.software download-updates false 2>/dev/null
+gsettings set org.gnome.software download-updates-notify false 2>/dev/null
+
 # 2b. Bluetooth: resta attivo per le associazioni, ma senza icona doppia
 #     (c'è già il menu Bluetooth di Alba nella barra)
 gsettings set org.blueman.general plugin-list "['!StatusIcon', '!ShowConnected']" 2>/dev/null

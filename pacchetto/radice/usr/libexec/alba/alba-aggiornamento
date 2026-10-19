@@ -1,0 +1,85 @@
+#!/bin/bash
+# Alba Linux - aggiornamenti "come Windows": si scaricano mentre usi il
+# computer e si installano al riavvio, prima della schermata di accesso,
+# con la schermata "Sto applicando l'aggiornamento". Così la grafica e i
+# programmi cambiano tutti insieme dopo il riavvio, mai mentre lavori.
+#
+#   alba-aggiornamento prepara   scarica tutto e prepara l'installazione al riavvio
+#   alba-aggiornamento applica   (all'avvio) installa, pulisce il vecchio, riavvia
+#   alba-aggiornamento annulla   non installare al prossimo riavvio
+#   alba-aggiornamento stato     pronto | nessuno
+set -u
+export DEBIAN_FRONTEND=noninteractive PATH=/usr/sbin:/usr/bin:/sbin:/bin
+DIR=/var/lib/alba/aggiornamento
+LOG=/var/lib/alba/aggiornamento.log
+APT_OPZ=(-o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold -o Dpkg::Lock::Timeout=300)
+
+schermo() {  # testo sulla schermata di avvio
+  command -v plymouth >/dev/null && plymouth display-message --text="$1" >/dev/null 2>&1
+  echo "$(date '+%F %T') $1" >> "$LOG"
+}
+avanzamento() {
+  command -v plymouth >/dev/null && plymouth system-update --progress="$1" >/dev/null 2>&1
+}
+
+case "${1:-}" in
+  prepara)
+    [ "$(id -u)" -eq 0 ] || { echo "Servono i permessi di amministratore"; exit 1; }
+    mkdir -p "$DIR"
+    apt-get update -q >/dev/null 2>&1 || true
+    ELENCO="$(apt-get -s -q "${APT_OPZ[@]}" dist-upgrade 2>/dev/null | awk '/^Inst /{print $2}')"
+    if [ -z "$ELENCO" ]; then
+      rm -f /system-update; echo nessuno; exit 0
+    fi
+    # scarica adesso (con Internet), installa al riavvio (anche senza Internet)
+    if ! apt-get -d -y -q "${APT_OPZ[@]}" dist-upgrade >/dev/null 2>&1; then
+      echo "errore-download"; exit 2
+    fi
+    echo "$ELENCO" > "$DIR/pacchetti"
+    ln -sfn "$DIR" /system-update
+    command -v flatpak >/dev/null && flatpak update -y --noninteractive --system >/dev/null 2>&1
+    echo pronto
+    ;;
+
+  applica)
+    # Gira all'avvio in "modalità aggiornamento" (system-update.target)
+    rm -f /system-update   # anche se qualcosa va storto, al prossimo avvio si entra normalmente
+    command -v plymouth >/dev/null && plymouth change-mode --system-upgrade >/dev/null 2>&1
+    avanzamento 2
+    schermo "Installo le novità…"
+    dpkg --configure -a >> "$LOG" 2>&1
+    # stato di avanzamento vero da apt (pmstatus) -> barra sulla schermata
+    export ALBA_OFFLINE=1
+    apt-get -y -q --no-download -o APT::Status-Fd=3 "${APT_OPZ[@]}" dist-upgrade 3>&1 >> "$LOG" 2>&1 \
+      | while IFS=: read -r tipo _ perc testo; do
+          [ "$tipo" = pmstatus ] || continue
+          p="${perc%%.*}"; avanzamento $(( 5 + p * 85 / 100 ))
+        done
+    esito=${PIPESTATUS[0]}
+    if [ "$esito" -ne 0 ]; then
+      schermo "Completo l'aggiornamento…"
+      dpkg --configure -a >> "$LOG" 2>&1
+      apt-get -y -q -f --no-download "${APT_OPZ[@]}" install >> "$LOG" 2>&1
+    fi
+    schermo "Tolgo i file della versione vecchia…"
+    avanzamento 92
+    /usr/libexec/alba/alba-pulizia sistema >> "$LOG" 2>&1
+    apt-get -y -q "${APT_OPZ[@]}" autoremove --purge >> "$LOG" 2>&1
+    apt-get -q clean >> "$LOG" 2>&1
+    rm -rf "$DIR"
+    avanzamento 100
+    schermo "Aggiornamento completato. Riavvio…"
+    sleep 2
+    systemctl reboot
+    ;;
+
+  annulla)
+    rm -f /system-update; echo annullato ;;
+
+  stato)
+    if [ -L /system-update ] && [ -s "$DIR/pacchetti" ]; then echo pronto; else echo nessuno; fi ;;
+
+  *)
+    echo "Uso: alba-aggiornamento prepara|applica|annulla|stato"; exit 1 ;;
+esac
+exit 0

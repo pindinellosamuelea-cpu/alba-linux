@@ -2252,10 +2252,16 @@ class PaginaAggiornamenti(Pagina):
         self.rotella.stop()
         self._da_installare = pacchetti or []
         n = len(self._da_installare)
-        if n:
+        if aggiornamento_pronto():
+            self.icona_stato.set_from_icon_name("system-reboot", Gtk.IconSize.DIALOG)
+            self.dettaglio.set_text("Aggiornamento scaricato e pronto. Si installa al riavvio, prima della "
+                                    "schermata di accesso: la grafica e i programmi cambiano tutti insieme.")
+            self.azione.set_label("Riavvia e aggiorna")
+            self.elenco.hide()
+        elif n:
             self.icona_stato.set_from_icon_name("software-update-available", Gtk.IconSize.DIALOG)
             self.dettaglio.set_text(f"{n} aggiornament{'o' if n == 1 else 'i'} pront{'o' if n == 1 else 'i'} da installare.")
-            self.azione.set_label("Installa ora")
+            self.azione.set_label("Scarica e riavvia")
             self.elenco_testo.set_text(", ".join(self._da_installare))
             self.elenco.show()
         elif riavvio_in_sospeso():
@@ -2275,7 +2281,7 @@ class PaginaAggiornamenti(Pagina):
     def _controlla(self):
         if self._da_installare:
             return self._installa()
-        if self.azione.get_label() == "Riavvia ora":
+        if self.azione.get_label() in ("Riavvia ora", "Riavvia e aggiorna"):
             return riavvio_con_conto(self.finestra, 10)
         self.azione.set_sensitive(False)
         self.rotella.start()
@@ -2285,29 +2291,32 @@ class PaginaAggiornamenti(Pagina):
     def _installa(self):
         self.azione.set_sensitive(False)
         self.rotella.start()
-        self.dettaglio.set_text("Installazione in corso… puoi continuare a usare il computer.")
-        kernel = any(p.startswith("linux-image") for p in self._da_installare)
-        alba = "alba-sistema" in self._da_installare
+        self.dettaglio.set_text("Scarico l'aggiornamento… puoi continuare a usare il computer. "
+                                "Si installerà al riavvio.")
 
         def lavoro():
-            r = come_amministratore("aggiorna-installa")
+            r = come_amministratore("aggiorna-prepara")
             esegui(["flatpak", "update", "--user", "-y", "--noninteractive"], timeout=600)
-            if r[0] == 0 and alba:
-                esegui(["/usr/bin/alba-applica-aspetto", "--se-serve"], timeout=60)
             return r
 
         def fatto(r):
             self.rotella.stop()
             self._da_installare = []
-            if r and r[0] == 0:
-                if kernel or alba:
-                    # Riavvio: la versione nuova parte pulita (cache e residui vecchi via)
-                    riavvio_con_conto(self.finestra)
+            if r and r[0] == 0 and aggiornamento_pronto():
+                riavvio_con_conto(self.finestra, 15)
+            elif r and r[0] == 0:
+                messaggio(self.finestra, "Il sistema è aggiornato")
             else:
-                messaggio(self.finestra, "Aggiornamento non completato",
+                messaggio(self.finestra, "Aggiornamento non scaricato",
                           "Controlla la connessione a Internet e riprova.", Gtk.MessageType.WARNING)
             self.aggiorna()
         in_sottofondo(lavoro, fatto)
+
+
+def aggiornamento_pronto():
+    """True se un aggiornamento è scaricato e si installerà al prossimo riavvio."""
+    return os.path.islink("/system-update") and os.path.getsize("/var/lib/alba/aggiornamento/pacchetti") > 0 \
+        if os.path.exists("/var/lib/alba/aggiornamento/pacchetti") else False
 
 
 def riavvio_in_sospeso():
@@ -2352,7 +2361,7 @@ def riavvio_con_conto(finestra, secondi=15):
     box = d.get_content_area()
     box.set_spacing(10)
     box.set_border_width(18)
-    box.pack_start(etichetta("Aggiornamento installato ✓", "riga-titolo"), False, False, 0)
+    box.pack_start(etichetta("Aggiornamento pronto ✓", "riga-titolo"), False, False, 0)
     testo = etichetta("", "riga-sottotitolo", wrap=True)
     box.pack_start(testo, False, False, 0)
     barra = Gtk.ProgressBar()
@@ -2363,8 +2372,8 @@ def riavvio_con_conto(finestra, secondi=15):
         if stato["resta"] <= 0:
             d.response(Gtk.ResponseType.OK)
             return False
-        testo.set_text(f"Il computer si riavvia tra {stato['resta']} secondi per finire l'aggiornamento "
-                       "e ripartire pulito. Salva quello che stai facendo.")
+        testo.set_text(f"Il computer si riavvia tra {stato['resta']} secondi e installa l'aggiornamento "
+                       "prima della schermata di accesso. Salva quello che stai facendo.")
         barra.set_fraction(1 - stato["resta"] / secondi)
         stato["resta"] -= 1
         return True

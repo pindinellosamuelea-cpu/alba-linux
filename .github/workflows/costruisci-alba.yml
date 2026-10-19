@@ -93,6 +93,13 @@ jobs:
           done
           if [ -n "$ERRPY" ]; then echo "ERR Python:$ERRPY (vedi controlli.log)" >> $R; OK=false
           else echo "OK  programmi Python senza errori" >> $R; fi
+          # Aggiornamento al riavvio: preparazione e annullamento funzionano
+          { echo "== alba-aggiornamento"; /usr/libexec/alba/alba-aggiornamento prepara; echo "esito $?";
+            /usr/libexec/alba/alba-aggiornamento stato; /usr/libexec/alba/alba-aggiornamento annulla;
+            ls -la /system-update 2>&1; } >> registro/controlli.log 2>&1
+          if bash -n /usr/libexec/alba/alba-aggiornamento && [ ! -e /system-update ]; then
+            echo "OK  aggiornamento al riavvio (prepara/annulla)" >> $R
+          else echo "ERR aggiornamento al riavvio (vedi controlli.log)" >> $R; OK=false; fi
           apt-get install -y gir1.2-lightdm-1 >> registro/installazione.log 2>&1 || true
           if python3 -c "import gi; gi.require_version('LightDM','1'); from gi.repository import LightDM" >> registro/controlli.log 2>&1; then
             echo "OK  schermata di accesso: componenti presenti" >> $R

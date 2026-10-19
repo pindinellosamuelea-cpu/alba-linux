@@ -9,7 +9,8 @@ mkdir -p "$STATO"
 
 # Vero se siamo su un sistema avviato (non durante la costruzione dell'ISO)
 sistema_avviato() {
-  [ -d /run/systemd/system ] && [ "$(stat -Lc %d:%i / 2>/dev/null)" = "$(stat -Lc %d:%i /proc/1/root 2>/dev/null)" ]
+  # durante l'aggiornamento al riavvio non si avvia niente (si riavvia subito dopo)
+  [ "${ALBA_OFFLINE:-0}" != 1 ] && [ -d /run/systemd/system ] && [ "$(stat -Lc %d:%i / 2>/dev/null)" = "$(stat -Lc %d:%i /proc/1/root 2>/dev/null)" ]
 }
 
 # Esegue un passo una sola volta per sistema (rispetta le scelte successive dell'utente)
@@ -80,10 +81,15 @@ APT::Periodic::Update-Package-Lists "1";
 APT::Periodic::Unattended-Upgrade "1";
 APT::Periodic::AutocleanInterval "7";
 EOF
-# Gli aggiornamenti automatici includono anche quelli di Alba
-cat > /etc/apt/apt.conf.d/52alba-unattended <<'EOF'
-Unattended-Upgrade::Origins-Pattern:: "origin=Alba";
-EOF
+# Gli aggiornamenti di Alba NON si installano più mentre usi il computer:
+# si scaricano e si applicano al riavvio (vedi alba-aggiornamento).
+rm -f /etc/apt/apt.conf.d/52alba-unattended
+sistema_avviato && systemctl daemon-reload >/dev/null 2>&1 || true
+systemctl enable alba-aggiornamento-offline.service >/dev/null 2>&1 || true
+systemctl enable alba-scarica-aggiornamenti.timer >/dev/null 2>&1 || true
+sistema_avviato && systemctl start --no-block alba-scarica-aggiornamenti.timer >/dev/null 2>&1 || true
+# PackageKit (app "Software") non deve fare aggiornamenti al riavvio per conto suo
+systemctl mask packagekit-offline-update.service >/dev/null 2>&1 || true
 for s in apparmor clamav-freshclam systemd-timesyncd power-profiles-daemon; do
   systemctl enable "$s.service" >/dev/null 2>&1 || true
 done
@@ -117,10 +123,13 @@ done
 
 # --- Avvio: logo Alba e niente menu di GRUB ------------------------------------
 if command -v plymouth-set-default-theme >/dev/null 2>&1; then
-  if [ "$(plymouth-set-default-theme 2>/dev/null)" != "alba" ]; then
+  # la schermata di avvio vive nell'initramfs: va rigenerato se il tema cambia
+  FIRMA="$(cat /usr/share/plymouth/themes/alba/* 2>/dev/null | md5sum | cut -c1-32)"
+  if [ "$(plymouth-set-default-theme 2>/dev/null)" != "alba" ] || [ "$(cat "$STATO/plymouth-firma" 2>/dev/null)" != "$FIRMA" ]; then
     plymouth-set-default-theme alba || true
     if ls /boot/initrd.img-* >/dev/null 2>&1; then
-      update-initramfs -u -k all >/dev/null 2>&1 || echo "Alba: aggiornamento initramfs non riuscito"
+      update-initramfs -u -k all >/dev/null 2>&1 && echo "$FIRMA" > "$STATO/plymouth-firma" \
+        || echo "Alba: aggiornamento initramfs non riuscito"
     fi
   fi
 fi

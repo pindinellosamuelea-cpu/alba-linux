@@ -59,6 +59,17 @@ elif [ -f /var/lib/alba/driver-secure-boot ] && [ ! -e /proc/driver/nvidia/versi
   [ "$R" = "installa" ] && setsid -f /usr/bin/alba-driver-grafici >/dev/null 2>&1
 fi
 
+# Aggiornamento già scaricato: si installa al prossimo riavvio
+if [ "$(/usr/libexec/alba/alba-aggiornamento stato 2>/dev/null)" = pronto ]; then
+  OGGI="$(date +%F)"
+  [ "$(cat "$CONF/ultimo-avviso" 2>/dev/null)" = "$OGGI" ] && exit 0
+  echo "$OGGI" > "$CONF/ultimo-avviso"
+  R="$(notify-send -a "Alba" -i system-software-update -A riavvia="Riavvia e aggiorna" \
+        "Aggiornamento pronto" "Si installa al prossimo riavvio, prima della schermata di accesso. Puoi continuare a lavorare." 2>/dev/null)"
+  [ "$R" = "riavvia" ] && systemctl reboot
+  exit 0
+fi
+
 N="$(apt list --upgradable 2>/dev/null | grep -c 'upgradable')"
 [ "${N:-0}" -gt 0 ] || exit 0
 

@@ -1,0 +1,67 @@
+#!/usr/bin/python3
+"""Alba Linux - aggiunge i componenti contrib e non-free alle fonti Debian.
+
+Servono per il driver NVIDIA, i firmware e Steam. Modifica solo le voci
+ufficiali di Debian già esistenti, così non si creano doppioni.
+"""
+import glob
+import re
+
+VOLUTI = ["main", "contrib", "non-free", "non-free-firmware"]
+
+
+def ufficiale(testo):
+    return "debian.org" in testo
+
+
+def sistema_sources(percorso):
+    righe = open(percorso, encoding="utf-8").read().split("\n")
+    blocchi, cur = [], []
+    for r in righe:
+        if r.strip() == "":
+            blocchi.append(cur)
+            cur = []
+        else:
+            cur.append(r)
+    blocchi.append(cur)
+    cambiato = False
+    for b in blocchi:
+        testo = "\n".join(b)
+        if not ufficiale(testo) or re.search(r"^Enabled:\s*no", testo, re.M | re.I):
+            continue
+        for i, r in enumerate(b):
+            m = re.match(r"^(Components:\s*)(.*)$", r)
+            if m:
+                comp = m.group(2).split()
+                nuovi = comp + [c for c in VOLUTI if c not in comp]
+                if nuovi != comp:
+                    b[i] = m.group(1) + " ".join(nuovi)
+                    cambiato = True
+    if cambiato:
+        with open(percorso, "w", encoding="utf-8") as f:
+            f.write("\n\n".join("\n".join(b) for b in blocchi).rstrip("\n") + "\n")
+
+
+def sistema_list(percorso):
+    righe = open(percorso, encoding="utf-8").read().split("\n")
+    cambiato = False
+    for i, r in enumerate(righe):
+        m = re.match(r"^(deb(?:-src)?\s+(?:\[[^\]]*\]\s+)?\S+\s+\S+)\s+(.*)$", r.strip())
+        if m and ufficiale(r) and not r.lstrip().startswith("#"):
+            comp = m.group(2).split()
+            nuovi = comp + [c for c in VOLUTI if c not in comp]
+            if nuovi != comp:
+                righe[i] = m.group(1) + " " + " ".join(nuovi)
+                cambiato = True
+    if cambiato:
+        with open(percorso, "w", encoding="utf-8") as f:
+            f.write("\n".join(righe))
+
+
+for p in glob.glob("/etc/apt/sources.list.d/*.sources"):
+    sistema_sources(p)
+for p in ["/etc/apt/sources.list"] + glob.glob("/etc/apt/sources.list.d/*.list"):
+    try:
+        sistema_list(p)
+    except FileNotFoundError:
+        pass

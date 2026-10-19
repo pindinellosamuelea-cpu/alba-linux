@@ -57,6 +57,11 @@ jobs:
           else
             echo "ERR installazione del pacchetto" >> $R; OK=false
           fi
+          if apt-get update > registro/apt-update.log 2>&1 && ! grep -q "^E:" registro/apt-update.log; then
+            echo "OK  apt funziona dopo l'installazione" >> $R
+          else
+            echo "ERR apt non funziona dopo l'installazione (vedi apt-update.log)" >> $R; OK=false
+          fi
           apt-get install -y xvfb xauth dbus-x11 x11-utils x11-xserver-utils imagemagick xdotool \
             xfwm4 xfce4-panel xfdesktop4 xfce4-settings xfce4-whiskermenu-plugin xfce4-docklike-plugin \
             xfce4-pulseaudio-plugin xfce4-power-manager papirus-icon-theme fonts-inter fonts-noto-core \

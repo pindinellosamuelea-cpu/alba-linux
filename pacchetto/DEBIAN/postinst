@@ -75,23 +75,10 @@ rm -f /etc/xdg/autostart/alba-primo-avvio.desktop \
       /usr/share/applications/alba-data-ora.desktop
 
 # --- Repository Debian completi (servono per i driver NVIDIA e Steam) --------
-if ! grep -rhsE '^[[:space:]]*(deb[[:space:]].*[[:space:]]non-free([[:space:]]|$)|Components:.*[[:space:]]non-free([[:space:]]|$))' \
-     /etc/apt/sources.list /etc/apt/sources.list.d/ >/dev/null 2>&1; then
-  cat > /etc/apt/sources.list.d/alba-debian-extra.sources <<'EOF'
-# Aggiunto da Alba: componenti contrib e non-free (driver e firmware)
-Types: deb
-URIs: http://deb.debian.org/debian
-Suites: trixie trixie-updates
-Components: contrib non-free
-Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
-
-Types: deb
-URIs: http://security.debian.org/debian-security
-Suites: trixie-security
-Components: contrib non-free
-Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
-EOF
-fi
+# Aggiunge "contrib non-free" alle fonti Debian già presenti, senza creare
+# doppioni (che bloccherebbero gli aggiornamenti).
+rm -f /etc/apt/sources.list.d/alba-debian-extra.sources
+"$LIB/alba-fonti-debian" || echo "Alba: fonti Debian non modificate"
 
 # --- Sicurezza (impostazioni predefinite, applicate una sola volta) ----------
 if [ -f /etc/ufw/ufw.conf ] && una_volta firewall; then

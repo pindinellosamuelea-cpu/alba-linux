@@ -1,0 +1,5 @@
+[Desktop Entry]
+Type=Application
+Name=Rete (sostituita dal menu Wi-Fi di Alba)
+Exec=nm-applet
+Hidden=true

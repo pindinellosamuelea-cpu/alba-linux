@@ -1,0 +1,11 @@
+[Unit]
+Description=Alba - controllo e riparazione automatica dei problemi
+After=network-online.target
+ConditionPathExists=!/run/live/medium
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/alba/alba-diagnosi --auto
+Nice=15
+IOSchedulingClass=idle
+TimeoutStartSec=45min

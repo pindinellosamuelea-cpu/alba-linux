@@ -1,0 +1,549 @@
+#!/usr/bin/python3
+"""Alba Linux - menu rapidi dalla barra, come su Windows 11 e macOS.
+
+  alba-rapido wifi        reti disponibili, collegati con un clic
+  alba-rapido bluetooth   dispositivi, cerca e collega
+  alba-rapido notifiche   calendario, notifiche, Non disturbare
+"""
+import configparser
+import glob
+import importlib.machinery
+import importlib.util
+import os
+import re
+import sqlite3
+import sys
+import time
+
+import gi
+gi.require_version("Gtk", "3.0")
+gi.require_version("Gdk", "3.0")
+from gi.repository import Gdk, GLib, Gtk, Pango  # noqa: E402
+
+# Strumenti condivisi con l'app Impostazioni
+_caricatore = importlib.machinery.SourceFileLoader(
+    "alba_impostazioni", os.environ.get("ALBA_IMPOSTAZIONI", "/usr/bin/alba-impostazioni"))
+_spec = importlib.util.spec_from_loader("alba_impostazioni", _caricatore)
+A = importlib.util.module_from_spec(_spec)
+_caricatore.exec_module(A)
+esegui, uscita, esiste, avvia, in_sottofondo = A.esegui, A.uscita, A.esiste, A.avvia, A.in_sottofondo
+etichetta, pulsante, Interruttore = A.etichetta, A.pulsante, A.Interruttore
+DEMO = A.DEMO
+
+CSS = b"""
+window.rapido { background-color: transparent; }
+.scatola { background-color: @theme_bg_color; border-radius: 18px;
+           border: 1px solid alpha(@theme_fg_color, 0.12); padding: 14px; }
+.titolo { font-size: 13pt; font-weight: 800; }
+.voce { border-radius: 10px; padding: 8px 10px; background: none; border: none; box-shadow: none; }
+.voce:hover { background-color: alpha(@theme_fg_color, 0.07); }
+.voce-attiva { background-color: alpha(#ff8a4c, 0.16); }
+.piccolo { font-size: 9pt; opacity: 0.65; }
+.notifica { background-color: alpha(@theme_fg_color, 0.05); border-radius: 12px; padding: 10px 12px; }
+.ora-grande { font-size: 26pt; font-weight: 800; }
+.piede button { border-radius: 8px; }
+calendar { border: none; background: none; }
+calendar:selected { background-color: #ff8a4c; color: #ffffff; border-radius: 6px; }
+"""
+
+SEGNALE = lambda s: ("excellent" if s > 75 else "good" if s > 50 else "ok" if s > 25 else "weak")
+
+
+class Rapido(Gtk.Window):
+    def __init__(self, modo):
+        super().__init__(title="Alba")
+        self.modo = modo
+        self.get_style_context().add_class("rapido")
+        self.set_decorated(False)
+        self.set_skip_taskbar_hint(True)
+        self.set_skip_pager_hint(True)
+        self.set_keep_above(True)
+        self.set_type_hint(Gdk.WindowTypeHint.DIALOG)
+        self.set_resizable(False)
+        visuale = self.get_screen().get_rgba_visual()
+        if visuale:
+            self.set_visual(visuale)
+        self.set_app_paintable(True)
+        stile = Gtk.CssProvider()
+        stile.load_from_data(A.CSS + CSS)
+        Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(), stile,
+                                                 Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        self.scatola = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        self.scatola.get_style_context().add_class("scatola")
+        self.scatola.set_size_request(370, -1)
+        self.add(self.scatola)
+        self.connect("focus-out-event", lambda *_: self._chiudi_presto())
+        self.connect("key-press-event", lambda w, e: self.destroy() if e.keyval == Gdk.KEY_Escape else None)
+        getattr(self, f"costruisci_{modo.replace('-', '_')}")()
+        self.show_all()
+        self._posiziona()
+        self.present()
+
+    def _chiudi_presto(self):
+        # piccolo ritardo: lascia aprire finestre di dialogo nostre senza chiudere tutto
+        GLib.timeout_add(150, lambda: (self.destroy() if not self.is_active() and not self._dialogo else None, False)[1])
+
+    _dialogo = False
+
+    def _posiziona(self):
+        display = Gdk.Display.get_default()
+        _, px, py = display.get_default_seat().get_pointer().get_position()
+        monitor = display.get_monitor_at_point(px, py)
+        area = monitor.get_workarea()
+        l, a = self.get_size()
+        x = min(max(px - l // 2, area.x + 10), area.x + area.width - l - 10)
+        y = area.y + area.height - a - 10
+        self.move(x, y)
+
+    def intestazione(self, titolo, controllo=None):
+        riga = Gtk.Box(spacing=8)
+        riga.pack_start(etichetta(titolo, "titolo"), True, True, 0)
+        if controllo is not None:
+            riga.pack_end(controllo, False, False, 0)
+        self.scatola.pack_start(riga, False, False, 0)
+        return riga
+
+    def piede(self, testo, pagina):
+        b = Gtk.Button(label=testo)
+        b.set_relief(Gtk.ReliefStyle.NONE)
+        b.set_halign(Gtk.Align.START)
+        b.connect("clicked", lambda *_: (avvia(["alba-impostazioni", "--pagina", pagina]), self.destroy()))
+        box = Gtk.Box()
+        box.get_style_context().add_class("piede")
+        box.pack_start(b, False, False, 0)
+        self.scatola.pack_end(box, False, False, 0)
+        self.scatola.pack_end(Gtk.Separator(), False, False, 0)
+
+    @staticmethod
+    def elenco_scorrevole(altezza=330):
+        s = Gtk.ScrolledWindow()
+        s.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        s.set_propagate_natural_height(True)
+        s.set_max_content_height(altezza)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        s.add(box)
+        return s, box
+
+    # ------------------------------------------------------------------ Wi-Fi
+    def costruisci_wifi(self):
+        self.wifi_on = Interruttore(self._wifi_radio)
+        self.rotella = Gtk.Spinner()
+        h = self.intestazione("Wi-Fi", self.wifi_on)
+        h.pack_end(self.rotella, False, False, 0)
+        self.stato = etichetta("", "piccolo")
+        self.scatola.pack_start(self.stato, False, False, 0)
+        scorri, self.reti = self.elenco_scorrevole()
+        self.scatola.pack_start(scorri, True, True, 0)
+        self.piede("Altre impostazioni di rete…", "wifi")
+        self._carica_reti(cerca=True)
+
+    def _wifi_radio(self, acceso):
+        esegui(["nmcli", "radio", "wifi", "on" if acceso else "off"])
+        GLib.timeout_add(1800, lambda: (self._carica_reti(cerca=True), False)[1])
+
+    def _carica_reti(self, cerca=False):
+        self.rotella.start()
+
+        def leggi():
+            if DEMO or not esiste("nmcli"):
+                return ("enabled", "CasaMia", [("*", "CasaMia", 92, "WPA2"), ("", "Vodafone-5G", 70, "WPA2"),
+                                               ("", "TIM-Fibra", 55, "WPA2"), ("", "Ospiti", 41, "")], set())
+            stato = uscita(["nmcli", "radio", "wifi"])
+            elenco = uscita(["nmcli", "-t", "-e", "yes", "-f", "IN-USE,SSID,SIGNAL,SECURITY", "device", "wifi",
+                             "list", "--rescan", "yes" if cerca else "auto"], timeout=25)
+            reti = {}
+            for l in elenco.splitlines():
+                p = A.dividi_nmcli(l)
+                if len(p) >= 4 and p[1]:
+                    s = int(p[2] or 0)
+                    if p[1] not in reti or s > reti[p[1]][2] or p[0] == "*":
+                        reti[p[1]] = (p[0], p[1], s, p[3])
+            note = {A.dividi_nmcli(l)[0] for l in uscita(["nmcli", "-t", "-f", "NAME,TYPE", "connection",
+                                                         "show"]).splitlines() if "wireless" in l}
+            attiva = next((r[1] for r in reti.values() if r[0] == "*"), "")
+            return stato, attiva, sorted(reti.values(), key=lambda r: (r[0] != "*", -r[2])), note
+
+        in_sottofondo(leggi, self._mostra_reti)
+
+    def _mostra_reti(self, dati):
+        self.rotella.stop()
+        if not dati:
+            return
+        stato, attiva, reti, note = dati
+        acceso = stato == "enabled"
+        self.wifi_on.imposta(acceso)
+        self.stato.set_text(f"Collegato a {attiva}" if attiva else ("Scegli una rete" if acceso else "Il Wi-Fi è spento"))
+        for c in self.reti.get_children():
+            self.reti.remove(c)
+        if acceso and not reti:
+            self.reti.pack_start(etichetta("Nessuna rete trovata. Sto cercando…", "piccolo"), False, False, 6)
+        for uso, ssid, segnale, sic in (reti if acceso else [])[:25]:
+            self.reti.pack_start(self._riga_rete(uso == "*", ssid, segnale, sic, ssid in note), False, False, 0)
+        self.reti.show_all()
+        self.resize(1, 1)
+        GLib.idle_add(self._posiziona)
+
+    def _riga_rete(self, attiva, ssid, segnale, sicurezza, nota):
+        contenitore = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        b = Gtk.Button()
+        b.get_style_context().add_class("voce")
+        if attiva:
+            b.get_style_context().add_class("voce-attiva")
+        riga = Gtk.Box(spacing=10)
+        riga.pack_start(Gtk.Image.new_from_icon_name(f"network-wireless-signal-{SEGNALE(segnale)}-symbolic",
+                                                     Gtk.IconSize.LARGE_TOOLBAR), False, False, 0)
+        testi = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        nome = etichetta(ssid)
+        nome.set_ellipsize(Pango.EllipsizeMode.END)
+        testi.pack_start(nome, False, False, 0)
+        testi.pack_start(etichetta("Collegato" if attiva else ("Protetta" if sicurezza else "Aperta"), "piccolo"), False, False, 0)
+        riga.pack_start(testi, True, True, 0)
+        if sicurezza:
+            riga.pack_end(Gtk.Image.new_from_icon_name("changes-prevent-symbolic", Gtk.IconSize.MENU), False, False, 0)
+        b.add(riga)
+        contenitore.pack_start(b, False, False, 0)
+        # Password direttamente nella riga (niente finestre a parte)
+        rivela = Gtk.Revealer()
+        box = Gtk.Box(spacing=6)
+        box.set_margin_start(42)
+        box.set_margin_end(6)
+        box.set_margin_bottom(6)
+        campo = Gtk.Entry(visibility=False, placeholder_text="Password della rete")
+        campo.set_hexpand(True)
+        vai = pulsante("Collega", principale=True)
+        box.pack_start(campo, True, True, 0)
+        box.pack_start(vai, False, False, 0)
+        rivela.add(box)
+        contenitore.pack_start(rivela, False, False, 0)
+
+        def collega(password=None):
+            self.rotella.start()
+            self.stato.set_text(f"Mi collego a {ssid}…")
+
+            def fai():
+                if nota and not password:
+                    return esegui(["nmcli", "connection", "up", "id", ssid], timeout=45)
+                cmd = ["nmcli", "device", "wifi", "connect", ssid]
+                if password:
+                    cmd += ["password", password]
+                return esegui(cmd, timeout=45)
+
+            def fatto(r):
+                if r and r[0] != 0:
+                    self.stato.set_text("Password errata o rete non raggiungibile. Riprova.")
+                    if sicurezza:
+                        rivela.set_reveal_child(True)
+                        campo.grab_focus()
+                    self.rotella.stop()
+                else:
+                    self._carica_reti()
+            in_sottofondo(fai, fatto)
+
+        def clic(*_):
+            if attiva:
+                esegui(["nmcli", "connection", "down", "id", ssid])
+                self._carica_reti()
+            elif sicurezza and not nota:
+                rivela.set_reveal_child(not rivela.get_reveal_child())
+                campo.grab_focus()
+            else:
+                collega()
+        b.connect("clicked", clic)
+        b.set_tooltip_text("Scollega" if attiva else "Collega")
+        vai.connect("clicked", lambda *_: collega(campo.get_text()))
+        campo.connect("activate", lambda *_: collega(campo.get_text()))
+        return contenitore
+
+    # -------------------------------------------------------------- Bluetooth
+    def costruisci_bluetooth(self):
+        self.bt_on = Interruttore(self._bt_radio)
+        self.rotella = Gtk.Spinner()
+        h = self.intestazione("Bluetooth", self.bt_on)
+        h.pack_end(self.rotella, False, False, 0)
+        self.stato = etichetta("", "piccolo")
+        self.scatola.pack_start(self.stato, False, False, 0)
+        scorri, self.dispositivi = self.elenco_scorrevole(300)
+        self.scatola.pack_start(scorri, True, True, 0)
+        self.cerca = pulsante("Cerca nuovi dispositivi", self._cerca, icona="edit-find-symbolic")
+        self.scatola.pack_start(self.cerca, False, False, 0)
+        self.piede("Altre impostazioni Bluetooth…", "bluetooth")
+        self.trovati = []
+        self._carica_bt()
+
+    def _bt_radio(self, acceso):
+        def fai():
+            if acceso:
+                esegui(["rfkill", "unblock", "bluetooth"])
+            esegui(["bluetoothctl", "power", "on" if acceso else "off"], timeout=10)
+        in_sottofondo(fai, lambda _: GLib.timeout_add(700, lambda: (self._carica_bt(), False)[1]))
+
+    def _carica_bt(self):
+        def leggi():
+            if DEMO or not esiste("bluetoothctl"):
+                return True, [("00", "AirPods di Ale", True, "audio-headphones"), ("01", "Xbox Controller", False, "input-gaming")]
+            info = uscita(["bluetoothctl", "show"], timeout=5)
+            if not info:
+                return None
+            elenco = []
+            for l in uscita(["bluetoothctl", "devices", "Paired"], timeout=5).splitlines():
+                p = l.split(" ", 2)
+                if len(p) == 3 and p[0] == "Device":
+                    d = uscita(["bluetoothctl", "info", p[1]], timeout=5)
+                    ic = re.search(r"Icon: (\S+)", d)
+                    elenco.append((p[1], p[2], "Connected: yes" in d, ic.group(1) if ic else "bluetooth"))
+            return "Powered: yes" in info, elenco
+        in_sottofondo(leggi, self._mostra_bt)
+
+    def _mostra_bt(self, dati):
+        self.rotella.stop()
+        for c in self.dispositivi.get_children():
+            self.dispositivi.remove(c)
+        if dati is None:
+            self.stato.set_text("Nessun adattatore Bluetooth trovato")
+            self.bt_on.set_sensitive(False)
+            self.cerca.set_sensitive(False)
+            return
+        acceso, elenco = dati
+        self.bt_on.imposta(acceso)
+        self.cerca.set_sensitive(acceso)
+        connessi = [n for _, n, c, _ in elenco if c]
+        self.stato.set_text(("Connesso a " + ", ".join(connessi)) if connessi else ("Acceso" if acceso else "Spento"))
+        if acceso:
+            if elenco:
+                self.dispositivi.pack_start(etichetta("I MIEI DISPOSITIVI", "etichetta-sezione"), False, False, 0)
+            for mac, nome, connesso, icona in elenco:
+                self.dispositivi.pack_start(self._riga_bt(mac, nome, icona, "Connesso" if connesso else "Non connesso",
+                                                          "disconnect" if connesso else "connect", connesso), False, False, 0)
+            if self.trovati:
+                self.dispositivi.pack_start(etichetta("VICINI", "etichetta-sezione"), False, False, 0)
+            gia = {m for m, *_ in elenco}
+            for mac, nome in self.trovati:
+                if mac not in gia:
+                    self.dispositivi.pack_start(self._riga_bt(mac, nome, "bluetooth", "Clicca per collegare", "pair"), False, False, 0)
+        self.dispositivi.show_all()
+        self.resize(1, 1)
+        GLib.idle_add(self._posiziona)
+
+    def _riga_bt(self, mac, nome, icona, sotto, azione, attivo=False):
+        b = Gtk.Button()
+        b.get_style_context().add_class("voce")
+        if attivo:
+            b.get_style_context().add_class("voce-attiva")
+        riga = Gtk.Box(spacing=10)
+        riga.pack_start(Gtk.Image.new_from_icon_name(icona if icona != "bluetooth" else "bluetooth-active-symbolic",
+                                                     Gtk.IconSize.LARGE_TOOLBAR), False, False, 0)
+        testi = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        n = etichetta(nome)
+        n.set_ellipsize(Pango.EllipsizeMode.END)
+        testi.pack_start(n, False, False, 0)
+        testi.pack_start(etichetta(sotto, "piccolo"), False, False, 0)
+        riga.pack_start(testi, True, True, 0)
+        b.add(riga)
+
+        def fai():
+            if azione == "pair":
+                esegui(["bluetoothctl", "--timeout", "25", "pair", mac], timeout=30)
+                esegui(["bluetoothctl", "trust", mac], timeout=8)
+                return esegui(["bluetoothctl", "--timeout", "15", "connect", mac], timeout=20)
+            return esegui(["bluetoothctl", "--timeout", "15", azione, mac], timeout=20)
+
+        def clic(*_):
+            self.rotella.start()
+            self.stato.set_text(("Mi collego a " if azione != "disconnect" else "Scollego ") + nome + "…")
+            in_sottofondo(fai, lambda r: (self.stato.set_text("Non riuscito: avvicina il dispositivo e mettilo in modalità di associazione")
+                                          if r and r[0] != 0 else None, self._carica_bt()))
+        b.connect("clicked", clic)
+        return b
+
+    def _cerca(self):
+        self.rotella.start()
+        self.stato.set_text("Cerco dispositivi vicini… metti il tuo in modalità di associazione")
+        self.cerca.set_sensitive(False)
+
+        def fai():
+            esegui(["bluetoothctl", "--timeout", "12", "scan", "on"], timeout=16)
+            trovati = []
+            for l in uscita(["bluetoothctl", "devices"], timeout=5).splitlines():
+                p = l.split(" ", 2)
+                if len(p) == 3 and p[0] == "Device" and not re.fullmatch(r"([0-9A-F]{2}-){5}[0-9A-F]{2}", p[2]):
+                    trovati.append((p[1], p[2]))
+            return trovati
+
+        def fatto(t):
+            self.trovati = t or []
+            self.cerca.set_sensitive(True)
+            self._carica_bt()
+        in_sottofondo(fai, fatto)
+
+    # --------------------------------------------------------------- Notifiche
+    def costruisci_notifiche(self):
+        alto = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.ora = etichetta("", "ora-grande")
+        self.data = etichetta("", "piccolo")
+        alto.pack_start(self.ora, False, False, 0)
+        alto.pack_start(self.data, False, False, 0)
+        self.scatola.pack_start(alto, False, False, 0)
+        self._tic()
+        GLib.timeout_add_seconds(1, self._tic)
+        cal = Gtk.Calendar()
+        cal.set_display_options(Gtk.CalendarDisplayOptions.SHOW_HEADING | Gtk.CalendarDisplayOptions.SHOW_DAY_NAMES)
+        self.scatola.pack_start(cal, False, False, 0)
+        self.scatola.pack_start(Gtk.Separator(), False, False, 4)
+        self.dnd = Interruttore(lambda v: A.xfconf_scrivi("xfce4-notifyd", "/do-not-disturb", "bool", v))
+        self.dnd.imposta(A.xfconf_leggi("xfce4-notifyd", "/do-not-disturb") == "true")
+        riga = Gtk.Box(spacing=8)
+        riga.pack_start(etichetta("Notifiche", "titolo"), True, True, 0)
+        cancella = Gtk.Button(label="Cancella tutto")
+        cancella.set_relief(Gtk.ReliefStyle.NONE)
+        cancella.connect("clicked", lambda *_: (cancella_notifiche(), self._mostra_notifiche()))
+        riga.pack_end(cancella, False, False, 0)
+        self.scatola.pack_start(riga, False, False, 0)
+        scorri, self.notifiche = self.elenco_scorrevole(260)
+        self.scatola.pack_start(scorri, True, True, 0)
+        dnd = Gtk.Box(spacing=8)
+        dnd.pack_start(Gtk.Image.new_from_icon_name("notifications-disabled-symbolic", Gtk.IconSize.MENU), False, False, 0)
+        dnd.pack_start(etichetta("Non disturbare"), True, True, 0)
+        dnd.pack_end(self.dnd, False, False, 0)
+        self.scatola.pack_end(dnd, False, False, 0)
+        self.scatola.pack_end(Gtk.Separator(), False, False, 0)
+        self._mostra_notifiche()
+
+    def _tic(self):
+        if not self.get_window() and self.ora.get_text():
+            return False
+        self.ora.set_text(time.strftime("%H:%M"))
+        self.data.set_text(time.strftime("%A %d %B").capitalize())
+        return True
+
+    def _mostra_notifiche(self):
+        for c in self.notifiche.get_children():
+            self.notifiche.remove(c)
+        elenco = leggi_notifiche()
+        if not elenco:
+            self.notifiche.pack_start(etichetta("Nessuna notifica", "piccolo", xalign=0.5), False, False, 18)
+        gruppi = {}
+        for n in elenco:
+            gruppi.setdefault(n["app"], []).append(n)
+        for app, voci in list(gruppi.items())[:12]:
+            self.notifiche.pack_start(etichetta(app.upper(), "etichetta-sezione"), False, False, 0)
+            for n in voci[:4]:
+                box = Gtk.Box(spacing=10)
+                box.get_style_context().add_class("notifica")
+                box.pack_start(Gtk.Image.new_from_icon_name(n["icona"] or "dialog-information-symbolic",
+                                                            Gtk.IconSize.LARGE_TOOLBAR), False, False, 0)
+                testi = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+                t = etichetta(n["titolo"], "riga-titolo", wrap=True)
+                testi.pack_start(t, False, False, 0)
+                if n["testo"]:
+                    corpo = etichetta(re.sub(r"<[^>]+>", "", n["testo"])[:220], "piccolo", wrap=True)
+                    corpo.set_max_width_chars(38)
+                    testi.pack_start(corpo, False, False, 0)
+                box.pack_start(testi, True, True, 0)
+                box.pack_end(etichetta(n["quando"], "piccolo"), False, False, 0)
+                self.notifiche.pack_start(box, False, False, 2)
+        self.notifiche.show_all()
+        self.resize(1, 1)
+        GLib.idle_add(self._posiziona)
+
+
+# ---------------------------------------------------------------------------
+# Registro delle notifiche di xfce4-notifyd (vecchio formato e SQLite)
+# ---------------------------------------------------------------------------
+CARTELLA_LOG = os.path.join(os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache")), "xfce4", "notifyd")
+
+
+def _quando(ts):
+    try:
+        t = float(ts)
+        if t > 1e12:
+            t /= 1e6
+    except (TypeError, ValueError):
+        try:
+            t = time.mktime(time.strptime(str(ts)[:19], "%Y-%m-%dT%H:%M:%S"))
+        except ValueError:
+            return ""
+    oggi = time.strftime("%Y%m%d")
+    return time.strftime("%H:%M" if time.strftime("%Y%m%d", time.localtime(t)) == oggi else "%d/%m", time.localtime(t))
+
+
+def leggi_notifiche():
+    if DEMO:
+        return [{"app": "Alba", "titolo": "Alba è stata aggiornata", "testo": "Il nuovo aspetto è pronto.",
+                 "icona": "alba-logo", "quando": "18:42"},
+                {"app": "Steam", "titolo": "Download completato", "testo": "BeamNG.drive è pronto per giocare.",
+                 "icona": "steam", "quando": "18:30"},
+                {"app": "Firefox", "titolo": "Download completato", "testo": "documento.pdf", "icona": "firefox-esr",
+                 "quando": "17:05"}]
+    risultato = []
+    for db in glob.glob(os.path.join(CARTELLA_LOG, "*.sqlite")) + glob.glob(os.path.join(CARTELLA_LOG, "*.db")):
+        try:
+            con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=1)
+            for (tabella,) in con.execute("SELECT name FROM sqlite_master WHERE type='table'"):
+                colonne = [c[1] for c in con.execute(f"PRAGMA table_info('{tabella}')")]
+                if "summary" not in colonne:
+                    continue
+                scegli = lambda *nomi: next((n for n in nomi if n in colonne), "NULL")
+                q = (f"SELECT {scegli('app_name', 'app_id')}, summary, {scegli('body')}, {scegli('app_icon', 'icon_id', 'icon')}, "
+                     f"{scegli('timestamp', 'time')} FROM '{tabella}' ORDER BY {scegli('timestamp', 'time', 'rowid')} DESC LIMIT 60")
+                for app, titolo, testo, icona, ts in con.execute(q):
+                    risultato.append({"app": app or "Sistema", "titolo": titolo or "", "testo": testo or "",
+                                      "icona": icona if icona and "/" not in str(icona) else None, "quando": _quando(ts)})
+            con.close()
+        except sqlite3.Error:
+            continue
+    vecchio = os.path.join(CARTELLA_LOG, "log")
+    if not risultato and os.path.exists(vecchio):
+        cp = configparser.RawConfigParser(strict=False, interpolation=None)
+        try:
+            cp.read(vecchio, encoding="utf-8")
+            for sez in reversed(cp.sections()[-60:]):
+                v = cp[sez]
+                risultato.append({"app": v.get("app_name", "Sistema"), "titolo": v.get("summary", ""),
+                                  "testo": v.get("body", ""), "icona": v.get("app_icon") if "/" not in v.get("app_icon", "/") else None,
+                                  "quando": _quando(sez)})
+        except configparser.Error:
+            pass
+    return risultato
+
+
+def cancella_notifiche():
+    for db in glob.glob(os.path.join(CARTELLA_LOG, "*.sqlite")) + glob.glob(os.path.join(CARTELLA_LOG, "*.db")):
+        try:
+            con = sqlite3.connect(db, timeout=2)
+            for (tabella,) in con.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall():
+                if "summary" in [c[1] for c in con.execute(f"PRAGMA table_info('{tabella}')")]:
+                    con.execute(f"DELETE FROM '{tabella}'")
+            con.commit()
+            con.close()
+        except sqlite3.Error:
+            pass
+    vecchio = os.path.join(CARTELLA_LOG, "log")
+    if os.path.exists(vecchio):
+        open(vecchio, "w").close()
+
+
+if __name__ == "__main__":
+    modo = sys.argv[1] if len(sys.argv) > 1 else "wifi"
+    if modo not in ("wifi", "bluetooth", "notifiche"):
+        print(__doc__)
+        sys.exit(1)
+    # Un solo menu alla volta: se è già aperto, il secondo clic lo chiude
+    blocco = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "alba-rapido.pid")
+    try:
+        vecchio = int(open(blocco).read())
+        if b"alba-rapido" in open(f"/proc/{vecchio}/cmdline", "rb").read():
+            os.kill(vecchio, 15)
+            os.remove(blocco)
+            sys.exit(0)
+    except (OSError, ValueError):
+        pass
+    open(blocco, "w").write(str(os.getpid()))
+    try:
+        finestra = Rapido(modo)
+        finestra.connect("destroy", Gtk.main_quit)
+        Gtk.main()
+    finally:
+        try:
+            os.remove(blocco)
+        except OSError:
+            pass

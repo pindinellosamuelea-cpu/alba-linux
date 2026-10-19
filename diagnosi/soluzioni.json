@@ -1,0 +1,25 @@
+{
+  "versione": 1,
+  "nota": "Regole della Risoluzione problemi di Alba. 'cerca' è un'espressione regolare cercata nel registro di sistema; 'problema' collega la regola a una riparazione già presente in alba-diagnosi. Le regole senza 'problema' mostrano solo una spiegazione.",
+  "regole": [
+    {"id": "nouveau-errori", "cerca": "nouveau .*(failed|error|timeout|fifo|gsp)", "problema": "driver-nvidia",
+     "spiegazione": "Il driver libero della scheda NVIDIA ha dato errori: con il driver ufficiale i giochi partono senza blocchi."},
+    {"id": "rete-non-parte", "cerca": "Failed to start .*Network ?Manager", "problema": "internet"},
+    {"id": "ora-timeout", "cerca": "systemd-timesyncd.*(Timed out|failed|No network connectivity)", "problema": "ora"},
+    {"id": "disco-pieno", "cerca": "No space left on device", "problema": "disco"},
+    {"id": "dpkg-interrotto", "cerca": "dpkg was interrupted", "problema": "pacchetti"},
+    {"id": "bluetooth-errore", "cerca": "Bluetooth: hci[0-9]+: .*(failed|timeout|Opcode .* failed)", "problema": "bluetooth"},
+    {"id": "firmware-mancante", "cerca": "firmware: failed to load|Direct firmware load for .* failed", "problema": "firmware"},
+    {"id": "memoria-esaurita", "cerca": "Out of memory: Killed process", "problema": "memoria",
+     "spiegazione": "La memoria si è esaurita e un programma è stato chiuso: la memoria compressa aiuta a evitarlo."},
+    {"id": "disco-errori", "cerca": "(EXT4-fs error|I/O error, dev (sd|nvme)|Buffer I/O error)", "gravita": "alta",
+     "titolo": "Il disco ha segnalato degli errori",
+     "spiegazione": "Il disco potrebbe essere danneggiato o in via di rottura. Fai subito una copia dei tuoi file importanti su una chiavetta o nel cloud."},
+    {"id": "surriscaldamento", "cerca": "(temperature above threshold|cpu clock throttled|Package temperature above)", "gravita": "media",
+     "titolo": "Il computer si scalda troppo",
+     "spiegazione": "Il processore rallenta per il calore. Controlla che le prese d'aria non siano coperte e, se è un portatile, usalo su una superficie rigida."},
+    {"id": "programma-chiuso", "cerca": "segfault at [0-9a-f]+ ip", "gravita": "bassa",
+     "titolo": "Un programma si è chiuso all'improvviso",
+     "spiegazione": "Di solito basta riaprirlo. Se succede spesso con lo stesso programma, crea un riepilogo e mandalo all'assistenza."}
+  ]
+}

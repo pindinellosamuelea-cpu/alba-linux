@@ -34,6 +34,7 @@ CSS = b"""
 .barra-laterale row:selected label { color: @theme_fg_color; }
 .voce-laterale { font-size: 10.5pt; }
 .icona-quadrata { border-radius: 7px; padding: 5px; color: #ffffff; }
+.icona-quadrata image, .barra-laterale row:selected .icona-quadrata image { color: #ffffff; }
 .cerca { margin: 12px 12px 8px 12px; border-radius: 8px; }
 .titolo-pagina { font-size: 21pt; font-weight: 800; }
 .sottotitolo-pagina { opacity: 0.65; }
@@ -63,7 +64,7 @@ levelbar block.filled { background-color: #ff8a4c; }
 COLORI = {
     "wifi": "#0a84ff", "bluetooth": "#0a84ff", "schermo": "#5e5ce6", "suono": "#ff375f",
     "batteria": "#30b158", "aspetto": "#bf5af2", "data-ora": "#8e8e93",
-    "scheda-grafica": "#ff9f0a", "dispositivi": "#34aadc", "sicurezza": "#64748b", "aggiornamenti": "#8e8e93",
+    "scheda-grafica": "#ff9f0a", "dispositivi": "#34aadc", "telefono": "#30b158", "problemi": "#ff453a", "sicurezza": "#64748b", "aggiornamenti": "#8e8e93",
     "info": "#8e8e93",
 }
 
@@ -1706,6 +1707,298 @@ class PaginaDispositivi(Pagina):
 
 
 # ---------------------------------------------------------------------------
+# Risoluzione problemi
+# ---------------------------------------------------------------------------
+REGISTRO_RIPARAZIONI = "/var/lib/alba/riparazioni.log"
+
+
+def problemi_utente():
+    """Controlli che riguardano la sessione dell'utente (non servono permessi)."""
+    trovati = []
+    if esiste("pactl") and esegui(["pactl", "info"], timeout=5)[0] != 0:
+        trovati.append(dict(id="u-audio", titolo="L'audio non funziona",
+                            spiegazione="Il servizio audio non risponde: niente suono da casse e cuffie.",
+                            dettaglio="servizio audio fermo", risolvibile=True, gravita="alta"))
+    elif esiste("pactl") and not uscita(["pactl", "list", "short", "sinks"]):
+        trovati.append(dict(id="u-audio", titolo="Nessuna uscita audio",
+                            spiegazione="Il sistema non vede casse o cuffie.", dettaglio="nessun dispositivo audio",
+                            risolvibile=True, gravita="media"))
+    for d in (os.path.expanduser("~/.steam/steam"), os.path.expanduser("~/.local/share/Steam")):
+        if os.path.isdir(d) and not os.path.exists(os.path.join(d, "steam_dev.cfg")):
+            trovati.append(dict(id="u-steam", titolo="Steam elabora gli shader lentamente",
+                                spiegazione="I giochi possono restare a lungo su «Elaborazione shader Vulkan».",
+                                dettaglio="Steam usa un solo core per gli shader", risolvibile=True, gravita="bassa"))
+            break
+    ultimo = leggi_file(os.path.expanduser("~/.cache/alba/exe-ultimo.log"))
+    m = re.search(r"Library ([A-Za-z0-9_.-]+\.dll)", ultimo)
+    if m:
+        trovati.append(dict(id="u-exe", titolo="Un programma Windows non è partito",
+                            spiegazione=f"Mancava il componente {m.group(1)}. Riapri il programma: Alba ti proporrà "
+                                        "di installarlo e riproverà da sola.",
+                            dettaglio="", risolvibile=False, gravita="bassa"))
+    if esiste("xfce4-panel") and esegui(["pgrep", "-u", str(os.getuid()), "-x", "xfce4-panel"])[0] != 0:
+        trovati.append(dict(id="u-barra", titolo="La barra delle applicazioni è sparita",
+                            spiegazione="La barra si è chiusa per un errore.", dettaglio="", risolvibile=True,
+                            gravita="alta"))
+    return trovati
+
+
+def ripara_utente(id_):
+    if id_ == "u-audio":
+        esegui(["systemctl", "--user", "restart", "pipewire", "pipewire-pulse", "wireplumber"], timeout=30)
+        time.sleep(2)
+        ok = esegui(["pactl", "info"], timeout=5)[0] == 0 and bool(uscita(["pactl", "list", "short", "sinks"]))
+        return dict(risolto=ok, dettaglio="" if ok else "Prova a riavviare il computer")
+    if id_ == "u-steam":
+        for d in (os.path.expanduser("~/.steam/steam"), os.path.expanduser("~/.local/share/Steam")):
+            if os.path.isdir(d):
+                with open(os.path.join(d, "steam_dev.cfg"), "w") as f:
+                    f.write(f"unShaderBackgroundProcessingThreads {os.cpu_count() or 4}\n")
+        return dict(risolto=True, dettaglio="Riavvia Steam per applicare")
+    if id_ == "u-barra":
+        avvia(["xfce4-panel"])
+        time.sleep(2)
+        return dict(risolto=esegui(["pgrep", "-x", "xfce4-panel"])[0] == 0, dettaglio="")
+    return dict(risolto=False, dettaglio="")
+
+
+class PaginaProblemi(Pagina):
+    nome, titolo, icona = "problemi", "Risoluzione problemi", "emblem-system-symbolic"
+    parole = "problemi errore risolvi ripara non funziona aiuto assistenza diagnosi lento bloccato"
+
+    def costruisci(self):
+        self.sottotitolo.set_text("Alba controlla il computer, trova la causa vera dei problemi e li ripara. "
+                                  "Considera un problema risolto solo dopo aver verificato che non c'è più.")
+        r = self.sezione()
+        alto = Gtk.Box(spacing=16)
+        alto.set_border_width(18)
+        self.icona_stato = Gtk.Image.new_from_icon_name("system-search", Gtk.IconSize.DIALOG)
+        alto.pack_start(self.icona_stato, False, False, 0)
+        testi = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
+        testi.set_valign(Gtk.Align.CENTER)
+        self.stato = etichetta("Controlla il computer", "riga-titolo")
+        self.dettaglio = etichetta("Ci vuole circa un minuto.", "riga-sottotitolo", wrap=True)
+        testi.pack_start(self.stato, False, False, 0)
+        testi.pack_start(self.dettaglio, False, False, 0)
+        alto.pack_start(testi, True, True, 0)
+        self.rotella = Gtk.Spinner()
+        alto.pack_start(self.rotella, False, False, 0)
+        self.pulsante = pulsante("Controlla", self.controlla, principale=True)
+        alto.pack_start(self.pulsante, False, False, 0)
+        r.aggiungi(alto)
+
+        self.intestazione = Gtk.Box(spacing=8)
+        self.intestazione.pack_start(etichetta("PROBLEMI TROVATI", "etichetta-sezione"), True, True, 0)
+        self.tutto = pulsante("Risolvi tutto", self.risolvi_tutto)
+        self.intestazione.pack_end(self.tutto, False, False, 0)
+        self.intestazione.set_no_show_all(True)
+        for c in self.intestazione.get_children():
+            c.show()
+        self.colonna.pack_start(self.intestazione, False, False, 0)
+        self.elenco = Riquadro()
+        self.elenco.set_no_show_all(True)
+        self.colonna.pack_start(self.elenco, False, False, 0)
+
+        self.colonna.pack_start(etichetta("RIPARAZIONI AUTOMATICHE RECENTI", "etichetta-sezione"), False, False, 0)
+        self.recenti = Riquadro()
+        self.colonna.pack_start(self.recenti, False, False, 0)
+
+        r = self.sezione("Serve aiuto?")
+        r.aggiungi(Riga("Crea un riepilogo per l'assistenza",
+                        "Se un problema non si risolve, crea un file da inviare a chi ti aiuta (anche a Claude).",
+                        pulsante("Crea", self.riepilogo), icona="document-save"))
+        self.problemi = []
+        self.righe = {}
+
+    def aggiorna(self):
+        self.recenti.svuota()
+        voci = []
+        for l in leggi_file(REGISTRO_RIPARAZIONI).splitlines()[-6:]:
+            try:
+                voci.append(json.loads(l))
+            except ValueError:
+                pass
+        if not voci:
+            self.recenti.aggiungi(Riga("Nessuna riparazione finora", "Alba controlla il computer da sola ogni 3 ore."))
+        for v in reversed(voci):
+            quando = time.strftime("%d/%m %H:%M", time.localtime(v.get("ora", 0)))
+            self.recenti.aggiungi(Riga(v.get("titolo", ""), f"{quando} · " + ("risolto ✓" if v.get("risolto") else
+                                                                            "non risolto: " + v.get("dettaglio", "")),
+                                       icona="emblem-ok-symbolic" if v.get("risolto") else "dialog-warning-symbolic"))
+        self.recenti.show_all()
+
+    def controlla(self):
+        self.pulsante.set_sensitive(False)
+        self.rotella.start()
+        self.stato.set_text("Sto controllando…")
+        self.dettaglio.set_text("Ora, rete, disco, programmi, driver, Vulkan, servizi, audio…")
+
+        def lavoro():
+            codice, testo = come_amministratore("diagnosi")
+            sistema = []
+            if codice == 0:
+                try:
+                    sistema = json.loads(testo.strip().splitlines()[-1])
+                except (ValueError, IndexError):
+                    sistema = []
+            return sistema + problemi_utente(), codice
+
+        in_sottofondo(lavoro, self._mostra)
+
+    def _mostra(self, risultato):
+        self.rotella.stop()
+        self.pulsante.set_sensitive(True)
+        self.problemi, codice = risultato or ([], 1)
+        self.elenco.svuota()
+        self.righe = {}
+        if not self.problemi:
+            self.icona_stato.set_from_icon_name("emblem-ok-symbolic", Gtk.IconSize.DIALOG)
+            self.stato.set_text("Nessun problema trovato ✓")
+            self.dettaglio.set_text("Il computer è in ordine." if codice == 0 else
+                                    "Controllo parziale: alcune verifiche richiedono i permessi di amministratore.")
+            self.intestazione.hide()
+            self.elenco.hide()
+            return
+        n = len(self.problemi)
+        self.icona_stato.set_from_icon_name("dialog-warning", Gtk.IconSize.DIALOG)
+        self.stato.set_text(f"Trovat{'o' if n == 1 else 'i'} {n} problem{'a' if n == 1 else 'i'}")
+        self.dettaglio.set_text("Premi «Risolvi» accanto a ciascuno, oppure «Risolvi tutto».")
+        ordine = {"alta": 0, "media": 1, "bassa": 2}
+        for p in sorted(self.problemi, key=lambda p: ordine.get(p.get("gravita"), 3)):
+            controllo = pulsante("Risolvi", lambda i=p["id"]: self.risolvi(i)) if p.get("risolvibile") else None
+            sotto = p.get("spiegazione", "") + (f"\nCausa: {p['dettaglio']}" if p.get("dettaglio") else "")
+            icona = {"alta": "dialog-error", "media": "dialog-warning"}.get(p.get("gravita"), "dialog-information")
+            riga = self.elenco.aggiungi(Riga(p["titolo"], sotto, controllo, icona=icona))
+            self.righe[p["id"]] = (riga, controllo)
+        self.tutto.set_visible(any(p.get("risolvibile") for p in self.problemi))
+        self.intestazione.show()
+        self.elenco.set_no_show_all(False)
+        self.elenco.show_all()
+
+    def risolvi(self, id_, poi=None):
+        riga, controllo = self.righe.get(id_, (None, None))
+        if controllo:
+            controllo.set_sensitive(False)
+            controllo.set_label("Sto riparando…")
+
+        def lavoro():
+            if id_.startswith("u-"):
+                return ripara_utente(id_)
+            codice, testo = come_amministratore("ripara", id_)
+            try:
+                return json.loads(testo.strip().splitlines()[-1])
+            except (ValueError, IndexError):
+                return dict(risolto=False, dettaglio="Riparazione non completata")
+
+        def fatto(r):
+            r = r or {}
+            if controllo:
+                controllo.set_label("Risolto ✓" if r.get("risolto") else "Riprova")
+                controllo.set_sensitive(not r.get("risolto"))
+            if riga:
+                riga.imposta_sottotitolo("Risolto ✓  " + (r.get("dettaglio") or "") if r.get("risolto") else
+                                         "Non ancora risolto. " + (r.get("dettaglio") or "") +
+                                         " Crea un riepilogo per l'assistenza qui sotto.")
+            self.aggiorna()
+            if poi:
+                poi()
+        in_sottofondo(lavoro, fatto)
+
+    def risolvi_tutto(self):
+        da_fare = [p["id"] for p in self.problemi if p.get("risolvibile")]
+
+        def prossimo():
+            if da_fare:
+                self.risolvi(da_fare.pop(0), prossimo)
+        prossimo()
+
+    def riepilogo(self):
+        def lavoro():
+            parti = [f"Riepilogo Alba Linux - {time.strftime('%d/%m/%Y %H:%M')}",
+                     f"Versione: {versione_alba()}",
+                     f"Computer: {leggi_file('/sys/devices/virtual/dmi/id/sys_vendor')} {leggi_file('/sys/devices/virtual/dmi/id/product_name')}",
+                     "Schede grafiche: " + ", ".join(f"{n} ({d})" for n, d in schede_grafiche()),
+                     "", "== Problemi trovati =="]
+            parti += [f"- {p['titolo']}: {p.get('dettaglio', '')}" for p in self.problemi] or ["(controllo non ancora eseguito)"]
+            parti += ["", "== Riparazioni recenti ==", leggi_file(REGISTRO_RIPARAZIONI)[-3000:]]
+            parti += ["", "== Errori di sistema recenti ==",
+                      uscita(["journalctl", "-b", "-p", "3", "--no-pager", "-n", "80", "-o", "short"], timeout=20)]
+            parti += ["", "== Driver grafico ==", leggi_file("/var/lib/alba/driver-auto.log")[-2500:]]
+            parti += ["", "== Ultimo programma Windows ==", leggi_file(os.path.expanduser("~/.cache/alba/exe-ultimo.log"))[-2500:]]
+            cartella = os.path.expanduser("~/Documenti") if os.path.isdir(os.path.expanduser("~/Documenti")) else os.path.expanduser("~")
+            percorso = os.path.join(cartella, f"Alba-riepilogo-{time.strftime('%Y%m%d-%H%M')}.txt")
+            with open(percorso, "w", encoding="utf-8") as f:
+                f.write("\n".join(parti))
+            return percorso
+
+        def fatto(percorso):
+            if percorso and domanda(self.finestra, "Riepilogo creato",
+                                    f"L'ho salvato in {percorso}. Allegalo al messaggio per chi ti aiuta.",
+                                    si="Apri la cartella", no="Chiudi"):
+                avvia(["xdg-open", os.path.dirname(percorso)])
+        in_sottofondo(lavoro, fatto)
+
+
+# ---------------------------------------------------------------------------
+# Telefono
+# ---------------------------------------------------------------------------
+AUTOSTART_KDECONNECT = os.path.expanduser("~/.config/autostart/org.kde.kdeconnect.daemon.desktop")
+
+
+class PaginaTelefono(Pagina):
+    nome, titolo, icona = "telefono", "Telefono", "phone-symbolic"
+    parole = "telefono iphone android kde connect localsend airdrop file foto appunti collegamento"
+
+    def costruisci(self):
+        self.sottotitolo.set_text("Scambia foto e file con il telefono, condividi gli appunti e usalo come telecomando.")
+        r = self.sezione()
+        self.attivo = Interruttore(self._attiva)
+        self.riga_attivo = r.aggiungi(Riga("Collegamento al telefono", "", self.attivo, icona="phone"))
+        r = self.sezione("Le app")
+        self.p_kde = pulsante("Apri", lambda: avvia(["kdeconnect-app"], ["kdeconnect-settings"]))
+        self.r_kde = r.aggiungi(Riga("KDE Connect", "File, appunti, telecomando e (su Android) notifiche e messaggi",
+                                     self.p_kde, icona="kdeconnect"))
+        self.p_ls = pulsante("Apri", lambda: avvia(["localsend_app"], ["localsend"]))
+        self.r_ls = r.aggiungi(Riga("LocalSend", "Come AirDrop: manda foto e video velocissimi, senza cavi",
+                                    self.p_ls, icona="document-send"))
+        r = self.sezione("Come si collega")
+        for passo in ("1. Sul telefono installa le app gratuite «KDE Connect» e «LocalSend» (App Store o Play Store).",
+                      "2. Collega telefono e computer alla stessa rete Wi-Fi.",
+                      "3. Apri l'app sul telefono: il computer compare da solo. Conferma l'associazione sul PC.",
+                      "Con l'iPhone funzionano file, foto, appunti e telecomando. Notifiche e messaggi sul PC "
+                      "funzionano solo con Android (Apple non lo permette)."):
+            r.aggiungi(Riga(passo))
+
+    def _attiva(self, acceso):
+        os.makedirs(os.path.dirname(AUTOSTART_KDECONNECT), exist_ok=True)
+        if acceso:
+            if os.path.exists(AUTOSTART_KDECONNECT):
+                os.remove(AUTOSTART_KDECONNECT)
+            avvia(["/usr/lib/x86_64-linux-gnu/libexec/kdeconnectd"], ["kdeconnectd"], ["kdeconnect-indicator"])
+        else:
+            with open(AUTOSTART_KDECONNECT, "w") as f:
+                f.write("[Desktop Entry]\nType=Application\nName=KDE Connect\nExec=kdeconnectd\nHidden=true\n")
+            esegui(["pkill", "-u", str(os.getuid()), "-f", "kdeconnectd"])
+        GLib.timeout_add(800, lambda: (self.aggiorna(), False)[1])
+
+    def aggiorna(self):
+        kde = esiste("kdeconnect-app") or esiste("kdeconnect-cli")
+        ls = esiste("localsend_app") or esiste("localsend")
+        self.p_kde.set_sensitive(kde)
+        self.p_ls.set_sensitive(ls)
+        self.r_kde.imposta_sottotitolo("File, appunti, telecomando e (su Android) notifiche e messaggi" if kde else
+                                       "In arrivo: si installa da solo in sottofondo quando sei connesso a Internet")
+        self.r_ls.imposta_sottotitolo("Come AirDrop: manda foto e video velocissimi, senza cavi" if ls else
+                                      "In arrivo: si installa da solo in sottofondo quando sei connesso a Internet")
+        attivo = kde and not os.path.exists(AUTOSTART_KDECONNECT)
+        self.attivo.set_sensitive(kde)
+        self.attivo.imposta(attivo)
+        in_esecuzione = esegui(["pgrep", "-u", str(os.getuid()), "-f", "kdeconnectd"])[0] == 0
+        self.riga_attivo.imposta_sottotitolo("Attivo: il telefono può trovare questo computer" if attivo and in_esecuzione
+                                             else ("Attivo all'accesso" if attivo else "Spento"))
+
+
+# ---------------------------------------------------------------------------
 # Sicurezza
 # ---------------------------------------------------------------------------
 class PaginaSicurezza(Pagina):
@@ -1950,7 +2243,7 @@ class PaginaInfo(Pagina):
 # Finestra principale
 # ---------------------------------------------------------------------------
 PAGINE = [PaginaWifi, PaginaBluetooth, None, PaginaSchermo, PaginaSuono, PaginaBatteria, None,
-          PaginaAspetto, PaginaDataOra, PaginaGrafica, PaginaDispositivi, None, PaginaSicurezza, PaginaAggiornamenti, PaginaInfo]
+          PaginaAspetto, PaginaDataOra, PaginaGrafica, PaginaDispositivi, PaginaTelefono, None, PaginaSicurezza, PaginaProblemi, PaginaAggiornamenti, PaginaInfo]
 
 
 class Impostazioni(Gtk.Window):

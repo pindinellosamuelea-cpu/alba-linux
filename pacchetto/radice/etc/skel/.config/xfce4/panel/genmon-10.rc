@@ -1,0 +1,6 @@
+Command=alba-icona bluetooth
+UseLabel=0
+Text=
+UpdatePeriod=10000
+Font=Inter 10
+EnableSingleRow=1

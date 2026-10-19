@@ -1,0 +1,18 @@
+/* Alba Linux: notifiche arrotondate, chiare da leggere */
+#XfceNotifyWindow {
+  background-color: rgba(28, 30, 46, 0.96);
+  color: #f2f2f7;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  padding: 6px;
+}
+#XfceNotifyWindow:hover { background-color: rgba(36, 38, 58, 0.98); }
+#XfceNotifyWindow #summary { font-weight: 700; font-size: 10.5pt; color: #ffffff; }
+#XfceNotifyWindow #body { color: rgba(242, 242, 247, 0.80); }
+#XfceNotifyWindow button {
+  border-radius: 9px; border: none; box-shadow: none;
+  background-image: none; background-color: rgba(255, 255, 255, 0.10); color: #ffffff;
+}
+#XfceNotifyWindow button:hover { background-color: rgba(255, 138, 76, 0.85); }
+#XfceNotifyWindow progressbar trough { background-color: rgba(255, 255, 255, 0.12); border-radius: 4px; min-height: 6px; }
+#XfceNotifyWindow progressbar progress { background-color: #ff8a4c; border-radius: 4px; min-height: 6px; }

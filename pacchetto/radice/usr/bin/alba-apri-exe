@@ -75,9 +75,95 @@ if [ ! -f "$CONF/windows-pronto" ]; then
       --text="Sto finendo di preparare la compatibilità con Windows…\nSuccede solo la prima volta." 2>/dev/null
 fi
 
-# --- 3. Avvio del programma ----------------------------------------------
+# --- 3. Avvio del programma, con riparazione automatica --------------------
 cd "$(dirname "$FILE")" || exit 1
-case "${NOME,,}" in
-  *.bat|*.cmd) exec /usr/bin/alba-gpu-dedicata wine cmd /c "$FILE" >>"$LOG" 2>&1 ;;
-  *)           exec /usr/bin/alba-gpu-dedicata wine start /unix "$FILE" >>"$LOG" 2>&1 ;;
-esac
+CORRENTE="${XDG_CACHE_HOME:-$HOME/.cache}/alba/exe-ultimo.log"
+
+avvia_programma() {
+  : > "$CORRENTE"
+  case "${NOME,,}" in
+    *.bat|*.cmd) /usr/bin/alba-gpu-dedicata wine cmd /c "$FILE" >>"$CORRENTE" 2>&1 ;;
+    *.msi)       /usr/bin/alba-gpu-dedicata wine msiexec /i "$FILE" >>"$CORRENTE" 2>&1 ;;
+    *.lnk)       /usr/bin/alba-gpu-dedicata wine start /wait /unix "$FILE" >>"$CORRENTE" 2>&1 ;;
+    *)           /usr/bin/alba-gpu-dedicata wine "$FILE" >>"$CORRENTE" 2>&1 ;;
+  esac
+  local codice=$?
+  cat "$CORRENTE" >> "$LOG"
+  return $codice
+}
+
+# Che cosa manca? Legge l'errore vero dal registro di Wine
+cosa_manca() {
+  local dll
+  dll="$(grep -oiE "Library [A-Za-z0-9_.-]+\.dll" "$CORRENTE" | head -1 | awk '{print tolower($2)}')"
+  case "$dll" in
+    vcruntime140*|msvcp140*|mfc140*|vcomp140*|concrt140*) echo "vcrun2022|le librerie Visual C++ 2015-2022" ;;
+    msvcr120*|msvcp120*|mfc120*) echo "vcrun2013|le librerie Visual C++ 2013" ;;
+    msvcr110*|msvcp110*|mfc110*) echo "vcrun2012|le librerie Visual C++ 2012" ;;
+    msvcr100*|msvcp100*|mfc100*) echo "vcrun2010|le librerie Visual C++ 2010" ;;
+    msvcr90*|msvcp90*)           echo "vcrun2008|le librerie Visual C++ 2008" ;;
+    d3dx9_*)                     echo "d3dx9|DirectX 9" ;;
+    d3dx10_*)                    echo "d3dx10|DirectX 10" ;;
+    d3dx11_*)                    echo "d3dx11_43|DirectX 11" ;;
+    d3dcompiler_43*)             echo "d3dcompiler_43|il compilatore DirectX" ;;
+    d3dcompiler_47*)             echo "d3dcompiler_47|il compilatore DirectX" ;;
+    xinput*)                     echo "xinput|il supporto ai controller DirectX" ;;
+    xaudio2*|x3daudio*)          echo "xact|l'audio DirectX" ;;
+    physxloader*|physxcore*)     echo "physx|NVIDIA PhysX" ;;
+    openal32*)                   echo "openal|OpenAL (audio dei giochi)" ;;
+    mscoree*)                    echo "dotnet48|.NET Framework 4.8" ;;
+    "") ;;
+    *)                           echo "|$dll" ;;
+  esac
+  [ -z "$dll" ] && grep -qiE "\.NET Framework|mscoree|clr\.dll" "$CORRENTE" && echo "dotnet48|.NET Framework 4.8"
+}
+
+proton_disponibile() {
+  ls -d "$HOME"/.steam/steam/steamapps/common/Proton*/proton "$HOME"/.local/share/Steam/steamapps/common/Proton*/proton 2>/dev/null | sort -V | tail -1
+}
+
+avvia_con_proton() {
+  local P; P="$(proton_disponibile)"
+  [ -n "$P" ] || return 1
+  export STEAM_COMPAT_DATA_PATH="$HOME/.local/share/alba/proton"
+  export STEAM_COMPAT_CLIENT_INSTALL_PATH="$HOME/.steam/steam"
+  mkdir -p "$STEAM_COMPAT_DATA_PATH"
+  exec /usr/bin/alba-gpu-dedicata "$P" run "$FILE" >>"$LOG" 2>&1
+}
+
+INIZIO=$(date +%s)
+avvia_programma
+CODICE=$?
+DURATA=$(( $(date +%s) - INIZIO ))
+
+# Uscito subito con un errore: proviamo a capire e sistemare
+if [ "$CODICE" -ne 0 ] && [ "$DURATA" -lt 60 ]; then
+  MANCA="$(cosa_manca | head -1)"
+  VERBO="${MANCA%%|*}"; DESCR="${MANCA#*|}"
+  if [ -n "$VERBO" ] && command -v winetricks >/dev/null; then
+    if zenity --question --title="$TITOLO" --width=460 \
+         --text="<b>$NOME_M</b> non è partito perché manca <b>$DESCR</b>.\n\nLo installo adesso e riprovo? (serve Internet, qualche minuto)" \
+         --ok-label="Installa e riprova" --cancel-label="Annulla" 2>/dev/null; then
+      ( winetricks -q "$VERBO" >>"$LOG" 2>&1 ) | zenity --progress --pulsate --auto-close --no-cancel \
+          --title="$TITOLO" --width=420 --text="Installo $DESCR…" 2>/dev/null
+      avvia_programma && exit 0
+    fi
+  fi
+  if grep -qi "Bad EXE format" "$CORRENTE"; then
+    zenity --error --title="$TITOLO" --width=460 \
+      --text="<b>$NOME_M</b> non è un programma per PC Windows (forse è per telefoni o per processori ARM)." 2>/dev/null
+    exit 1
+  fi
+  BOTTONE=()
+  [ -n "$(proton_disponibile)" ] && BOTTONE=(--extra-button "Prova con Proton (Steam)")
+  SCELTA="$(zenity --question --title="$TITOLO" --width=480 \
+     --text="<b>$NOME_M</b> si è chiuso con un errore${DESCR:+ (manca: <b>$DESCR</b>)}.\n\nPuoi provare con Proton, oppure aprire <b>Risoluzione problemi</b>: legge l'errore e prova a sistemarlo." \
+     --ok-label="Risoluzione problemi" --cancel-label="Chiudi" "${BOTTONE[@]}" 2>/dev/null)"
+  RISP=$?
+  if [ "$SCELTA" = "Prova con Proton (Steam)" ]; then
+    avvia_con_proton
+  elif [ $RISP -eq 0 ]; then
+    setsid -f alba-impostazioni --pagina problemi >/dev/null 2>&1
+  fi
+fi
+exit 0

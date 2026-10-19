@@ -1,9 +1,34 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- Alba Linux: voci chiare nel menu del tasto destro -->
 <actions>
+  <action>
+    <icon>package-x-generic</icon>
+    <name>Comprimi in file .zip</name>
+    <unique-id>alba-comprimi-zip</unique-id>
+    <command>sh -c 'cd "$(dirname "$1")" &amp;&amp; n="$(basename "$1")"; n="${n%.*}"; [ $# -gt 1 ] &amp;&amp; n="Archivio"; 7z a -tzip -- "$n.zip" "$@" &gt;/dev/null &amp;&amp; notify-send -i package-x-generic "Compresso" "$n.zip"' _ %F</command>
+    <description>Crea un archivio .zip con i file selezionati</description>
+    <range>*</range>
+    <patterns>*</patterns>
+    <directories/>
+    <audio-files/>
+    <image-files/>
+    <other-files/>
+    <text-files/>
+    <video-files/>
+  </action>
+  <action>
+    <icon>extract-archive</icon>
+    <name>Estrai qui</name>
+    <unique-id>alba-estrai-qui</unique-id>
+    <command>sh -c 'for f in "$@"; do if command -v unar &gt;/dev/null; then unar -q -f -d -o "$(dirname "$f")" -- "$f" || exit 1; else d="${f%.*}"; 7z x -y -o"$d" -- "$f" &gt;/dev/null || exit 1; fi; done; notify-send -i extract-archive "Estratto" "$(basename "$1")"' _ %F</command>
+    <description>Estrae l'archivio in una cartella con lo stesso nome</description>
+    <range>*</range>
+    <patterns>*.zip;*.ZIP;*.rar;*.RAR;*.7z;*.tar;*.tar.gz;*.tgz;*.tar.xz;*.txz;*.tar.bz2;*.tar.zst;*.gz;*.xz;*.bz2;*.iso;*.cab</patterns>
+    <other-files/>
+  </action>
   <action>
     <icon>video-display</icon>
     <name>Avvia con scheda grafica dedicata</name>
-    <submenu></submenu>
     <unique-id>alba-gpu-dedicata-1</unique-id>
     <command>/usr/bin/alba-gpu-dedicata xdg-open %f</command>
     <description>Usa la scheda grafica più potente</description>
@@ -12,15 +37,17 @@
     <other-files/>
   </action>
   <action>
-    <icon>utilities-terminal</icon>
-    <name>Apri terminale qui</name>
-    <submenu></submenu>
-    <unique-id>alba-terminale-1</unique-id>
-    <command>exo-open --working-directory %f --launch TerminalEmulator</command>
-    <description>Apre un terminale in questa cartella</description>
-    <range></range>
+    <icon>document-send</icon>
+    <name>Invia al telefono</name>
+    <unique-id>alba-invia-telefono</unique-id>
+    <command>sh -c 'command -v localsend_app &gt;/dev/null &amp;&amp; exec localsend_app; command -v localsend &gt;/dev/null &amp;&amp; exec localsend; exec kdeconnect-app'</command>
+    <description>Manda i file al telefono con LocalSend</description>
+    <range>*</range>
     <patterns>*</patterns>
-    <startup-notify/>
-    <directories/>
+    <audio-files/>
+    <image-files/>
+    <other-files/>
+    <text-files/>
+    <video-files/>
   </action>
 </actions>

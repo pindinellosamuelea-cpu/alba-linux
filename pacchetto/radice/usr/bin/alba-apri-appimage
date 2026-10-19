@@ -1,0 +1,20 @@
+#!/bin/bash
+# Alba Linux - apre le app in formato AppImage con un doppio clic,
+# come un .exe su Windows: niente terminale, niente "rendi eseguibile".
+set -u
+FILE="${1:-}"
+[ -f "$FILE" ] || exit 1
+NOME="$(basename "$FILE")"
+if [ ! -x "$FILE" ]; then
+  zenity --question --title="Apri app" --width=420 \
+    --text="Vuoi aprire <b>$(printf '%s' "$NOME" | sed 's/&/\&amp;/g; s/</\&lt;/g')</b>?\n\nAprila solo se ti fidi della sua provenienza." \
+    --ok-label="Apri" --cancel-label="Annulla" 2>/dev/null || exit 0
+  chmod +x "$FILE" || { zenity --error --text="Non riesco ad aprire il file (cartella protetta?)." 2>/dev/null; exit 1; }
+fi
+cd "$(dirname "$FILE")" || exit 1
+if ! "$FILE" "${@:2}" 2>/tmp/alba-appimage-$$.log; then
+  if grep -qi "fuse" /tmp/alba-appimage-$$.log; then
+    APPIMAGE_EXTRACT_AND_RUN=1 exec "$FILE" "${@:2}"
+  fi
+fi
+rm -f /tmp/alba-appimage-$$.log

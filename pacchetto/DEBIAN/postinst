@@ -144,6 +144,16 @@ configura_accesso
 configura_smartcard
 systemctl enable pcscd.socket >/dev/null 2>&1 || true
 
+# --- App extra in sottofondo (PeaZip, LocalSend, KDE Connect, Wine recente) ---
+systemctl enable alba-extra.service >/dev/null 2>&1 || true
+if sistema_avviato; then
+  systemctl start --no-block alba-extra.service >/dev/null 2>&1 || true
+fi
+
+# --- Risoluzione problemi automatica (ogni 3 ore, ripara solo cose sicure) ---
+systemctl enable alba-diagnosi.timer >/dev/null 2>&1 || true
+sistema_avviato && systemctl start --no-block alba-diagnosi.timer >/dev/null 2>&1 || true
+
 # --- Driver grafico automatico (NVIDIA) --------------------------------------
 systemctl enable alba-driver-auto.service >/dev/null 2>&1 || true
 if sistema_avviato; then

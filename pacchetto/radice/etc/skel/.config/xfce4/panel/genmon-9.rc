@@ -1,0 +1,6 @@
+Command=alba-icona wifi
+UseLabel=0
+Text=
+UpdatePeriod=5000
+Font=Inter 10
+EnableSingleRow=1

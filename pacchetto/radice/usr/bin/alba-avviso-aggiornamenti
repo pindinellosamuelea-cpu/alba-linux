@@ -6,6 +6,29 @@ set -u
 CONF="${XDG_CONFIG_HOME:-$HOME/.config}/alba"
 mkdir -p "$CONF"
 
+# Riparazioni fatte da sole in sottofondo: avvisa con una notifica chiara
+REG=/var/lib/alba/riparazioni.log
+if [ -f "$REG" ]; then
+  VISTO="$(cat "$CONF/riparazioni-viste" 2>/dev/null || echo 0)"
+  python3 - "$REG" "$VISTO" <<'PY' | while IFS='|' read -r ora titolo risolto; do
+import json, sys
+for l in open(sys.argv[1]):
+    try:
+        d = json.loads(l)
+    except ValueError:
+        continue
+    if d.get("ora", 0) > int(sys.argv[2]):
+        print(f"{d['ora']}|{d.get('titolo', '')}|{d.get('risolto')}")
+PY
+    if [ "$risolto" = "True" ]; then
+      notify-send -a "Alba" -i emblem-ok-symbolic "Ho sistemato un problema" "$titolo: risolto." 2>/dev/null
+    else
+      notify-send -a "Alba" -i dialog-warning-symbolic "Problema da controllare" "$titolo. Apri Impostazioni → Risoluzione problemi." 2>/dev/null
+    fi
+    echo "$ora" > "$CONF/riparazioni-viste"
+  done
+fi
+
 # Driver NVIDIA installato in automatico: serve un riavvio
 if [ -f /var/lib/alba/driver-riavvio ] && [ ! -e /proc/driver/nvidia/version ] && \
    [ "$(cat "$CONF/avviso-driver" 2>/dev/null)" != "$(date +%F)" ]; then

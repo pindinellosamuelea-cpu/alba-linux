@@ -1,0 +1,10 @@
+[Unit]
+Description=Alba - controllo dei problemi ogni 3 ore
+
+[Timer]
+OnBootSec=4min
+OnUnitActiveSec=3h
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target

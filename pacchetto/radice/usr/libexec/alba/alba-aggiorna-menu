@@ -40,20 +40,24 @@ AVANZATI = [
     "libreoffice-startcenter", "libreoffice-xsltfilter", "winetricks", "wine",
     "alba-impostazioni-windows", "alba-programmi-windows-installati", "lstopo",
     "vkcube", "vulkan-*", "nvidia-settings", "corectrl", "org.corectrl.CoreCtrl",
-    "timeshift-gtk", "system-config-printer", "xfce4-screenshooter",
-    "org.xfce.ristretto", "gcr-*", "galculator", "xsane", "mpv", "debian-*",
-    "python3*", "lutris", "net.lutris.Lutris", "gamemoderun", "mangohud",
+    "gcr-*", "xsane", "mpv", "debian-*", "python3*", "gamemoderun", "mangohud",
     "org.gnome.Software.Editor", "xdg-*", "x11-*",
+    # Terminale e strumenti tecnici (niente terminale per l'uso di tutti i giorni)
+    "xfce4-terminal", "org.xfce.terminal", "xfce4-terminal-settings", "uxterm",
+    # Doppioni e app poco utili in "Accessori"
+    "xfburn", "org.xfce.xfburn", "parole", "org.xfce.Parole", "xfce4-notes", "org.xfce.notes",
+    "orage", "org.xfce.orage", "globaltime", "xfce4-kbdleds", "wine-*", "org.kde.kdeconnect.sms",
+    "org.kde.kdeconnect-settings", "org.kde.kdeconnect.handler", "org.kde.kdeconnect.nonplasma",
+    "kdeconnect-*", "jstest-gtk", "pcsc_scan", "PeaZip*.desktop", "peazip-*", "org.gnome.Devhelp",
+    "lightdm-settings", "slick-greeter*", "mission-center-*", "vim-*",
 ]
-# Restano visibili nel menu anche se compaiono qui sopra per somiglianza
-SEMPRE_VISIBILI = {"lutris", "net.lutris.Lutris", "timeshift-gtk", "system-config-printer",
-                   "xfce4-screenshooter", "org.xfce.ristretto", "galculator"}
+SEMPRE_VISIBILI = set()
 
 SCHEDA_DEDICATA = [
     "steam", "lutris", "net.lutris.Lutris", "blender", "org.kde.kdenlive", "kdenlive",
     "org.kde.krita", "krita", "gimp", "org.gimp.GIMP", "obs", "com.obsproject.Studio",
     "darktable", "org.darktable.darktable", "shotcut", "org.shotcut.Shotcut",
-    "inkscape", "org.inkscape.Inkscape", "audacity",
+    "inkscape", "org.inkscape.Inkscape", "audacity", "heroic", "com.heroicgameslauncher.hgl",
 ]
 
 RINOMINA = {
@@ -73,6 +77,24 @@ RINOMINA = {
     "galculator": ("Calcolatrice", None),
     "timeshift-gtk": ("Punti di ripristino", None),
     "system-config-printer": ("Stampanti", None),
+    "peazip": ("Archivi (PeaZip)", None),
+    "io.github.peazip.PeaZip": ("Archivi (PeaZip)", None),
+    "localsend_app": ("LocalSend", None),
+    "org.localsend.localsend_app": ("LocalSend", None),
+    "org.kde.kdeconnect.app": ("Collegamento al telefono", None),
+    "io.missioncenter.MissionCenter": ("Gestione attività", None),
+    "vlc": ("VLC", None),
+    "org.kde.kdenlive": ("Kdenlive (video)", None),
+    "org.kde.krita": ("Krita (disegno)", None),
+    "gimp": ("GIMP (foto)", None),
+    "org.gimp.GIMP": ("GIMP (foto)", None),
+    "org.inkscape.Inkscape": ("Inkscape (grafica)", None),
+    "inkscape": ("Inkscape (grafica)", None),
+    "com.obsproject.Studio": ("OBS (registra lo schermo)", None),
+    "obs": ("OBS (registra lo schermo)", None),
+    "audacity": ("Audacity (audio)", None),
+    "simple-scan": ("Scanner", None),
+    "clamtk": ("Antivirus", None),
 }
 
 

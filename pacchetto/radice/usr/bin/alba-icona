@@ -1,0 +1,44 @@
+#!/bin/bash
+# Alba Linux - icone dinamiche della barra (plugin "genmon"):
+# Wi-Fi, Bluetooth e notifiche. Un clic apre il menu rapido.
+# Uso: alba-icona wifi|bluetooth|notifiche
+case "${1:-}" in
+  wifi)
+    if ! command -v nmcli >/dev/null; then echo "<icon>network-offline-symbolic</icon>"; exit 0; fi
+    if [ "$(nmcli radio wifi 2>/dev/null)" != "enabled" ]; then
+      ICONA=network-wireless-offline-symbolic; TIP="Wi-Fi spento"
+    else
+      R="$(nmcli -t -f ACTIVE,SIGNAL,SSID device wifi list --rescan no 2>/dev/null | grep '^yes:' | head -1)"
+      if [ -n "$R" ]; then
+        S="$(echo "$R" | cut -d: -f2)"; N="$(echo "$R" | cut -d: -f3-)"
+        if [ "$S" -gt 75 ]; then L=excellent; elif [ "$S" -gt 50 ]; then L=good; elif [ "$S" -gt 25 ]; then L=ok; else L=weak; fi
+        ICONA="network-wireless-signal-$L-symbolic"; TIP="Wi-Fi: $N"
+      elif nmcli -t -f TYPE,STATE device 2>/dev/null | grep -q '^ethernet:connected'; then
+        ICONA=network-wired-symbolic; TIP="Connesso via cavo"
+      else
+        ICONA=network-wireless-signal-none-symbolic; TIP="Non connesso: clicca per scegliere una rete"
+      fi
+    fi
+    echo "<icon>$ICONA</icon><iconclick>alba-rapido wifi</iconclick><tool>$TIP</tool>"
+    ;;
+  bluetooth)
+    if ! command -v bluetoothctl >/dev/null || ! bluetoothctl show >/dev/null 2>&1 || [ -z "$(bluetoothctl list 2>/dev/null)" ]; then
+      echo "<icon>bluetooth-disabled-symbolic</icon><iconclick>alba-rapido bluetooth</iconclick><tool>Bluetooth non disponibile</tool>"; exit 0
+    fi
+    if bluetoothctl show 2>/dev/null | grep -q "Powered: yes"; then
+      N="$(bluetoothctl devices Connected 2>/dev/null | wc -l)"
+      if [ "$N" -gt 0 ]; then ICONA=bluetooth-active-symbolic; TIP="Bluetooth: $N dispositiv$([ "$N" = 1 ] && echo o || echo i) connesso"
+      else ICONA=bluetooth-active-symbolic; TIP="Bluetooth acceso"; fi
+    else
+      ICONA=bluetooth-disabled-symbolic; TIP="Bluetooth spento"
+    fi
+    echo "<icon>$ICONA</icon><iconclick>alba-rapido bluetooth</iconclick><tool>$TIP</tool>"
+    ;;
+  notifiche)
+    if [ "$(xfconf-query -c xfce4-notifyd -p /do-not-disturb 2>/dev/null)" = "true" ]; then
+      echo "<icon>notifications-disabled-symbolic</icon><iconclick>alba-rapido notifiche</iconclick><tool>Non disturbare attivo</tool>"
+    else
+      echo "<icon>preferences-system-notifications-symbolic</icon><iconclick>alba-rapido notifiche</iconclick><tool>Notifiche e calendario</tool>"
+    fi
+    ;;
+esac

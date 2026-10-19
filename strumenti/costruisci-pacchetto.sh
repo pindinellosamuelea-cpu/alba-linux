@@ -38,10 +38,10 @@ if [ "${TEMA_FLUENT:-0}" = 1 ]; then
     TEMA_CHIARO="$chiaro"; TEMA_SCURO="$scuro"
     # Teniamo solo le due varianti usate (pacchetto più leggero)
     ( cd "$P/usr/share/themes" && for d in *; do
-        [ "$d" = "$TEMA_CHIARO" ] || [ "$d" = "$TEMA_SCURO" ] || rm -rf "$d"; done )
+        [ "$d" = "$TEMA_CHIARO" ] || [ "$d" = "$TEMA_SCURO" ] || [ "$d" = "Alba" ] || rm -rf "$d"; done )
   else
     echo "ATTENZIONE: tema Fluent non trovato, uso Materia"
-    rm -rf "$P/usr/share/themes"/*
+    find "$P/usr/share/themes" -mindepth 1 -maxdepth 1 ! -name Alba -exec rm -rf {} +
   fi
 fi
 echo ">> Temi: chiaro=$TEMA_CHIARO scuro=$TEMA_SCURO"
@@ -53,6 +53,19 @@ XFWM_SCURO="$TEMA_SCURO"
 [ -d "$P/usr/share/themes/$TEMA_SCURO/xfwm4" ] || XFWM_SCURO="Arc-Dark"
 sed -i "s/@TEMA_SCURO@/$TEMA_SCURO/" "$P/etc/skel/.config/xfce4/xfconf/xfce-perchannel-xml/xsettings.xml"
 sed -i "s/@TEMA_SCURO_XFWM@/$XFWM_SCURO/" "$P/etc/skel/.config/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml"
+
+# --- Canale aggiornamenti: firmato (se c'è la chiave) o solo HTTPS ----------------
+CANALE="https://raw.githubusercontent.com/pindinellosamuelea-cpu/alba-linux/apt ./"
+if [ "${ALBA_FIRMATO:-0}" = 1 ]; then
+  mkdir -p "$P/usr/share/keyrings"
+  cp pacchetto/chiave-pubblica.asc "$P/usr/share/keyrings/alba-archive-keyring.asc"
+  printf '# Canale aggiornamenti di Alba Linux (firmato)\ndeb [signed-by=/usr/share/keyrings/alba-archive-keyring.asc] %s\n' "$CANALE" \
+    > "$P/etc/apt/sources.list.d/alba.list"
+  echo ">> Canale aggiornamenti: firmato"
+else
+  printf '# Canale aggiornamenti di Alba Linux\ndeb [trusted=yes] %s\n' "$CANALE" > "$P/etc/apt/sources.list.d/alba.list"
+  echo ">> Canale aggiornamenti: non firmato (manca la chiave)"
+fi
 
 # --- Permessi -------------------------------------------------------------------
 find "$P" -type d -exec chmod 755 {} +

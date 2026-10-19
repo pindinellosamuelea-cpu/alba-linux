@@ -1,0 +1,6 @@
+Command=alba-icona notifiche
+UseLabel=0
+Text=
+UpdatePeriod=3000
+Font=Inter 10
+EnableSingleRow=1

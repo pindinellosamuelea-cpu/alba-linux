@@ -2,6 +2,8 @@
 # Ultimi ritocchi dopo che tutti i programmi sono installati:
 # menu Start in ordine, logo di avvio, Gestione attività con GPU.
 set -e
+# App extra (PeaZip, LocalSend, KDE Connect, Wine recente) già nell'ISO
+/usr/libexec/alba/alba-extra --costruzione || true
 /usr/libexec/alba/alba-aggiorna-menu || true
 plymouth-set-default-theme alba 2>/dev/null || true
 

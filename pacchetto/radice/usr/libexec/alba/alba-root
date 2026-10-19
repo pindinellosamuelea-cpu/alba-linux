@@ -20,6 +20,7 @@ case "${1:-}" in
     command -v flatpak >/dev/null && flatpak update -y --noninteractive --system >/dev/null 2>&1
     # Driver grafico migliore per questo computer (se serve)
     /usr/libexec/alba/alba-driver-auto --aggiornamento >/dev/null 2>&1
+    /usr/libexec/alba/alba-extra >/dev/null 2>&1
     exit $esito
     ;;
   firewall)
@@ -53,6 +54,13 @@ case "${1:-}" in
     ;;
   driver)
     exec /usr/libexec/alba/alba-driver-auto --forza
+    ;;
+  diagnosi)
+    exec /usr/libexec/alba/alba-diagnosi --controlla
+    ;;
+  ripara)
+    [[ "$ARG" =~ ^[a-z0-9-]{1,40}$ ]] || exit 2
+    exec /usr/libexec/alba/alba-diagnosi --ripara "$ARG"
     ;;
   installa-cie)
     URL=https://github.com/italia/cie-middleware-linux/releases/download/1.4.3.1/CIE-Middleware-1.4.3-2.amd64.deb

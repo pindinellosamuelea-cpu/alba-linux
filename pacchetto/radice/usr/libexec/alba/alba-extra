@@ -1,0 +1,109 @@
+#!/bin/bash
+# Alba Linux - installa in sottofondo le app che non sono nei repository
+# Debian o che arrivano con gli aggiornamenti di Alba:
+#   PeaZip (archivi, come WinRAR), LocalSend (come AirDrop),
+#   KDE Connect (collegamento al telefono), 7-Zip con supporto RAR,
+#   indicatori della barra, avvio delle AppImage.
+# Ogni app si installa una volta sola; se manca Internet riprova dopo.
+#
+# Uso: alba-extra [--costruzione]   (--costruzione: durante la creazione dell'ISO)
+set -u
+STATO=/var/lib/alba/extra
+LOG=/var/lib/alba/extra.log
+VERSIONE_EXTRA=1
+mkdir -p "$STATO"
+exec > >(tee -a "$LOG") 2>&1
+echo "== $(date) =="
+[ -d /run/live/medium ] && [ "${1:-}" != "--costruzione" ] && exit 0
+
+export DEBIAN_FRONTEND=noninteractive
+APT=(apt-get -y -q -o DPkg::Lock::Timeout=1800 -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold)
+
+fatto() { [ -f "$STATO/$1.v$VERSIONE_EXTRA" ]; }
+segna() { touch "$STATO/$1.v$VERSIONE_EXTRA"; echo "OK: $1"; }
+
+# Aspetta Internet (fino a 10 minuti)
+for _ in $(seq 1 120); do
+  getent hosts github.com >/dev/null 2>&1 && break
+  sleep 5
+done
+getent hosts github.com >/dev/null 2>&1 || { echo "Niente Internet, riprovo dopo"; exit 0; }
+"${APT[@]}" update >/dev/null 2>&1 || true
+
+# Pacchetti dai repository Debian (ognuno da solo: se uno manca, gli altri si installano)
+apt_extra() {
+  local nome="$1"; shift
+  fatto "$nome" && return
+  local ok=1
+  for p in "$@"; do
+    "${APT[@]}" install "$p" >/dev/null 2>&1 || { echo "ATTENZIONE: $p non disponibile"; ok=0; }
+  done
+  [ "$ok" = 1 ] && segna "$nome"
+}
+apt_extra archivi 7zip 7zip-rar unrar unar
+apt_extra barra xfce4-genmon-plugin
+apt_extra appimage libfuse2t64
+apt_extra telefono kdeconnect
+apt_extra exe winetricks cabextract
+apt_extra audio libspa-0.2-bluetooth alsa-ucm-conf firmware-sof-signed
+
+# Ultimo .deb pubblicato su GitHub da un progetto (filtro sul nome del file)
+deb_github() {  # nome progetto filtro
+  local nome="$1" progetto="$2" filtro="$3"
+  fatto "$nome" && return
+  local url
+  url="$(curl -fsSL "https://api.github.com/repos/$progetto/releases/latest" 2>/dev/null | \
+         grep -Eo '"browser_download_url": *"[^"]+"' | cut -d'"' -f4 | grep -E "$filtro" | head -1)"
+  if [ -z "$url" ]; then echo "ATTENZIONE: $nome non trovato su GitHub"; return; fi
+  local t; t="$(mktemp -d)"
+  if curl -fsSL -o "$t/pacchetto.deb" "$url" && "${APT[@]}" install "$t/pacchetto.deb"; then
+    segna "$nome"
+  else
+    echo "ATTENZIONE: installazione di $nome non riuscita ($url)"
+  fi
+  rm -rf "$t"
+}
+deb_github peazip peazip/PeaZip 'GTK2.*amd64\.deb$|gtk2.*amd64\.deb$'
+fatto peazip || deb_github peazip peazip/PeaZip 'Qt6.*amd64\.deb$|Qt5.*amd64\.deb$'
+deb_github heroic Heroic-Games-Launcher/HeroicGamesLauncher 'amd64\.deb$'
+deb_github localsend localsend/localsend 'linux-x86-64\.deb$|x86_64\.deb$|amd64\.deb$'
+
+# Wine più recente (WineHQ stable): più programmi Windows compatibili.
+# Solo se WineHQ pubblica la versione per questo Debian; altrimenti resta
+# il Wine di Debian, che funziona già.
+if ! fatto wine-recente; then
+  CODENAME="$(. /etc/os-release; echo "${VERSION_CODENAME:-trixie}")"
+  SRC="https://dl.winehq.org/wine-builds/debian/dists/$CODENAME/winehq-$CODENAME.sources"
+  if curl -fsSL -o /tmp/winehq.sources "$SRC"; then
+    mkdir -p /etc/apt/keyrings
+    if curl -fsSL -o /etc/apt/keyrings/winehq-archive.key https://dl.winehq.org/wine-builds/winehq.key; then
+      cp /tmp/winehq.sources "/etc/apt/sources.list.d/winehq-$CODENAME.sources"
+      if "${APT[@]}" update >/dev/null 2>&1 && "${APT[@]}" install --install-recommends winehq-stable; then
+        segna wine-recente
+        # l'ambiente Windows degli utenti si aggiorna da solo al prossimo avvio di un .exe
+      else
+        echo "ATTENZIONE: WineHQ non installato, resta il Wine di Debian"
+        rm -f "/etc/apt/sources.list.d/winehq-$CODENAME.sources"
+        "${APT[@]}" update >/dev/null 2>&1 || true
+      fi
+    fi
+  else
+    echo "WineHQ non disponibile per $CODENAME: resta il Wine di Debian"
+  fi
+  rm -f /tmp/winehq.sources
+fi
+
+# Telefono: apri il firewall solo verso la rete di casa (KDE Connect e LocalSend)
+if command -v ufw >/dev/null && ! fatto firewall-telefono; then
+  for rete in 192.168.0.0/16 10.0.0.0/8 172.16.0.0/12; do
+    ufw allow from "$rete" to any port 1714:1764 proto tcp comment "KDE Connect" >/dev/null
+    ufw allow from "$rete" to any port 1714:1764 proto udp comment "KDE Connect" >/dev/null
+    ufw allow from "$rete" to any port 53317 proto tcp comment "LocalSend" >/dev/null
+    ufw allow from "$rete" to any port 53317 proto udp comment "LocalSend" >/dev/null
+  done
+  segna firewall-telefono
+fi
+
+/usr/libexec/alba/alba-aggiorna-menu || true
+update-desktop-database -q /usr/share/applications 2>/dev/null || true
+echo "Fine"

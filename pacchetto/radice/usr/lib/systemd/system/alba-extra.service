@@ -1,0 +1,14 @@
+[Unit]
+Description=Alba - installazione delle app extra in sottofondo
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=!/run/live/medium
+
+[Service]
+Type=simple
+ExecStart=/usr/libexec/alba/alba-extra
+Nice=15
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target

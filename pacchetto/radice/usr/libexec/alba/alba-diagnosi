@@ -1,0 +1,508 @@
+#!/usr/bin/python3
+"""Alba Linux - risoluzione problemi automatica.
+
+Per ogni problema conosciuto c'è:
+  - un CONTROLLO che guarda lo stato vero del sistema (non tira a indovinare);
+  - una RIPARAZIONE precisa;
+  - una VERIFICA: il problema è "risolto" solo se il controllo, rifatto
+    dopo la riparazione, non lo trova più.
+
+Un elenco di regole aggiornato online (diagnosi/soluzioni.json su GitHub)
+riconosce nuovi messaggi di errore e li collega alle riparazioni qui sotto.
+Le regole online non contengono comandi: possono solo scegliere tra le
+riparazioni già scritte in questo file, quindi non possono fare danni.
+
+Uso (da amministratore):
+  alba-diagnosi --controlla        elenco dei problemi (JSON)
+  alba-diagnosi --ripara ID        ripara e verifica (JSON)
+  alba-diagnosi --auto             controllo in sottofondo + riparazioni sicure
+"""
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+import urllib.request
+
+STATO = "/var/lib/alba"
+REGISTRO = os.path.join(STATO, "riparazioni.log")
+REGOLE_LOCALI = "/usr/share/alba/soluzioni.json"
+REGOLE_ONLINE = os.path.join(STATO, "soluzioni.json")
+URL_REGOLE = "https://raw.githubusercontent.com/pindinellosamuelea-cpu/alba-linux/main/diagnosi/soluzioni.json"
+os.environ["LC_ALL"] = "C"
+os.environ["DEBIAN_FRONTEND"] = "noninteractive"
+APT = ["apt-get", "-y", "-q", "-o", "DPkg::Lock::Timeout=600",
+       "-o", "Dpkg::Options::=--force-confdef", "-o", "Dpkg::Options::=--force-confold"]
+
+
+def esegui(cmd, timeout=60):
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        return r.returncode, (r.stdout or "") + (r.stderr or "")
+    except (OSError, subprocess.SubprocessError) as ex:
+        return 127, str(ex)
+
+
+def ok(cmd, timeout=60):
+    return esegui(cmd, timeout)[0] == 0
+
+
+def esiste(prog):
+    return shutil.which(prog) is not None
+
+
+def leggi(p, predefinito=""):
+    try:
+        with open(p, encoding="utf-8", errors="replace") as f:
+            return f.read()
+    except OSError:
+        return predefinito
+
+
+def internet():
+    return ok(["getent", "hosts", "deb.debian.org"], 10)
+
+
+# ---------------------------------------------------------------------------
+# I problemi conosciuti: controllo -> (trovato, dettaglio); riparazione
+# ---------------------------------------------------------------------------
+PROBLEMI = {}
+
+
+def problema(id_, titolo, spiegazione, auto=False, gravita="media"):
+    def registra(classe):
+        PROBLEMI[id_] = dict(id=id_, titolo=titolo, spiegazione=spiegazione, auto=auto,
+                             gravita=gravita, controllo=classe.controllo, ripara=classe.ripara)
+        return classe
+    return registra
+
+
+@problema("ora", "Data e ora sbagliate",
+          "L'orologio non si regola da solo: i siti sicuri e gli aggiornamenti possono non funzionare.", auto=True, gravita="alta")
+class Ora:
+    @staticmethod
+    def controllo():
+        anno = time.localtime().tm_year
+        info = dict(l.split("=", 1) for l in esegui(["timedatectl", "show"])[1].splitlines() if "=" in l)
+        if anno < 2025:
+            return True, f"la data del computer è nel {anno}"
+        if info.get("CanNTP") == "no":
+            return True, "manca il servizio dell'ora automatica"
+        if info.get("NTP") != "yes":
+            return True, "l'ora automatica è spenta"
+        return False, ""
+
+    @staticmethod
+    def ripara():
+        if not (os.path.exists("/usr/lib/systemd/systemd-timesyncd") or os.path.exists("/lib/systemd/systemd-timesyncd")):
+            esegui(APT + ["install", "systemd-timesyncd"], 600)
+        esegui(["timedatectl", "set-ntp", "true"])
+        esegui(["systemctl", "restart", "systemd-timesyncd"])
+        for _ in range(15):
+            if "NTPSynchronized=yes" in esegui(["timedatectl", "show"])[1]:
+                break
+            time.sleep(2)
+
+
+@problema("internet", "Nessuna connessione a Internet",
+          "Il computer non riesce a raggiungere Internet.", gravita="alta")
+class Internet:
+    @staticmethod
+    def controllo():
+        if internet():
+            return False, ""
+        if "Soft blocked: yes" in esegui(["rfkill", "list", "wifi"])[1]:
+            return True, "il Wi-Fi è bloccato (tasto aereo o interruttore)"
+        if esegui(["systemctl", "is-active", "NetworkManager"])[1].strip() != "active":
+            return True, "il servizio di rete non è attivo"
+        if not esegui(["ip", "route", "show", "default"])[1].strip():
+            return True, "non sei collegato a nessuna rete"
+        return True, "la rete c'è ma i nomi dei siti non si risolvono (DNS)"
+
+    @staticmethod
+    def ripara():
+        esegui(["rfkill", "unblock", "wifi"])
+        esegui(["nmcli", "radio", "wifi", "on"])
+        esegui(["systemctl", "restart", "NetworkManager"], 60)
+        for _ in range(20):
+            if internet():
+                return
+            time.sleep(2)
+        # DNS di riserva sulla connessione attiva, se il problema è solo quello
+        if esegui(["ip", "route", "show", "default"])[1].strip():
+            attiva = esegui(["nmcli", "-t", "-f", "NAME", "connection", "show", "--active"])[1].splitlines()
+            if attiva:
+                esegui(["nmcli", "connection", "modify", attiva[0], "ipv4.dns", "1.1.1.1 9.9.9.9", "ipv4.ignore-auto-dns", "no"])
+                esegui(["nmcli", "connection", "up", attiva[0]], 40)
+
+
+@problema("disco", "Disco quasi pieno",
+          "Con poco spazio libero il sistema e gli aggiornamenti possono bloccarsi.", auto=True, gravita="alta")
+class Disco:
+    @staticmethod
+    def controllo():
+        u = shutil.disk_usage("/")
+        libero = u.free / u.total
+        if libero < 0.05 or u.free < 2e9:
+            return True, f"restano solo {u.free / 1e9:.1f} GB liberi"
+        return False, ""
+
+    @staticmethod
+    def ripara():
+        esegui(APT + ["clean"])
+        esegui(APT + ["autoremove", "--purge"], 600)
+        esegui(["journalctl", "--vacuum-size=150M"])
+        if esiste("flatpak"):
+            esegui(["flatpak", "uninstall", "--unused", "-y", "--noninteractive"], 600)
+        for casa in os.listdir("/home"):
+            shutil.rmtree(f"/home/{casa}/.cache/thumbnails", ignore_errors=True)
+
+
+@problema("pacchetti", "Installazione di programmi interrotta",
+          "Un'installazione o un aggiornamento si è fermato a metà: finché non si sistema, non si possono installare altri programmi.",
+          auto=True, gravita="alta")
+class Pacchetti:
+    @staticmethod
+    def controllo():
+        audit = esegui(["dpkg", "--audit"])[1].strip()
+        if audit:
+            return True, "ci sono pacchetti installati a metà"
+        if os.listdir("/var/lib/dpkg/updates") if os.path.isdir("/var/lib/dpkg/updates") else False:
+            return True, "un aggiornamento è stato interrotto"
+        codice, testo = esegui(["apt-get", "check"], 120)
+        if codice != 0 and "lock" not in testo.lower():
+            return True, "ci sono dipendenze mancanti"
+        return False, ""
+
+    @staticmethod
+    def ripara():
+        esegui(["dpkg", "--configure", "-a"], 1800)
+        esegui(APT + ["-f", "install"], 1800)
+
+
+@problema("fonti", "Elenco delle fonti dei programmi danneggiato",
+          "Le fonti da cui arrivano programmi e aggiornamenti hanno un errore: gli aggiornamenti non funzionano.", auto=True, gravita="alta")
+class Fonti:
+    @staticmethod
+    def controllo():
+        codice, testo = esegui(["apt-get", "-q", "indextargets"], 60)
+        if codice != 0 or re.search(r"Conflicting values|Malformed|could not be read|Type '.*' is not known", testo):
+            m = re.search(r"E: (.+)", testo)
+            return True, (m.group(1) if m else "errore nelle fonti")[:160]
+        if not os.path.exists("/etc/apt/sources.list.d/alba.list"):
+            return True, "manca il canale aggiornamenti di Alba"
+        return False, ""
+
+    @staticmethod
+    def ripara():
+        for f in ("/etc/apt/sources.list.d/alba-debian-extra.sources",):
+            if os.path.exists(f):
+                os.remove(f)
+        if os.path.exists("/usr/libexec/alba/alba-fonti-debian"):
+            esegui(["/usr/libexec/alba/alba-fonti-debian"])
+        if not os.path.exists("/etc/apt/sources.list.d/alba.list"):
+            chiave = "/usr/share/keyrings/alba-archive-keyring.asc"
+            opzione = f"signed-by={chiave}" if os.path.exists(chiave) else "trusted=yes"
+            with open("/etc/apt/sources.list.d/alba.list", "w") as f:
+                f.write("# Canale aggiornamenti di Alba Linux\n"
+                        f"deb [{opzione}] https://raw.githubusercontent.com/pindinellosamuelea-cpu/alba-linux/apt ./\n")
+        esegui(["apt-get", "update", "-q"], 300)
+
+
+def nvidia_presente():
+    return bool(re.search(r"(VGA|3D|Display).*NVIDIA", esegui(["lspci"])[1], re.I))
+
+
+@problema("driver-nvidia", "Manca il driver NVIDIA ufficiale",
+          "La scheda NVIDIA usa il driver libero, lento: i giochi Vulkan possono bloccarsi sugli shader o non partire.")
+class DriverNvidia:
+    @staticmethod
+    def controllo():
+        if not nvidia_presente() or os.path.exists("/proc/driver/nvidia/version"):
+            return False, ""
+        if os.path.exists(os.path.join(STATO, "driver-riavvio")):
+            return True, "il driver è installato: serve solo un riavvio"
+        return True, "driver ufficiale non installato"
+
+    @staticmethod
+    def ripara():
+        if os.path.exists(os.path.join(STATO, "driver-riavvio")):
+            return
+        esegui(["/usr/libexec/alba/alba-driver-auto", "--forza"], 3600)
+
+
+@problema("vulkan", "Vulkan incompleto per i giochi",
+          "Mancano le librerie Vulkan (anche a 32 bit) che servono a Steam e Proton: i giochi possono non partire o bloccarsi sugli shader.")
+class Vulkan:
+    @staticmethod
+    def pacchetti_mancanti():
+        installati = esegui(["dpkg-query", "-W", "-f=${binary:Package} ${Status}\n"])[1]
+        def ha(p):
+            return re.search(rf"^{re.escape(p)} install ok installed", installati, re.M) is not None
+        voluti = ["mesa-vulkan-drivers", "libvulkan1"]
+        if "i386" in esegui(["dpkg", "--print-foreign-architectures"])[1]:
+            voluti += ["mesa-vulkan-drivers:i386", "libvulkan1:i386"]
+        if os.path.exists("/proc/driver/nvidia/version"):
+            voluti += ["nvidia-vulkan-icd"]
+            if "i386" in esegui(["dpkg", "--print-foreign-architectures"])[1]:
+                voluti += ["nvidia-vulkan-icd:i386", "nvidia-driver-libs:i386"]
+        return [p for p in voluti if not ha(p)]
+
+    @staticmethod
+    def controllo():
+        mancanti = Vulkan.pacchetti_mancanti()
+        if mancanti:
+            return True, "mancano: " + ", ".join(mancanti)
+        return False, ""
+
+    @staticmethod
+    def ripara():
+        esegui(["apt-get", "update", "-q"], 300)
+        esegui(APT + ["install"] + Vulkan.pacchetti_mancanti(), 1800)
+
+
+SERVIZI_SICURI = ["NetworkManager", "bluetooth", "systemd-timesyncd", "cups", "pcscd", "power-profiles-daemon",
+                  "upower", "ufw", "apparmor", "zramswap", "ModemManager", "avahi-daemon"]
+
+
+@problema("servizi", "Servizi di sistema bloccati",
+          "Alcuni servizi del sistema non sono partiti correttamente.", auto=True)
+class Servizi:
+    @staticmethod
+    def falliti():
+        testo = esegui(["systemctl", "--failed", "--plain", "--no-legend", "--type=service"])[1]
+        return [l.split()[0].removesuffix(".service") for l in testo.splitlines() if l.strip()]
+
+    @staticmethod
+    def controllo():
+        f = [s for s in Servizi.falliti() if s in SERVIZI_SICURI]
+        return (True, "non partiti: " + ", ".join(f)) if f else (False, "")
+
+    @staticmethod
+    def ripara():
+        for s in Servizi.falliti():
+            if s in SERVIZI_SICURI:
+                esegui(["systemctl", "reset-failed", s])
+                esegui(["systemctl", "restart", s], 60)
+
+
+@problema("firewall", "Firewall spento",
+          "Il firewall protegge il computer dalle connessioni non richieste da Internet.", gravita="media")
+class Firewall:
+    @staticmethod
+    def controllo():
+        conf = leggi("/etc/ufw/ufw.conf")
+        if conf and "ENABLED=yes" not in conf:
+            return True, "il firewall è disattivato"
+        return False, ""
+
+    @staticmethod
+    def ripara():
+        esegui(["ufw", "--force", "enable"])
+
+
+@problema("memoria", "Memoria compressa non attiva",
+          "Sui computer con poca RAM la memoria compressa evita rallentamenti e blocchi.", auto=True, gravita="bassa")
+class Memoria:
+    @staticmethod
+    def controllo():
+        if not os.path.exists("/etc/default/zramswap"):
+            return False, ""
+        if "zram" not in esegui(["swapon", "--show"])[1]:
+            return True, "la memoria compressa è spenta"
+        return False, ""
+
+    @staticmethod
+    def ripara():
+        esegui(["systemctl", "enable", "--now", "zramswap"], 60)
+
+
+@problema("aggiornamenti", "Aggiornamenti fermi da molti giorni",
+          "Il sistema non controlla gli aggiornamenti da più di una settimana.", auto=True, gravita="bassa")
+class Aggiornamenti:
+    @staticmethod
+    def controllo():
+        segno = "/var/lib/apt/periodic/update-success-stamp"
+        riferimento = segno if os.path.exists(segno) else "/var/lib/apt/lists"
+        try:
+            giorni = (time.time() - os.path.getmtime(riferimento)) / 86400
+        except OSError:
+            return False, ""
+        return (True, f"ultimo controllo {int(giorni)} giorni fa") if giorni > 7 else (False, "")
+
+    @staticmethod
+    def ripara():
+        esegui(["apt-get", "update", "-q"], 600)
+        esegui(["touch", "/var/lib/apt/periodic/update-success-stamp"])
+
+
+@problema("bluetooth", "Bluetooth bloccato",
+          "Il Bluetooth è bloccato dal sistema: cuffie, mouse e controller non si collegano.", gravita="media")
+class Bluetooth:
+    @staticmethod
+    def controllo():
+        r = esegui(["rfkill", "list", "bluetooth"])[1]
+        if "Hard blocked: yes" in r:
+            return False, ""   # interruttore fisico: lo segnala la pagina Bluetooth
+        if "Soft blocked: yes" in r:
+            return True, "bloccato via software"
+        return False, ""
+
+    @staticmethod
+    def ripara():
+        esegui(["rfkill", "unblock", "bluetooth"])
+        esegui(["systemctl", "restart", "bluetooth"], 30)
+
+
+FIRMWARE = ["firmware-linux-nonfree", "firmware-misc-nonfree", "firmware-iwlwifi", "firmware-realtek",
+            "firmware-atheros", "firmware-brcm80211", "firmware-mediatek", "firmware-amd-graphics",
+            "firmware-intel-graphics", "firmware-nvidia-graphics", "firmware-sof-signed", "bluez-firmware"]
+
+
+@problema("firmware", "Manca un componente per un dispositivo",
+          "Un dispositivo (Wi-Fi, Bluetooth, audio o scheda grafica) non ha il firmware che gli serve per funzionare.")
+class Firmware:
+    @staticmethod
+    def mancanti():
+        testo = esegui(["dmesg"], 10)[1] + esegui(["journalctl", "-k", "-b", "--no-pager", "-o", "cat"], 30)[1]
+        nomi = set(re.findall(r"firmware: failed to load ([^\s(]+)", testo))
+        nomi |= set(re.findall(r"Direct firmware load for ([^\s]+) failed", testo))
+        return sorted(n for n in nomi if not os.path.exists(f"/lib/firmware/{n}") and not os.path.exists(f"/usr/lib/firmware/{n}"))
+
+    @staticmethod
+    def controllo():
+        m = Firmware.mancanti()
+        return (True, "manca: " + ", ".join(m[:4])) if m else (False, "")
+
+    @staticmethod
+    def ripara():
+        esegui(["/usr/libexec/alba/alba-fonti-debian"])
+        esegui(["apt-get", "update", "-q"], 300)
+        for p in FIRMWARE:
+            esegui(APT + ["install", p], 900)
+        esegui(["update-initramfs", "-u"], 900)
+
+    # la verifica vera avviene al riavvio: il controllo guarda i file installati
+
+
+# ---------------------------------------------------------------------------
+# Regole online: riconoscono messaggi d'errore nel registro di sistema e li
+# collegano ai problemi qui sopra (o mostrano una spiegazione chiara)
+# ---------------------------------------------------------------------------
+def carica_regole(scarica=False):
+    if scarica:
+        try:
+            if not os.path.exists(REGOLE_ONLINE) or time.time() - os.path.getmtime(REGOLE_ONLINE) > 86400:
+                with urllib.request.urlopen(URL_REGOLE, timeout=15) as r:
+                    dati = json.loads(r.read().decode())
+                if isinstance(dati.get("regole"), list):
+                    with open(REGOLE_ONLINE, "w") as f:
+                        json.dump(dati, f)
+        except Exception:  # noqa: BLE001 - senza Internet si usano le regole già presenti
+            pass
+    for p in (REGOLE_ONLINE, REGOLE_LOCALI):
+        try:
+            dati = json.loads(leggi(p))
+            if isinstance(dati.get("regole"), list):
+                return dati["regole"]
+        except (ValueError, AttributeError):
+            continue
+    return []
+
+
+def errori_registro():
+    testo = esegui(["journalctl", "-b", "-p", "4", "--no-pager", "-o", "cat", "-n", "2000"], 30)[1]
+    testo += esegui(["dmesg", "--level=err,warn"], 10)[1]
+    return testo
+
+
+def controlla(scarica=False):
+    trovati = []
+    for p in PROBLEMI.values():
+        try:
+            presente, dettaglio = p["controllo"]()
+        except Exception as ex:  # noqa: BLE001
+            presente, dettaglio = False, f"controllo non riuscito: {ex}"
+        if presente:
+            trovati.append(dict(id=p["id"], titolo=p["titolo"], spiegazione=p["spiegazione"],
+                                dettaglio=dettaglio, risolvibile=True, auto=p["auto"], gravita=p["gravita"]))
+    # Regole online sui messaggi d'errore
+    registro = errori_registro()
+    gia = {t["id"] for t in trovati}
+    for regola in carica_regole(scarica):
+        try:
+            if not re.search(regola["cerca"], registro, re.I | re.M):
+                continue
+        except (re.error, KeyError, TypeError):
+            continue
+        collegato = regola.get("problema")
+        if collegato in PROBLEMI:
+            if collegato in gia:
+                continue
+            presente, dettaglio = PROBLEMI[collegato]["controllo"]()
+            if not presente:
+                continue
+            p = PROBLEMI[collegato]
+            trovati.append(dict(id=p["id"], titolo=p["titolo"], spiegazione=regola.get("spiegazione") or p["spiegazione"],
+                                dettaglio=dettaglio, risolvibile=True, auto=p["auto"], gravita=p["gravita"]))
+            gia.add(collegato)
+        elif regola.get("titolo") and regola.get("id") not in gia:
+            trovati.append(dict(id=regola.get("id", "regola"), titolo=regola["titolo"],
+                                spiegazione=regola.get("spiegazione", ""), dettaglio="", risolvibile=False,
+                                auto=False, gravita=regola.get("gravita", "bassa")))
+            gia.add(regola.get("id"))
+    return trovati
+
+
+def ripara(id_):
+    if id_ not in PROBLEMI:
+        return dict(id=id_, risolto=False, dettaglio="Problema sconosciuto")
+    p = PROBLEMI[id_]
+    try:
+        p["ripara"]()
+    except Exception as ex:  # noqa: BLE001
+        return dict(id=id_, risolto=False, dettaglio=f"Riparazione non riuscita: {ex}")
+    presente, dettaglio = p["controllo"]()   # verifica: il problema c'è ancora?
+    risolto = not presente
+    if id_ == "driver-nvidia" and os.path.exists(os.path.join(STATO, "driver-riavvio")):
+        risolto, dettaglio = True, "Driver installato: riavvia il computer per attivarlo"
+    registra(id_, p["titolo"], risolto, dettaglio)
+    return dict(id=id_, risolto=risolto, dettaglio=dettaglio)
+
+
+def registra(id_, titolo, risolto, dettaglio):
+    os.makedirs(STATO, exist_ok=True)
+    with open(REGISTRO, "a") as f:
+        f.write(json.dumps(dict(ora=int(time.time()), id=id_, titolo=titolo, risolto=risolto,
+                                dettaglio=dettaglio)) + "\n")
+    # tieni il registro piccolo
+    righe = leggi(REGISTRO).splitlines()
+    if len(righe) > 200:
+        with open(REGISTRO, "w") as f:
+            f.write("\n".join(righe[-200:]) + "\n")
+
+
+def automatico():
+    """In sottofondo: ripara da solo solo i problemi marcati come sicuri."""
+    for t in controlla(scarica=True):
+        if t["auto"] and t["risolvibile"]:
+            ripara(t["id"])
+    with open(os.path.join(STATO, "diagnosi.json"), "w") as f:
+        json.dump(dict(ora=int(time.time()), problemi=controlla()), f)
+
+
+if __name__ == "__main__":
+    if os.geteuid() != 0:
+        print(json.dumps({"errore": "servono i permessi di amministratore"}))
+        sys.exit(1)
+    if len(sys.argv) >= 2 and sys.argv[1] == "--controlla":
+        print(json.dumps(controlla(scarica=True), ensure_ascii=False))
+    elif len(sys.argv) >= 3 and sys.argv[1] == "--ripara" and re.fullmatch(r"[a-z0-9-]{1,40}", sys.argv[2]):
+        print(json.dumps(ripara(sys.argv[2]), ensure_ascii=False))
+    elif len(sys.argv) >= 2 and sys.argv[1] == "--auto":
+        automatico()
+    else:
+        print(__doc__)
+        sys.exit(2)

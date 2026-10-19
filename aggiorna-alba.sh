@@ -11,14 +11,22 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
+BASE=https://raw.githubusercontent.com/pindinellosamuelea-cpu/alba-linux
+CANALE="$BASE/apt ./"
+CHIAVE=/usr/share/keyrings/alba-archive-keyring.asc
+export DEBIAN_FRONTEND=noninteractive
+
 echo "==> Collego Alba al canale aggiornamenti…"
-cat > /etc/apt/sources.list.d/alba.list <<'EOF'
-# Canale aggiornamenti di Alba Linux
-deb [trusted=yes] https://raw.githubusercontent.com/pindinellosamuelea-cpu/alba-linux/apt ./
-EOF
+# Con la firma digitale se il canale è firmato, altrimenti solo HTTPS
+if curl -fsSL -o "$CHIAVE" "$BASE/main/pacchetto/chiave-pubblica.asc" && \
+   curl -fsSL -o /dev/null "$BASE/apt/InRelease"; then
+  echo "deb [signed-by=$CHIAVE] $CANALE" > /etc/apt/sources.list.d/alba.list
+  echo "    (canale firmato)"
+else
+  echo "deb [trusted=yes] $CANALE" > /etc/apt/sources.list.d/alba.list
+fi
 
 echo "==> Scarico le novità (qualche minuto)…"
-export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y alba-sistema
 

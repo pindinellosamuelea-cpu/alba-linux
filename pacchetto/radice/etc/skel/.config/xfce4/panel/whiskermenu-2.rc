@@ -1,4 +1,4 @@
-favorites=firefox-esr.desktop,thunar.desktop,org.gnome.Software.desktop,alba-impostazioni.desktop,libreoffice-writer.desktop,libreoffice-calc.desktop,libreoffice-impress.desktop,steam.desktop,vlc.desktop,org.kde.kdenlive.desktop,org.kde.krita.desktop,codium.desktop,obs.desktop,com.obsproject.Studio.desktop,org.xfce.ristretto.desktop,atril.desktop,xfce4-terminal.desktop
+favorites=firefox-esr.desktop,thunar.desktop,org.gnome.Software.desktop,alba-impostazioni.desktop,libreoffice-writer.desktop,libreoffice-calc.desktop,libreoffice-impress.desktop,steam.desktop,vlc.desktop,org.kde.kdenlive.desktop,org.kde.krita.desktop,codium.desktop,obs.desktop,com.obsproject.Studio.desktop,org.xfce.ristretto.desktop,atril.desktop,org.kde.kdeconnect.app.desktop
 recent=
 button-title=Start
 button-icon=alba-start

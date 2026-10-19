@@ -18,22 +18,23 @@ fi
 # 2. Prime impostazioni (scorciatoie, sfondo) e aspetto aggiornato
 /usr/bin/alba-applica-aspetto --se-serve
 /usr/bin/alba-primo-avvio
+/usr/bin/alba-segnalibri
+
+# 2b. Bluetooth: resta attivo per le associazioni, ma senza icona doppia
+#     (c'è già il menu Bluetooth di Alba nella barra)
+gsettings set org.blueman.general plugin-list "['!StatusIcon', '!ShowConnected']" 2>/dev/null
 
 # 3. Risoluzione e frequenza dello schermo scelte nelle Impostazioni
 [ -f "$CONF/schermo.sh" ] && bash "$CONF/schermo.sh" >/dev/null 2>&1
 
-# 4. Steam: elaborazione degli shader più veloce (usa tutti i core)
-for d in "$HOME/.steam/steam" "$HOME/.local/share/Steam"; do
-  if [ -d "$d" ] && [ ! -f "$d/steam_dev.cfg" ]; then
-    echo "unShaderBackgroundProcessingThreads $(nproc)" > "$d/steam_dev.cfg"
-  fi
-done
+# 4. Steam: Proton Experimental predefinito e shader più veloci
+/usr/bin/alba-steam >/dev/null 2>&1
 
 # 5. Avviso quando ci sono aggiornamenti (controlla ogni 6 ore)
 (
   sleep 90
   while true; do
     /usr/bin/alba-avviso-aggiornamenti
-    sleep 21600
+    sleep 1800
   done
 ) >/dev/null 2>&1 &

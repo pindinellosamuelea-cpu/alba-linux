@@ -37,7 +37,7 @@ prova intel-opencl-icd winbind gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugl
 
 # Schermata di accesso moderna, portachiavi sbloccato all'accesso
 # (niente richieste di password all'apertura delle app)
-prova slick-greeter gnome-keyring libpam-gnome-keyring
+prova gir1.2-lightdm-1 slick-greeter gnome-keyring libpam-gnome-keyring
 
 # Controller (Xbox, PlayStation, Switch, Steam) e lettori di smart card
 prova game-devices-udev steam-devices joystick pcscd libccid libacsccid1 \

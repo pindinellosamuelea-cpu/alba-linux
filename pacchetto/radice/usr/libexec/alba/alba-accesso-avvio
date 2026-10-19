@@ -1,0 +1,12 @@
+#!/bin/sh
+# Alba Linux - avvia la schermata di accesso di Alba.
+# Se per qualsiasi motivo non parte, usa quella classica: l'accesso funziona sempre.
+REG="${HOME:-/var/lib/lightdm}/.cache/alba-accesso"
+mkdir -p "$REG" 2>/dev/null
+if /usr/bin/python3 -c "import gi; gi.require_version('LightDM','1'); gi.require_version('Gtk','3.0'); from gi.repository import LightDM, Gtk" 2>/dev/null; then
+  /usr/bin/python3 /usr/libexec/alba/alba-accesso 2>"$REG/errori.log" && exit 0
+fi
+for g in /usr/sbin/slick-greeter /usr/sbin/lightdm-gtk-greeter; do
+  [ -x "$g" ] && exec "$g"
+done
+exit 1

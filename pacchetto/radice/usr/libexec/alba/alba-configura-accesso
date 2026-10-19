@@ -1,0 +1,44 @@
+#!/bin/bash
+# Alba Linux - schermata di accesso: quella di Alba (o la classica di riserva),
+# con il nome utente ricordato. Chiamato dall'aggiornamento e da alba-extra.
+configura() {
+  [ -d /etc/lightdm ] || return 0
+  GREETER=""
+  if python3 -c "import gi; gi.require_version('LightDM','1'); from gi.repository import LightDM" 2>/dev/null; then
+    GREETER=alba-accesso        # la schermata di Alba (con riserva automatica)
+  elif [ -x /usr/sbin/slick-greeter ] && [ -f /usr/share/xgreeters/slick-greeter.desktop ]; then
+    GREETER=slick-greeter
+  fi
+  if [ -x /usr/sbin/slick-greeter ]; then
+    . /usr/share/alba/tema.conf 2>/dev/null || true
+    T="${TEMA_SCURO:-Arc-Dark}"
+    [ -d "/usr/share/themes/$T" ] || T=Arc-Dark
+    sed "s/@TEMA_SCURO@/$T/" /usr/share/alba/slick-greeter.conf.in > /etc/lightdm/slick-greeter.conf
+  fi
+  # Il nome utente resta ricordato: si scrive solo la password.
+  # (lightdm.conf viene letto per ultimo: se l'installazione vi ha scritto
+  #  un'altra schermata o "nascondi utenti", lo disattiviamo lì)
+  [ -f /etc/lightdm/lightdm.conf ] && sed -i -E 's/^[[:space:]]*(greeter-session|greeter-hide-users|greeter-show-manual-login)[[:space:]]*=/#&/' /etc/lightdm/lightdm.conf
+  mkdir -p /etc/lightdm/lightdm.conf.d
+  {
+    echo "# Alba Linux: schermata di accesso moderna, utente ricordato"
+    echo "[Seat:*]"
+    [ -n "$GREETER" ] && echo "greeter-session=$GREETER"
+    echo "greeter-hide-users=false"
+    echo "greeter-show-manual-login=false"
+    echo "greeter-allow-guest=false"
+  } > /etc/lightdm/lightdm.conf.d/50-alba.conf
+  # schermata classica di riserva: anche lei ricorda l'utente
+  if [ -f /etc/lightdm/lightdm-gtk-greeter.conf ] && ! grep -q "^background=/usr/share/backgrounds/alba" /etc/lightdm/lightdm-gtk-greeter.conf; then
+    cat > /etc/lightdm/lightdm-gtk-greeter.conf <<'EOF2'
+[greeter]
+background=/usr/share/backgrounds/alba/accesso.png
+theme-name=Adwaita-dark
+font-name=Inter 11
+clock-format=%H:%M
+indicators=~spacer;~clock;~spacer;~power
+EOF2
+  fi
+}
+configura
+exit 0

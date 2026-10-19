@@ -65,7 +65,12 @@ kill $PID 2>/dev/null
 
 # Schermata di accesso
 pkill -x xfce4-panel; pkill -x xfdesktop; pkill -x xfwm4
-if command -v slick-greeter >/dev/null; then
+HOME=/tmp/accesso-prova python3 /usr/libexec/alba/alba-accesso --prova >/tmp/accesso.log 2>&1 &
+PID=$!
+foto 30-schermata-accesso 4
+kill $PID 2>/dev/null
+cat /tmp/accesso.log 2>/dev/null | tail -5
+if false && command -v slick-greeter >/dev/null; then
   mkdir -p /etc/lightdm
   slick-greeter --test-mode >/dev/null 2>&1 &
   PID=$!

@@ -1,5 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Negozio di app (servizio in background)
-Exec=gnome-software --gapplication-service
-Hidden=true

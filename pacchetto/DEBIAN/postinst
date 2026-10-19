@@ -21,21 +21,7 @@ una_volta() {  # nome
 
 # Schermata di accesso moderna (se slick-greeter è installato)
 configura_accesso() {
-  if [ -x /usr/sbin/slick-greeter ] && [ -f /usr/share/xgreeters/slick-greeter.desktop ]; then
-    . /usr/share/alba/tema.conf 2>/dev/null || true
-    T="${TEMA_SCURO:-Arc-Dark}"
-    [ -d "/usr/share/themes/$T" ] || T=Arc-Dark
-    sed "s/@TEMA_SCURO@/$T/" /usr/share/alba/slick-greeter.conf.in > /etc/lightdm/slick-greeter.conf
-    mkdir -p /etc/lightdm/lightdm.conf.d
-    cat > /etc/lightdm/lightdm.conf.d/50-alba.conf <<'EOF2'
-# Alba Linux: schermata di accesso moderna
-[Seat:*]
-greeter-session=slick-greeter
-greeter-hide-users=false
-EOF2
-  else
-    rm -f /etc/lightdm/lightdm.conf.d/50-alba.conf
-  fi
+  "$LIB/alba-configura-accesso" || true
 }
 
 # Firefox: lettori di smart card e CIE riconosciuti nei siti (es. SPID/CIE)
@@ -169,6 +155,20 @@ systemctl enable alba-driver-auto.service >/dev/null 2>&1 || true
 if sistema_avviato; then
   systemctl daemon-reload >/dev/null 2>&1 || true
   systemctl start --no-block alba-driver-auto.service >/dev/null 2>&1 || true
+fi
+
+# --- Leggerezza: meno programmi sempre accesi (meno RAM a computer fermo) ----
+# Docker e la stampa partono solo quando servono davvero (all'uso), non da subito.
+if [ "$(cat "$STATO/leggero-versione" 2>/dev/null)" != "1" ]; then
+  if systemctl list-unit-files docker.socket >/dev/null 2>&1; then
+    systemctl disable docker.service containerd.service >/dev/null 2>&1 || true
+    systemctl enable docker.socket >/dev/null 2>&1 || true
+  fi
+  if systemctl list-unit-files cups.socket >/dev/null 2>&1; then
+    systemctl disable cups.service >/dev/null 2>&1 || true
+    systemctl enable cups.socket cups.path >/dev/null 2>&1 || true
+  fi
+  echo 1 > "$STATO/leggero-versione"
 fi
 
 # --- Pulizia dei residui delle versioni vecchie --------------------------------

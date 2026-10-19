@@ -1,0 +1,582 @@
+#!/usr/bin/python3
+"""Alba Linux - schermata di accesso (greeter per LightDM).
+
+Pulita e moderna: sfondo di Alba sfocato, orologio grande, la tua foto e il
+tuo nome già scelti (l'utente resta ricordato), solo la password da scrivere.
+Animazioni morbide all'apertura, all'errore e all'ingresso.
+
+  alba-accesso           come greeter (avviato da LightDM)
+  alba-accesso --prova   finta, per vedere com'è (nessun accesso vero)
+"""
+import math
+import os
+import sys
+import time
+import traceback
+
+import gi
+gi.require_version("Gtk", "3.0")
+gi.require_version("Gdk", "3.0")
+from gi.repository import Gdk, GdkPixbuf, GLib, Gtk, Pango  # noqa: E402
+
+PROVA = "--prova" in sys.argv
+if not PROVA:
+    gi.require_version("LightDM", "1")
+    from gi.repository import LightDM  # noqa: E402
+
+SFONDO = "/usr/share/backgrounds/alba/accesso.png"
+LOGO = "/usr/share/alba/logo.png"
+MEMORIA = os.path.join(os.environ.get("HOME", "/var/lib/lightdm"), ".cache", "alba-accesso", "ultimo-utente")
+ARANCIO = (1.0, 0.54, 0.30)
+GIORNI = ["lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato", "domenica"]
+MESI = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre",
+        "ottobre", "novembre", "dicembre"]
+
+CSS = b"""
+* { font-family: "Inter", "Noto Sans", sans-serif; }
+window { background-color: #0b0f29; }
+.ora { color: #ffffff; font-size: 84px; font-weight: 300; letter-spacing: 1px; }
+.data { color: alpha(#ffffff, 0.85); font-size: 19px; font-weight: 500; }
+.nome { color: #ffffff; font-size: 24px; font-weight: 600; }
+.messaggio { color: #ffd2bd; font-size: 13px; }
+.suggerimento { color: alpha(#ffffff, 0.6); font-size: 12px; }
+entry.password { min-height: 42px; min-width: 290px; border-radius: 21px; padding: 0 8px 0 18px;
+                 color: #ffffff; caret-color: #ffffff; font-size: 15px;
+                 background-color: alpha(#ffffff, 0.14); border: 1px solid alpha(#ffffff, 0.26);
+                 border-top-color: alpha(#ffffff, 0.40); box-shadow: inset 0 1px alpha(#ffffff, 0.18); transition: background-color 200ms ease, border-color 200ms ease; }
+entry.password:focus { background-color: alpha(#ffffff, 0.22); border-color: alpha(#ff8a4c, 0.9); }
+entry.password image { color: #ffffff; }
+entry.password placeholder, entry.password text placeholder { color: alpha(#ffffff, 0.55); }
+button.vai { min-width: 34px; min-height: 34px; border-radius: 17px; padding: 0; border: none; box-shadow: none;
+             background-image: none; background-color: #ff8a4c; color: #ffffff;
+             transition: background-color 150ms ease, -gtk-icon-transform 120ms ease; }
+button.vai:hover { background-color: #ff9d66; }
+button.vai:active { -gtk-icon-transform: scale(0.88); }
+button.vai image { color: #ffffff; }
+button.tondo { min-width: 40px; min-height: 40px; border-radius: 20px; padding: 0; border: none; box-shadow: none;
+               background-image: none; background-color: alpha(#ffffff, 0.10); color: #ffffff;
+               transition: background-color 150ms ease; }
+button.tondo:hover { background-color: alpha(#ffffff, 0.22); }
+button.tondo image { color: #ffffff; }
+button.utente { border-radius: 12px; padding: 6px 12px 6px 6px; border: none; box-shadow: none;
+                background-image: none; background-color: transparent; color: #ffffff; }
+button.utente:hover { background-color: alpha(#ffffff, 0.12); }
+button.utente.scelto { background-color: alpha(#ffffff, 0.18); }
+button.utente label { color: #ffffff; }
+.menu-energia { background-color: rgba(28, 30, 44, 0.96); border-radius: 14px; padding: 6px;
+                border: 1px solid alpha(#ffffff, 0.1); }
+.menu-energia button { color: #ffffff; border-radius: 9px; padding: 8px 14px; background: none; border: none;
+                       box-shadow: none; }
+.menu-energia button:hover { background-color: alpha(#ffffff, 0.12); }
+.menu-energia button label { color: #ffffff; }
+/* "vetro liquido" leggero: lo sfondo è già sfocato, qui solo trasparenza,
+   riflesso in alto e bordo luminoso (nessun effetto pesante da calcolare) */
+.vetro { background-color: transparent;
+         background-image: linear-gradient(to bottom, alpha(#ffffff, 0.20), alpha(#ffffff, 0.06) 45%,
+                                           alpha(#ffffff, 0.04) 70%, alpha(#ffffff, 0.10));
+         border: 1px solid alpha(#ffffff, 0.22); border-top-color: alpha(#ffffff, 0.45);
+         border-bottom-color: alpha(#ffffff, 0.12);
+         box-shadow: inset 0 1px alpha(#ffffff, 0.30), inset 0 -1px alpha(#ffffff, 0.08);
+         border-radius: 32px; padding: 30px 44px 24px 44px; }
+popover { background-color: transparent; border: none; box-shadow: none; }
+"""
+
+
+def leggi(percorso, predefinito=""):
+    try:
+        with open(percorso, encoding="utf-8") as f:
+            return f.read().strip()
+    except OSError:
+        return predefinito
+
+
+def tema():
+    conf = {}
+    for riga in leggi("/usr/share/alba/tema.conf").splitlines():
+        if "=" in riga:
+            k, v = riga.split("=", 1)
+            conf[k.strip()] = v.strip().strip('"')
+    return conf
+
+
+def morbido(t):
+    """Curva ease-out: parte veloce, arriva piano."""
+    return 1 - (1 - t) ** 3
+
+
+def anima(durata_ms, passo, fine=None):
+    """Chiama passo(t) con t da 0 a 1 per la durata indicata."""
+    inizio = time.monotonic()
+
+    def tic():
+        t = min(1.0, (time.monotonic() - inizio) * 1000 / durata_ms)
+        passo(t)
+        if t >= 1.0:
+            if fine:
+                fine()
+            return False
+        return True
+    GLib.timeout_add(16, tic)
+
+
+class UtenteFinto:
+    def __init__(self, nome, completo):
+        self.nome, self.completo = nome, completo
+
+    def get_name(self):
+        return self.nome
+
+    def get_display_name(self):
+        return self.completo
+
+    def get_image(self):
+        return ""
+
+    def get_session(self):
+        return None
+
+
+class Foto(Gtk.DrawingArea):
+    """Foto dell'utente in un cerchio (o l'iniziale su un cerchio arancione)."""
+
+    def __init__(self, utente, lato):
+        super().__init__()
+        self.lato = lato
+        self.set_size_request(lato, lato)
+        self.immagine = None
+        self.iniziale = (utente.get_display_name() or utente.get_name() or "?")[:1].upper()
+        percorso = utente.get_image() if hasattr(utente, "get_image") else ""
+        for p in (percorso, os.path.expanduser(f"~{utente.get_name()}/.face")):
+            if p and os.path.isfile(p):
+                try:
+                    self.immagine = GdkPixbuf.Pixbuf.new_from_file_at_scale(p, lato, lato, False)
+                    break
+                except GLib.Error:
+                    pass
+        self.connect("draw", self.disegna)
+
+    def disegna(self, _w, cr):
+        l = self.lato
+        cr.arc(l / 2, l / 2, l / 2, 0, 2 * math.pi)
+        if self.immagine:
+            cr.save()
+            cr.clip()
+            Gdk.cairo_set_source_pixbuf(cr, self.immagine, 0, 0)
+            cr.paint()
+            cr.restore()
+        else:
+            g = __import__("cairo").LinearGradient(0, 0, l, l)
+            g.add_color_stop_rgb(0, 1.0, 0.62, 0.35)
+            g.add_color_stop_rgb(1, 0.86, 0.32, 0.38)
+            cr.set_source(g)
+            cr.fill()
+            cr.set_source_rgb(1, 1, 1)
+            cr.select_font_face("Inter", 0, 1)
+            cr.set_font_size(l * 0.42)
+            e = cr.text_extents(self.iniziale)
+            cr.move_to(l / 2 - e.width / 2 - e.x_bearing, l / 2 - e.height / 2 - e.y_bearing)
+            cr.show_text(self.iniziale)
+        # anello sottile
+        cr.arc(l / 2, l / 2, l / 2 - 1, 0, 2 * math.pi)
+        cr.set_source_rgba(1, 1, 1, 0.35)
+        cr.set_line_width(2)
+        cr.stroke()
+
+
+class Sfondo(Gtk.DrawingArea):
+    def __init__(self):
+        super().__init__()
+        self.originale = None
+        self.scalato = None
+        self.zoom = 1.0
+        try:
+            self.originale = GdkPixbuf.Pixbuf.new_from_file(SFONDO)
+        except GLib.Error:
+            pass
+        self.connect("draw", self.disegna)
+
+    def disegna(self, w, cr):
+        L, A = w.get_allocated_width(), w.get_allocated_height()
+        if self.originale:
+            if not self.scalato or self.scalato.get_width() < L or self.scalato.get_height() < A:
+                o = self.originale
+                s = max(L / o.get_width(), A / o.get_height())
+                self.scalato = o.scale_simple(max(1, int(o.get_width() * s)), max(1, int(o.get_height() * s)),
+                                              GdkPixbuf.InterpType.BILINEAR)
+            cr.save()
+            if self.zoom != 1.0:   # leggero zoom all'apertura, centrato
+                cr.translate(L / 2, A / 2)
+                cr.scale(self.zoom, self.zoom)
+                cr.translate(-L / 2, -A / 2)
+            Gdk.cairo_set_source_pixbuf(cr, self.scalato, (L - self.scalato.get_width()) / 2,
+                                        (A - self.scalato.get_height()) / 2)
+            cr.paint()
+            cr.restore()
+        else:
+            cr.set_source_rgb(0.04, 0.06, 0.16)
+            cr.paint()
+        # velo scuro per leggere bene i testi
+        cr.set_source_rgba(0.02, 0.03, 0.08, 0.30)
+        cr.paint()
+
+
+class Accesso:
+    def __init__(self):
+        self.esito = 0
+        self.greeter = None
+        self.utente = None
+        self.in_corso = False
+        if not PROVA:
+            self.greeter = LightDM.Greeter()
+            self.greeter.connect("show-prompt", self.chiede)
+            self.greeter.connect("show-message", self.messaggio_pam)
+            self.greeter.connect("authentication-complete", self.completato)
+            self.greeter.connect_to_daemon_sync()
+            self.utenti = [u for u in LightDM.UserList.get_instance().get_users()]
+        else:
+            self.utenti = [UtenteFinto("ale", "Alessandro"), UtenteFinto("ospite", "Ospite")]
+
+        impostazioni = Gtk.Settings.get_default()
+        conf = tema()
+        impostazioni.set_property("gtk-theme-name", conf.get("TEMA_SCURO", "Adwaita-dark"))
+        impostazioni.set_property("gtk-icon-theme-name", conf.get("ICONE_SCURO", "Adwaita"))
+        impostazioni.set_property("gtk-application-prefer-dark-theme", True)
+        impostazioni.set_property("gtk-font-name", "Inter 11")
+        stile = Gtk.CssProvider()
+        stile.load_from_data(CSS)
+        Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(), stile,
+                                                 Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION + 10)
+
+        schermo = Gdk.Display.get_default()
+        principale = schermo.get_primary_monitor() or schermo.get_monitor(0)
+        self.finestre = []
+        self.sfondi = []
+        for i in range(schermo.get_n_monitors()):
+            m = schermo.get_monitor(i)
+            self.finestre.append(self.crea_finestra(m.get_geometry(), m == principale))
+
+        self.scegli_utente(self.utente_iniziale(), animazione=False)
+        self.entrata()
+
+    # ------------------------------------------------------------ interfaccia
+    def crea_finestra(self, g, principale):
+        f = Gtk.Window(type=Gtk.WindowType.TOPLEVEL)
+        f.set_decorated(False)
+        f.move(g.x, g.y)
+        f.set_default_size(g.width, g.height)
+        f.set_size_request(g.width, g.height)
+        sovrapposto = Gtk.Overlay()
+        sfondo = Sfondo()
+        self.sfondi.append(sfondo)
+        sovrapposto.add(sfondo)
+        f.add(sovrapposto)
+        f.realize()
+        f.get_window().set_cursor(Gdk.Cursor.new_from_name(Gdk.Display.get_default(), "default"))
+        if principale:
+            self.costruisci(sovrapposto, g)
+            f.connect("key-press-event", self.tasto)
+        f.show_all()
+        return f
+
+    def costruisci(self, sovrapposto, g):
+        # Orologio in alto
+        self.blocco_ora = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self.blocco_ora.set_halign(Gtk.Align.CENTER)
+        self.blocco_ora.set_valign(Gtk.Align.START)
+        self.blocco_ora.set_margin_top(int(g.height * 0.10))
+        self.ora = Gtk.Label()
+        self.ora.get_style_context().add_class("ora")
+        self.data = Gtk.Label()
+        self.data.get_style_context().add_class("data")
+        self.blocco_ora.pack_start(self.ora, False, False, 0)
+        self.blocco_ora.pack_start(self.data, False, False, 0)
+        sovrapposto.add_overlay(self.blocco_ora)
+        self.aggiorna_ora()
+        GLib.timeout_add_seconds(1, self.aggiorna_ora)
+
+        # Utente al centro
+        self.centro = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+        self.centro.get_style_context().add_class("vetro")
+        self.centro.set_halign(Gtk.Align.CENTER)
+        self.centro.set_valign(Gtk.Align.START)
+        self.margine_centro = int(g.height * 0.36)
+        self.centro.set_margin_top(self.margine_centro)
+        self.posto_foto = Gtk.Box()
+        self.posto_foto.set_halign(Gtk.Align.CENTER)
+        self.centro.pack_start(self.posto_foto, False, False, 0)
+        self.nome = Gtk.Label()
+        self.nome.get_style_context().add_class("nome")
+        self.centro.pack_start(self.nome, False, False, 0)
+        self.password = Gtk.Entry()
+        self.password.get_style_context().add_class("password")
+        self.password.set_visibility(False)
+        self.password.set_placeholder_text("Password")
+        self.password.set_halign(Gtk.Align.CENTER)
+        self.password.connect("activate", lambda *_: self.invia())
+        self.password.connect("changed", lambda *_: self.mostra_messaggio(""))
+        self.vai = Gtk.Button.new_from_icon_name("go-next-symbolic", Gtk.IconSize.BUTTON)
+        self.vai.get_style_context().add_class("vai")
+        self.vai.set_valign(Gtk.Align.CENTER)
+        self.vai.connect("clicked", lambda *_: self.invia())
+        self.rotella = Gtk.Spinner()
+        self.riga_password = Gtk.Box(spacing=8)
+        self.riga_password.set_halign(Gtk.Align.CENTER)
+        self.riga_password.pack_start(self.password, False, False, 0)
+        self.riga_password.pack_start(self.vai, False, False, 0)
+        self.centro.pack_start(self.riga_password, False, False, 0)
+        self.messaggio = Gtk.Label()
+        self.messaggio.get_style_context().add_class("messaggio")
+        self.messaggio.set_line_wrap(True)
+        self.messaggio.set_max_width_chars(46)
+        self.messaggio.set_justify(Gtk.Justification.CENTER)
+        self.centro.pack_start(self.messaggio, False, False, 0)
+        self.centro.pack_start(self.rotella, False, False, 0)
+        sovrapposto.add_overlay(self.centro)
+
+        # Altri utenti in basso a sinistra (solo se ce n'è più di uno)
+        self.bottoni_utente = {}
+        if len(self.utenti) > 1:
+            lista = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+            lista.set_halign(Gtk.Align.START)
+            lista.set_valign(Gtk.Align.END)
+            lista.set_margin_start(28)
+            lista.set_margin_bottom(28)
+            for u in self.utenti[:8]:
+                b = Gtk.Button()
+                b.get_style_context().add_class("utente")
+                r = Gtk.Box(spacing=10)
+                r.pack_start(Foto(u, 36), False, False, 0)
+                n = Gtk.Label(label=u.get_display_name() or u.get_name(), xalign=0)
+                n.set_ellipsize(Pango.EllipsizeMode.END)
+                n.set_max_width_chars(22)
+                r.pack_start(n, False, False, 0)
+                b.add(r)
+                b.connect("clicked", lambda *_, x=u: self.scegli_utente(x))
+                lista.pack_start(b, False, False, 0)
+                self.bottoni_utente[u.get_name()] = b
+            sovrapposto.add_overlay(lista)
+
+        # Spegnimento in basso a destra
+        energia = Gtk.MenuButton()
+        energia.set_image(Gtk.Image.new_from_icon_name("system-shutdown-symbolic", Gtk.IconSize.LARGE_TOOLBAR))
+        energia.get_style_context().add_class("tondo")
+        energia.set_tooltip_text("Spegni o riavvia")
+        energia.set_direction(Gtk.ArrowType.UP)
+        menu = Gtk.Popover()
+        voci = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        voci.get_style_context().add_class("menu-energia")
+        for nome, icona, azione, possibile in (
+                ("Sospendi", "media-playback-pause-symbolic", "suspend", "get_can_suspend"),
+                ("Riavvia", "view-refresh-symbolic", "restart", "get_can_restart"),
+                ("Spegni", "system-shutdown-symbolic", "shutdown", "get_can_shutdown")):
+            if not PROVA and not getattr(LightDM, possibile)():
+                continue
+            b = Gtk.Button()
+            r = Gtk.Box(spacing=10)
+            r.pack_start(Gtk.Image.new_from_icon_name(icona, Gtk.IconSize.MENU), False, False, 0)
+            r.pack_start(Gtk.Label(label=nome, xalign=0), True, True, 0)
+            b.add(r)
+            b.connect("clicked", lambda *_, a=azione: self.energia(a))
+            voci.pack_start(b, False, False, 0)
+        voci.show_all()
+        menu.add(voci)
+        energia.set_popover(menu)
+        angolo = Gtk.Box(spacing=10)
+        angolo.set_halign(Gtk.Align.END)
+        angolo.set_valign(Gtk.Align.END)
+        angolo.set_margin_end(28)
+        angolo.set_margin_bottom(28)
+        angolo.pack_end(energia, False, False, 0)
+        sovrapposto.add_overlay(angolo)
+
+        # Logo e nome in basso al centro
+        if os.path.exists(LOGO):
+            marchio = Gtk.Box(spacing=8)
+            marchio.set_halign(Gtk.Align.CENTER)
+            marchio.set_valign(Gtk.Align.END)
+            marchio.set_margin_bottom(34)
+            try:
+                marchio.pack_start(Gtk.Image.new_from_pixbuf(
+                    GdkPixbuf.Pixbuf.new_from_file_at_size(LOGO, 22, 22)), False, False, 0)
+            except GLib.Error:
+                pass
+            t = Gtk.Label(label="Alba")
+            t.get_style_context().add_class("suggerimento")
+            marchio.pack_start(t, False, False, 0)
+            marchio.set_opacity(0.8)
+            sovrapposto.add_overlay(marchio)
+
+    def aggiorna_ora(self):
+        adesso = time.localtime()
+        self.ora.set_text(time.strftime("%H:%M", adesso))
+        self.data.set_text(f"{GIORNI[adesso.tm_wday].capitalize()} {adesso.tm_mday} {MESI[adesso.tm_mon - 1]}")
+        return True
+
+    # -------------------------------------------------------------- animazioni
+    def entrata(self):
+        """All'apertura: orologio e utente salgono piano e compaiono."""
+        self.blocco_ora.set_opacity(0)
+        self.centro.set_opacity(0)
+        alto = self.blocco_ora.get_margin_top()
+
+        def passo(t):
+            e = morbido(t)
+            for sf in self.sfondi:
+                sf.zoom = 1.0 + 0.06 * (1 - e)
+                sf.queue_draw()
+            self.blocco_ora.set_opacity(e)
+            self.blocco_ora.set_margin_top(int(alto + 24 * (1 - e)))
+            self.centro.set_opacity(morbido(max(0.0, t * 1.25 - 0.25)))
+            self.centro.set_margin_top(int(self.margine_centro + 36 * (1 - e)))
+        anima(900, passo, lambda: self.password.grab_focus())
+
+    def scuoti(self):
+        """Password sbagliata: il campo fa "no" con la testa, come su macOS."""
+        def passo(t):
+            spostamento = int(14 * math.sin(t * math.pi * 6) * (1 - t))
+            self.riga_password.set_margin_start(max(0, spostamento) * 2)
+            self.riga_password.set_margin_end(max(0, -spostamento) * 2)
+        anima(420, passo)
+
+    def uscita(self, poi):
+        """Accesso riuscito: tutto svanisce dolcemente prima del desktop."""
+        def passo(t):
+            e = morbido(t)
+            for w in (self.blocco_ora, self.centro):
+                w.set_opacity(1 - e)
+            self.centro.set_margin_top(int(self.margine_centro - 20 * e))
+        anima(320, passo, poi)
+
+    # ------------------------------------------------------------------ utenti
+    def utente_iniziale(self):
+        nomi = {u.get_name(): u for u in self.utenti}
+        for candidato in ((self.greeter.get_select_user_hint() if self.greeter else None), leggi(MEMORIA)):
+            if candidato and candidato in nomi:
+                return nomi[candidato]
+        return self.utenti[0] if self.utenti else None
+
+    def scegli_utente(self, utente, animazione=True):
+        if utente is None:
+            self.nome.set_text("Nessun utente")
+            return
+        self.utente = utente
+        for c in self.posto_foto.get_children():
+            self.posto_foto.remove(c)
+        foto = Foto(utente, 116)
+        self.posto_foto.pack_start(foto, False, False, 0)
+        foto.show()
+        self.nome.set_text(utente.get_display_name() or utente.get_name())
+        for n, b in self.bottoni_utente.items():
+            ctx = b.get_style_context()
+            (ctx.add_class if n == utente.get_name() else ctx.remove_class)("scelto")
+        self.password.set_text("")
+        self.mostra_messaggio("")
+        if animazione:
+            self.centro.set_opacity(0)
+            anima(260, lambda t: self.centro.set_opacity(morbido(t)))
+        self.avvia_autenticazione()
+        self.password.grab_focus()
+
+    def avvia_autenticazione(self):
+        if PROVA or not self.utente:
+            return
+        if self.greeter.get_in_authentication():
+            self.greeter.cancel_authentication()
+        self.greeter.authenticate(self.utente.get_name())
+
+    # ------------------------------------------------------------ LightDM
+    def chiede(self, _g, testo, tipo):
+        # PAM chiede la password (o un altro dato): il campo è già pronto
+        self.in_corso = False
+        self.rotella.stop()
+        self.password.set_sensitive(True)
+        segreto = tipo == LightDM.PromptType.SECRET
+        self.password.set_visibility(not segreto)
+        if not segreto and testo:
+            self.password.set_placeholder_text(testo.strip().rstrip(":"))
+        else:
+            self.password.set_placeholder_text("Password")
+        self.password.grab_focus()
+
+    def messaggio_pam(self, _g, testo, _tipo):
+        self.mostra_messaggio(testo)
+
+    def completato(self, greeter):
+        self.rotella.stop()
+        self.in_corso = False
+        if greeter.get_is_authenticated():
+            try:
+                os.makedirs(os.path.dirname(MEMORIA), exist_ok=True)
+                with open(MEMORIA, "w", encoding="utf-8") as f:
+                    f.write(self.utente.get_name())
+            except OSError:
+                pass
+            sessione = self.utente.get_session() or greeter.get_default_session_hint()
+
+            def avvia():
+                try:
+                    greeter.start_session_sync(sessione)
+                except GLib.Error:
+                    greeter.start_session_sync(None)
+                Gtk.main_quit()
+            self.uscita(avvia)
+        else:
+            self.password.set_text("")
+            self.password.set_sensitive(True)
+            self.mostra_messaggio("Password errata. Riprova.")
+            self.scuoti()
+            self.avvia_autenticazione()
+
+    def invia(self):
+        if self.in_corso:
+            return
+        testo = self.password.get_text()
+        if PROVA:
+            self.mostra_messaggio("Password errata. Riprova.") if testo != "alba" else Gtk.main_quit()
+            if testo != "alba":
+                self.scuoti()
+            return
+        if not self.greeter.get_in_authentication():
+            self.avvia_autenticazione()
+        self.in_corso = True
+        self.password.set_sensitive(False)
+        self.rotella.start()
+        self.greeter.respond(testo)
+
+    def energia(self, azione):
+        if PROVA:
+            return
+        try:
+            {"suspend": LightDM.suspend, "restart": LightDM.restart, "shutdown": LightDM.shutdown}[azione]()
+        except GLib.Error as e:
+            self.mostra_messaggio(f"Non riuscito: {e.message}")
+
+    def mostra_messaggio(self, testo):
+        if not testo and self.password.get_visibility() is False:
+            caps = Gdk.Keymap.get_for_display(Gdk.Display.get_default()).get_caps_lock_state()
+            testo = "Il blocco maiuscole è attivo" if caps and self.password.get_text() else ""
+        self.messaggio.set_text(testo)
+
+    def tasto(self, _w, evento):
+        if not self.password.has_focus() and self.password.get_sensitive():
+            self.password.grab_focus()
+        GLib.idle_add(lambda: self.mostra_messaggio(self.messaggio.get_text()
+                                                    if "Riprova" in self.messaggio.get_text() else ""))
+        return False
+
+
+def main():
+    stato = {"errore": False}
+
+    def errore(tipo, valore, tb):
+        traceback.print_exception(tipo, valore, tb)
+        stato["errore"] = True
+        Gtk.main_quit()
+    sys.excepthook = errore
+    Accesso()
+    Gtk.main()
+    return 1 if stato["errore"] else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

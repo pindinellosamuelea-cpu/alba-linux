@@ -23,6 +23,16 @@ fi
 /usr/bin/alba-primo-avvio
 /usr/bin/alba-segnalibri
 
+# 2a. Leggerezza: "Software" non resta acceso in sottofondo (occupava
+#     centinaia di MB). Gli aggiornamenti li controlla Alba da sola.
+mkdir -p "$HOME/.config/autostart"
+for f in org.gnome.Software.desktop gnome-software-service.desktop; do
+  if [ -f "/etc/xdg/autostart/$f" ] && [ ! -f "$HOME/.config/autostart/$f" ]; then
+    printf '[Desktop Entry]\nType=Application\nName=Software\nHidden=true\n' > "$HOME/.config/autostart/$f"
+    pkill -u "$(id -u)" -f "gnome-software --gapplication-service" 2>/dev/null
+  fi
+done
+
 # 2b. Bluetooth: resta attivo per le associazioni, ma senza icona doppia
 #     (c'è già il menu Bluetooth di Alba nella barra)
 gsettings set org.blueman.general plugin-list "['!StatusIcon', '!ShowConnected']" 2>/dev/null

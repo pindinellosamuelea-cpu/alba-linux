@@ -1,0 +1,5 @@
+[Desktop Entry]
+Name=Alba
+Comment=Schermata di accesso di Alba Linux
+Exec=/usr/libexec/alba/alba-accesso-avvio
+Type=Application

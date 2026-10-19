@@ -42,6 +42,8 @@ apt_extra() {
 }
 apt_extra archivi 7zip 7zip-rar unrar unar
 apt_extra barra xfce4-genmon-plugin
+apt_extra accesso gir1.2-lightdm-1
+/usr/libexec/alba/alba-configura-accesso
 apt_extra appimage libfuse2t64
 apt_extra telefono kdeconnect
 apt_extra exe winetricks cabextract

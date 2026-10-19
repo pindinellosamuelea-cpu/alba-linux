@@ -36,8 +36,11 @@ if [ "${TEMA_FLUENT:-0}" = 1 ]; then
   mkdir -p "$P/usr/share/doc/alba-sistema"
   echo ">> Integro il tema WhiteSur (stile macOS)"
   if git clone --depth 1 https://github.com/vinceliuice/WhiteSur-gtk-theme.git "$LAVORO/whitesur-gtk"; then
-    ( cd "$LAVORO/whitesur-gtk" && ./install.sh -d "$T" -c Light -c Dark -o normal -t default ) \
-      || ( cd "$LAVORO/whitesur-gtk" && ./install.sh -d "$T" ) || echo "ATTENZIONE: WhiteSur non installato"
+    # l'installatore chiede il nome dell'utente con "logname", che qui non esiste
+    mkdir -p "$LAVORO/bin" && printf '#!/bin/sh\nid -un\n' > "$LAVORO/bin/logname" && chmod +x "$LAVORO/bin/logname"
+    ( cd "$LAVORO/whitesur-gtk" && PATH="$LAVORO/bin:$PATH" HOME="${HOME:-/root}" \
+        ./install.sh -d "$T" -c Light -c Dark -o normal -t default ) \
+      || echo "ATTENZIONE: WhiteSur non installato"
     cp "$LAVORO/whitesur-gtk/COPYING" "$P/usr/share/doc/alba-sistema/LICENZA-tema-WhiteSur" 2>/dev/null || true
   fi
   if ! scegli_tema 'WhiteSur*Light*' 'WhiteSur*Dark*'; then

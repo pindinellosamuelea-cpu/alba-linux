@@ -85,6 +85,19 @@ jobs:
           if grep -q "error" registro/controlli.log; then echo "ERR shellcheck (vedi controlli.log)" >> $R; OK=false
           else echo "OK  shellcheck" >> $R; fi
 
+          # Programmi in Python: nessun errore di scrittura (altrimenti non partirebbero)
+          ERRPY=""
+          for f in /usr/bin/alba-* /usr/libexec/alba/*; do
+            head -1 "$f" | grep -q python3 || continue
+            python3 -c "import ast,sys; ast.parse(open(sys.argv[1]).read())" "$f" >> registro/controlli.log 2>&1 || ERRPY="$ERRPY $(basename "$f")"
+          done
+          if [ -n "$ERRPY" ]; then echo "ERR Python:$ERRPY (vedi controlli.log)" >> $R; OK=false
+          else echo "OK  programmi Python senza errori" >> $R; fi
+          apt-get install -y gir1.2-lightdm-1 >> registro/installazione.log 2>&1 || true
+          if python3 -c "import gi; gi.require_version('LightDM','1'); from gi.repository import LightDM" >> registro/controlli.log 2>&1; then
+            echo "OK  schermata di accesso: componenti presenti" >> $R
+          else echo "ERR schermata di accesso: manca gir1.2-lightdm-1" >> $R; OK=false; fi
+
           if ALBA_DEMO=1 LC_ALL=it_IT.UTF-8 xvfb-run -a -s "-screen 0 1400x900x24" \
                dbus-launch --exit-with-session python3 /usr/bin/alba-impostazioni --autotest \
                > registro/autotest.log 2>&1; then

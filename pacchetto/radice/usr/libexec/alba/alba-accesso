@@ -32,7 +32,7 @@ GIORNI = ["lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato",
 MESI = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre",
         "ottobre", "novembre", "dicembre"]
 
-CSS = b"""
+CSS = """
 * { font-family: "Inter", "Noto Sans", sans-serif; }
 window { background-color: #0b0f29; }
 .ora { color: #ffffff; font-size: 84px; font-weight: 300; letter-spacing: 1px; }
@@ -243,7 +243,7 @@ class Accesso:
         impostazioni.set_property("gtk-application-prefer-dark-theme", True)
         impostazioni.set_property("gtk-font-name", "Inter 11")
         stile = Gtk.CssProvider()
-        stile.load_from_data(CSS)
+        stile.load_from_data(CSS.encode())
         Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(), stile,
                                                  Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION + 10)
 

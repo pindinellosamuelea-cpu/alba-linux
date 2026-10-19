@@ -177,6 +177,7 @@ class Foto(Gtk.DrawingArea):
             cr.move_to(l / 2 - e.width / 2 - e.x_bearing, l / 2 - e.height / 2 - e.y_bearing)
             cr.show_text(self.iniziale)
         # anello sottile
+        cr.new_path()
         cr.arc(l / 2, l / 2, l / 2 - 1, 0, 2 * math.pi)
         cr.set_source_rgba(1, 1, 1, 0.35)
         cr.set_line_width(2)
@@ -331,6 +332,8 @@ class Accesso:
         self.messaggio.set_justify(Gtk.Justification.CENTER)
         self.centro.pack_start(self.messaggio, False, False, 0)
         self.centro.pack_start(self.rotella, False, False, 0)
+        self.messaggio.set_no_show_all(True)
+        self.rotella.set_no_show_all(True)
         sovrapposto.add_overlay(self.centro)
 
         # Altri utenti in basso a sinistra (solo se ce n'è più di uno)
@@ -488,7 +491,7 @@ class Accesso:
     def chiede(self, _g, testo, tipo):
         # PAM chiede la password (o un altro dato): il campo è già pronto
         self.in_corso = False
-        self.rotella.stop()
+        (self.rotella.stop(), self.rotella.hide())
         self.password.set_sensitive(True)
         segreto = tipo == LightDM.PromptType.SECRET
         self.password.set_visibility(not segreto)
@@ -502,7 +505,7 @@ class Accesso:
         self.mostra_messaggio(testo)
 
     def completato(self, greeter):
-        self.rotella.stop()
+        (self.rotella.stop(), self.rotella.hide())
         self.in_corso = False
         if greeter.get_is_authenticated():
             try:
@@ -540,7 +543,7 @@ class Accesso:
             self.avvia_autenticazione()
         self.in_corso = True
         self.password.set_sensitive(False)
-        self.rotella.start()
+        (self.rotella.show(), self.rotella.start())
         self.greeter.respond(testo)
 
     def energia(self, azione):
@@ -556,6 +559,7 @@ class Accesso:
             caps = Gdk.Keymap.get_for_display(Gdk.Display.get_default()).get_caps_lock_state()
             testo = "Il blocco maiuscole è attivo" if caps and self.password.get_text() else ""
         self.messaggio.set_text(testo)
+        self.messaggio.set_visible(bool(testo))   # niente spazio vuoto nella scheda
 
     def tasto(self, _w, evento):
         if not self.password.has_focus() and self.password.get_sensitive():

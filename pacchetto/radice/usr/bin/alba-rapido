@@ -102,22 +102,47 @@ class Rapido(Gtk.Window):
         # Animazione di apertura: il pannello sale dal basso
         self.rivela = Gtk.Revealer()
         self.rivela.set_transition_type(Gtk.RevealerTransitionType.SLIDE_UP)
-        self.rivela.set_transition_duration(220)
+        self.rivela.set_transition_duration(240)
         self.rivela.add(self.scatola)
         self.add(self.rivela)
         self.connect("focus-out-event", lambda *_: self._chiudi_presto())
-        self.connect("key-press-event", lambda w, e: self.destroy() if e.keyval == Gdk.KEY_Escape else None)
+        self.connect("key-press-event", lambda w, e: self.chiudi() if e.keyval == Gdk.KEY_Escape else None)
         getattr(self, f"costruisci_{modo.replace('-', '_')}")()
         self.show_all()
         self._posiziona()
         self.present()
         self._posiziona()
-        GLib.timeout_add(30, lambda: (self.rivela.set_reveal_child(True), False)[1])
+        # apertura: sale dal basso e intanto compare (dissolvenza)
+        self.scatola.set_opacity(0)
+        GLib.timeout_add(30, lambda: (self.rivela.set_reveal_child(True), self._dissolvi(0, 1, 220), False)[2])
         GLib.timeout_add(260, lambda: (self._posiziona(), False)[1])
+
+    def _dissolvi(self, da, a, durata, poi=None):
+        inizio = time.monotonic()
+
+        def tic():
+            t = min(1.0, (time.monotonic() - inizio) * 1000 / durata)
+            e = 1 - (1 - t) ** 3
+            self.scatola.set_opacity(da + (a - da) * e)
+            if t >= 1.0:
+                if poi:
+                    poi()
+                return False
+            return True
+        GLib.timeout_add(16, tic)
+
+    def chiudi(self):
+        """Chiusura animata: scende e svanisce, poi la finestra se ne va."""
+        if getattr(self, "_in_chiusura", False):
+            return
+        self._in_chiusura = True
+        self.rivela.set_transition_duration(170)
+        self.rivela.set_reveal_child(False)
+        self._dissolvi(self.scatola.get_opacity(), 0, 160, lambda: GLib.timeout_add(20, lambda: (self.destroy(), False)[1]))
 
     def _chiudi_presto(self):
         # piccolo ritardo: lascia aprire finestre di dialogo nostre senza chiudere tutto
-        GLib.timeout_add(150, lambda: (self.destroy() if not self.is_active() and not self._dialogo else None, False)[1])
+        GLib.timeout_add(150, lambda: (self.chiudi() if not self.is_active() and not self._dialogo else None, False)[1])
 
     _dialogo = False
 

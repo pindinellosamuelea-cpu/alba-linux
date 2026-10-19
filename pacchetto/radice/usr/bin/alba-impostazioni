@@ -1488,11 +1488,25 @@ class PaginaGrafica(Pagina):
                                              pulsante("Apri", self._pannello)))
         self.riga_obs = r.aggiungi(Riga("Registrare e fare dirette (OBS)", "Controllo…", icona="media-record"))
         in_sottofondo(codificatori_video, self._mostra_obs)
+        self.gioco = Interruttore(self._modalita_gioco)
+        self.gioco.imposta(not os.path.exists(os.path.join(CONF, "modalita-gioco-spenta")))
+        r.aggiungi(Riga("Modalità gioco automatica", "Gioco a schermo intero: grafica diretta senza effetti del desktop, "
+                        "niente notifiche, prestazioni massime. Uscendo torna tutto com'era.", self.gioco))
         self.fps = Interruttore(self._fps)
         r.aggiungi(Riga("Mostra FPS e temperature nei giochi", "Un piccolo riquadro in alto a sinistra durante il gioco", self.fps))
         r.aggiungi(Riga("Driver", "Controlla se c'è un driver migliore per la tua scheda",
                         pulsante("Controlla", lambda: avvia(["alba-driver-grafici"]))))
         self._timer = None
+
+    def _modalita_gioco(self, acceso):
+        segno = os.path.join(CONF, "modalita-gioco-spenta")
+        if acceso:
+            if os.path.exists(segno):
+                os.remove(segno)
+            avvia(["alba-modalita-gioco"])
+        else:
+            os.makedirs(CONF, exist_ok=True)
+            open(segno, "w").close()
 
     def _mostra_obs(self, trovati):
         if not trovati:
@@ -2040,6 +2054,12 @@ class PaginaProblemi(Pagina):
             parti += ["", "== Riparazioni recenti ==", leggi_file(REGISTRO_RIPARAZIONI)[-3000:]]
             parti += ["", "== Errori di sistema recenti ==",
                       uscita(["journalctl", "-b", "-p", "3", "--no-pager", "-n", "80", "-o", "short"], timeout=20)]
+            parti += ["", "== Memoria (RAM) ==", uscita(["free", "-m"]),
+                      "", "Programmi che usano più memoria (MB):",
+                      uscita(["sh", "-c", "ps -eo rss=,comm= --sort=-rss | head -25 | "
+                              "awk '{printf \"%6d  %s\\n\", $1/1024, $2}'"]),
+                      "", "Servizi attivi:", uscita(["sh", "-c", "systemctl list-units --type=service --state=running "
+                                                    "--no-legend --plain | awk '{print $1}' | tr '\\n' ' '"])]
             parti += ["", "== Driver grafico ==", leggi_file("/var/lib/alba/driver-auto.log")[-2500:]]
             parti += ["", "== Ultimo programma Windows ==", leggi_file(os.path.expanduser("~/.cache/alba/exe-ultimo.log"))[-2500:]]
             cartella = os.path.expanduser("~/Documenti") if os.path.isdir(os.path.expanduser("~/Documenti")) else os.path.expanduser("~")
@@ -2221,6 +2241,11 @@ class PaginaAggiornamenti(Pagina):
         self.elenco_testo.show()
         r.pack_start(self.elenco, False, False, 0)
 
+        # "Cosa c'è di nuovo": versione e novità spiegate per bene
+        self.scheda_novita = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        self.scheda_novita.set_no_show_all(True)
+        self.colonna.pack_start(self.scheda_novita, False, False, 0)
+
         r = self.sezione()
         r.aggiungi(Riga("Aggiornamenti automatici", "Quelli di sicurezza si installano da soli ogni giorno. "
                         "Per gli altri ricevi una notifica.", icona="emblem-default"))
@@ -2252,6 +2277,10 @@ class PaginaAggiornamenti(Pagina):
         self.rotella.stop()
         self._da_installare = pacchetti or []
         n = len(self._da_installare)
+        if "alba-sistema" in self._da_installare or aggiornamento_pronto() or DEMO:
+            in_sottofondo(novita_alba, self._mostra_novita)
+        else:
+            self.scheda_novita.hide()
         if aggiornamento_pronto():
             self.icona_stato.set_from_icon_name("system-reboot", Gtk.IconSize.DIALOG)
             self.dettaglio.set_text("Aggiornamento scaricato e pronto. Si installa al riavvio, prima della "
@@ -2277,6 +2306,33 @@ class PaginaAggiornamenti(Pagina):
             self.azione.set_label("Controlla")
             self.elenco.hide()
         self.azione.set_sensitive(True)
+
+    def _mostra_novita(self, dati):
+        if not dati:
+            return
+        versione, voci = dati
+        for c in self.scheda_novita.get_children():
+            self.scheda_novita.remove(c)
+        self.scheda_novita.pack_start(etichetta(f"COSA C'È DI NUOVO IN ALBA {versione}".upper(), "etichetta-sezione"),
+                                      False, False, 0)
+        riquadro = Riquadro()
+        for v in voci:
+            blocco = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+            blocco.set_border_width(16)
+            blocco.pack_start(etichetta(v.get("titolo", "Miglioramenti"), "riga-titolo", wrap=True), False, False, 0)
+            for punto in v.get("novita", []):
+                riga = Gtk.Box(spacing=8)
+                pallino = etichetta("●", "riga-sottotitolo")
+                pallino.set_valign(Gtk.Align.START)
+                riga.pack_start(pallino, False, False, 0)
+                riga.pack_start(etichetta(punto, "riga-sottotitolo", wrap=True), True, True, 0)
+                blocco.pack_start(riga, False, False, 0)
+            riquadro.aggiungi(blocco)
+        self.scheda_novita.pack_start(riquadro, False, False, 0)
+        self.scheda_novita.set_no_show_all(False)
+        self.scheda_novita.show_all()
+        if self.stato.get_text().startswith("Alba"):
+            self.stato.set_text(f"Alba {versione_alba()}  →  {versione}")
 
     def _controlla(self):
         if self._da_installare:
@@ -2311,6 +2367,32 @@ class PaginaAggiornamenti(Pagina):
                           "Controlla la connessione a Internet e riprova.", Gtk.MessageType.WARNING)
             self.aggiorna()
         in_sottofondo(lavoro, fatto)
+
+
+def novita_alba():
+    """(versione nuova, [novità]) prese dall'elenco online di Alba: solo quelle
+    più recenti della versione installata, spiegate per bene."""
+    import json
+    if DEMO:
+        nuova = "1.1.40"
+    else:
+        nuova = leggi_file("/var/lib/alba/aggiornamento/versione") or ""
+        if not nuova:
+            m = re.search(r"Candidate:\s*(\S+)", uscita(["sh", "-c", "LC_ALL=C apt-cache policy alba-sistema"]))
+            nuova = m.group(1) if m else ""
+    testo = uscita(["curl", "-fsSL", "--max-time", "8",
+                    "https://raw.githubusercontent.com/pindinellosamuelea-cpu/alba-linux/main/novita.json"], timeout=12)
+    try:
+        dati = json.loads(testo or leggi_file("/usr/share/alba/novita.json", "{}"))
+    except ValueError:
+        dati = {}
+    installata = leggi_file("/usr/share/alba/data-versione", "")
+    voci = [v for v in dati.get("versioni", []) if not installata or v.get("data", "") > installata]
+    if not installata:
+        voci = voci[:1]
+    if not voci:
+        voci = [{"titolo": "Miglioramenti e correzioni", "novita": ["Piccole correzioni per un sistema più stabile e veloce"]}]
+    return nuova or "nuova", voci[:4]
 
 
 def aggiornamento_pronto():

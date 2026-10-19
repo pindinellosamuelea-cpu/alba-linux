@@ -36,6 +36,15 @@ case "${1:-}" in
       echo "errore-download"; exit 2
     fi
     echo "$ELENCO" > "$DIR/pacchetti"
+    # versione nuova di Alba e titolo delle novità (per la schermata e la notifica)
+    if echo "$ELENCO" | grep -qx alba-sistema; then
+      LC_ALL=C apt-cache policy alba-sistema | awk '/Candidate:/{print $2}' > "$DIR/versione"
+      curl -fsSL --max-time 8 https://raw.githubusercontent.com/pindinellosamuelea-cpu/alba-linux/main/novita.json 2>/dev/null \
+        | python3 -c "import json,sys; v=json.load(sys.stdin)['versioni']; print(v[0]['titolo'])" > "$DIR/titolo" 2>/dev/null \
+        || rm -f "$DIR/titolo"
+    else
+      rm -f "$DIR/versione" "$DIR/titolo"
+    fi
     ln -sfn "$DIR" /system-update
     command -v flatpak >/dev/null && flatpak update -y --noninteractive --system >/dev/null 2>&1
     echo pronto
@@ -44,9 +53,15 @@ case "${1:-}" in
   applica)
     # Gira all'avvio in "modalità aggiornamento" (system-update.target)
     rm -f /system-update   # anche se qualcosa va storto, al prossimo avvio si entra normalmente
+    NUOVA="$(cat "$DIR/versione" 2>/dev/null)"
+    TITOLO="$(cat "$DIR/titolo" 2>/dev/null)"
     command -v plymouth >/dev/null && plymouth change-mode --system-upgrade >/dev/null 2>&1
     avanzamento 2
-    schermo "Installo le novità…"
+    if [ -n "$NUOVA" ]; then
+      schermo "Alba $NUOVA${TITOLO:+ · $TITOLO}"
+    else
+      schermo "Installo gli aggiornamenti…"
+    fi
     dpkg --configure -a >> "$LOG" 2>&1
     # stato di avanzamento vero da apt (pmstatus) -> barra sulla schermata
     export ALBA_OFFLINE=1
@@ -57,7 +72,7 @@ case "${1:-}" in
         done
     esito=${PIPESTATUS[0]}
     if [ "$esito" -ne 0 ]; then
-      schermo "Completo l'aggiornamento…"
+      schermo "Completo l'aggiornamento${NUOVA:+ ad Alba $NUOVA}…"
       dpkg --configure -a >> "$LOG" 2>&1
       apt-get -y -q -f --no-download "${APT_OPZ[@]}" install >> "$LOG" 2>&1
     fi
@@ -68,7 +83,7 @@ case "${1:-}" in
     apt-get -q clean >> "$LOG" 2>&1
     rm -rf "$DIR"
     avanzamento 100
-    schermo "Aggiornamento completato. Riavvio…"
+    schermo "Alba ${NUOVA:-è} aggiornata. Riavvio…"
     sleep 2
     systemctl reboot
     ;;

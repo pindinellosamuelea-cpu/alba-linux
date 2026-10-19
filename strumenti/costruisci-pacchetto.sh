@@ -18,6 +18,8 @@ mkdir -p "$P/DEBIAN" "$P/usr/share/alba" "$P/usr/share/themes"
 sed "s/@VERSIONE@/$VERSIONE/" pacchetto/DEBIAN/control.in > "$P/DEBIAN/control"
 cp pacchetto/DEBIAN/postinst pacchetto/DEBIAN/triggers "$P/DEBIAN/"
 echo "$VERSIONE" > "$P/usr/share/alba/versione"
+date -u +%Y-%m-%dT%H:%M > "$P/usr/share/alba/data-versione"
+cp novita.json "$P/usr/share/alba/novita.json" 2>/dev/null || true
 
 # --- Tema ---------------------------------------------------------------------
 # Prima scelta: WhiteSur (stile macOS). Riserva: Fluent (stile Windows 11),

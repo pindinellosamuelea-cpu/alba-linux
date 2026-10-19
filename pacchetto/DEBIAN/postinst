@@ -133,6 +133,12 @@ if command -v plymouth-set-default-theme >/dev/null 2>&1; then
     fi
   fi
 fi
+# Niente scritte "Loading Linux…" / "Loading initial ramdisk…" all'accensione:
+# solo il logo di Alba che carica.
+if [ -f /etc/grub.d/10_linux ] && grep -q "^[[:space:]]*echo[[:space:]]*'\$(echo \"\$message\" | grub_quote)'" /etc/grub.d/10_linux; then
+  sed -i "s/^\([[:space:]]*\)echo\([[:space:]]*\)'\$(echo \"\$message\" | grub_quote)'/\1# alba: senza scritte # echo\2'\$(echo \"\$message\" | grub_quote)'/" /etc/grub.d/10_linux
+fi
+sysctl -q --system >/dev/null 2>&1 || true
 if [ -e /boot/grub/grub.cfg ] && command -v update-grub >/dev/null 2>&1; then
   update-grub >/dev/null 2>&1 || echo "Alba: update-grub non riuscito"
 fi

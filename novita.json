@@ -1,0 +1,38 @@
+{
+  "nota": "Novità di Alba mostrate in Impostazioni → Aggiornamenti. 'data' = quando la novità è entrata in Alba (UTC). Le più recenti in alto.",
+  "versioni": [
+    {
+      "data": "2026-10-19T23:10",
+      "titolo": "Modalità gioco, aggiornamenti al riavvio e meno memoria",
+      "novita": [
+        "Modalità gioco automatica: quando un gioco è a schermo intero gli effetti del desktop si spengono e il gioco usa direttamente la scheda grafica, senza notifiche e con le prestazioni al massimo",
+        "Aggiornamenti come su Windows: si scaricano mentre lavori e si installano al riavvio, prima della schermata di accesso, con la versione e le novità ben visibili",
+        "Accensione pulita: niente più scritte prima del logo di Alba",
+        "Meno memoria a computer fermo: spenti i programmi in sottofondo che non servono (calendario di GNOME, indicizzatore dei file, KDE Connect se il telefono non è collegato)",
+        "Steam: gli shader Vulkan vengono preparati in sottofondo, i giochi partono senza attese",
+        "Il riepilogo per l'assistenza ora mostra anche quali programmi usano più memoria"
+      ]
+    },
+    {
+      "data": "2026-10-19T22:30",
+      "titolo": "Nuova schermata di accesso e Start rinnovato",
+      "novita": [
+        "Schermata di accesso nuova in stile vetro: il tuo nome è già scelto, scrivi solo la password",
+        "Menu Start in stile Windows 11, con le icone Fluent grandi e senza il bordo nero",
+        "Animazioni: il menu Start e le Impostazioni rapide salgono e compaiono in dissolvenza",
+        "OBS registra con la scheda grafica: Intel Quick Sync, AMD/Vega e NVIDIA NVENC",
+        "Super+X apre un menu veloce con Gestione attività, Impostazioni e spegnimento"
+      ]
+    },
+    {
+      "data": "2026-10-19T20:00",
+      "titolo": "Impostazioni rapide stile Windows 11",
+      "novita": [
+        "Wi-Fi, Bluetooth, volume e batteria in un unico pannello, con luminosità e volume",
+        "Icone Fluent in tutto il sistema",
+        "Supporto touchscreen e Surface Laptop",
+        "Webcam Elgato Facecam e schede di acquisizione video USB"
+      ]
+    }
+  ]
+}

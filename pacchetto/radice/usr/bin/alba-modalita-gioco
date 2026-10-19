@@ -1,0 +1,77 @@
+#!/bin/bash
+# Alba Linux - Modalità gioco automatica.
+# Quando un gioco è a schermo intero (Steam, Heroic, programmi Windows .exe):
+#   - gli effetti del desktop si spengono: il gioco disegna direttamente
+#     sullo schermo con la scheda grafica, senza passaggi in mezzo
+#   - "Non disturbare" (niente notifiche sopra il gioco)
+#   - prestazioni massime del processore
+# Uscendo dal gioco (o togliendo lo schermo intero) torna tutto com'era.
+# Leggerissimo: aspetta gli eventi delle finestre, non controlla di continuo.
+set -u
+CONF="${XDG_CONFIG_HOME:-$HOME/.config}/alba"
+STATO="$CONF/modalita-gioco.prima"
+mkdir -p "$CONF"
+command -v xprop >/dev/null || exit 0
+pgrep -u "$(id -u)" -f "bash /usr/bin/alba-modalita-gioco" | grep -vx "$$" | grep -q . && exit 0
+
+attiva=0
+leggi() { xfconf-query -c "$1" -p "$2" 2>/dev/null; }
+scrivi() { xfconf-query -c "$1" -p "$2" -s "$3" 2>/dev/null; }
+
+e_un_gioco() {  # $1 = id finestra
+  local stato classe
+  stato="$(xprop -id "$1" _NET_WM_STATE 2>/dev/null)"
+  case "$stato" in *_NET_WM_STATE_FULLSCREEN*) ;; *) return 1 ;; esac
+  classe="$(xprop -id "$1" WM_CLASS 2>/dev/null | tr 'A-Z' 'a-z')"
+  case "$classe" in
+    *steam_app_*|*steam_proton*|*.exe*|*gamescope*|*heroic*|*lutris*|*minecraft*|*retroarch*|*dolphin-emu*|*pcsx2*|*rpcs3*|*yuzu*|*ryujinx*) return 0 ;;
+  esac
+  # programmi lanciati da Wine/Proton
+  local pid
+  pid="$(xprop -id "$1" _NET_WM_PID 2>/dev/null | awk '{print $3}')"
+  [ -n "$pid" ] && tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null | grep -qiE 'wine|proton|\.exe' && return 0
+  return 1
+}
+
+entra() {
+  [ "$attiva" = 1 ] && return
+  attiva=1
+  printf '%s\n%s\n%s\n' "$(leggi xfwm4 /general/use_compositing)" \
+    "$(leggi xfce4-notifyd /do-not-disturb)" "$(powerprofilesctl get 2>/dev/null)" > "$STATO"
+  scrivi xfwm4 /general/use_compositing false
+  xfconf-query -c xfce4-notifyd -p /do-not-disturb -n -t bool -s true 2>/dev/null || scrivi xfce4-notifyd /do-not-disturb true
+  powerprofilesctl set performance 2>/dev/null
+}
+
+esci() {
+  [ "$attiva" = 1 ] || return
+  attiva=0
+  local comp dnd prof
+  { read -r comp; read -r dnd; read -r prof; } < "$STATO" 2>/dev/null
+  scrivi xfwm4 /general/use_compositing "${comp:-true}"
+  scrivi xfce4-notifyd /do-not-disturb "${dnd:-false}"
+  [ -n "${prof:-}" ] && powerprofilesctl set "$prof" 2>/dev/null
+  rm -f "$STATO"
+}
+
+# se la sessione precedente si è chiusa durante un gioco, ripristina
+if [ -f "$STATO" ]; then attiva=1; esci; fi
+trap 'esci; exit 0' TERM INT HUP
+
+controlla() {
+  [ -f "$CONF/modalita-gioco-spenta" ] && { esci; return; }
+  local w
+  w="$(xprop -root _NET_ACTIVE_WINDOW 2>/dev/null | awk '{print $NF}')"
+  if [ -n "$w" ] && [ "$w" != "0x0" ] && e_un_gioco "$w"; then entra; else esci; fi
+}
+
+controlla
+# eventi: cambio della finestra attiva; ogni 4 s ricontrolla (schermo intero acceso/spento)
+xprop -root -spy _NET_ACTIVE_WINDOW 2>/dev/null | {
+  while true; do
+    read -r -t 4 _; r=$?
+    [ "$r" -eq 1 ] && break     # sessione chiusa
+    controlla
+  done
+  esci
+}

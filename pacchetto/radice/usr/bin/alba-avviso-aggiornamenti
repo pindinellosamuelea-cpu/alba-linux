@@ -64,9 +64,14 @@ if [ "$(/usr/libexec/alba/alba-aggiornamento stato 2>/dev/null)" = pronto ]; the
   OGGI="$(date +%F)"
   [ "$(cat "$CONF/ultimo-avviso" 2>/dev/null)" = "$OGGI" ] && exit 0
   echo "$OGGI" > "$CONF/ultimo-avviso"
-  R="$(notify-send -a "Alba" -i system-software-update -A riavvia="Riavvia e aggiorna" \
-        "Aggiornamento pronto" "Si installa al prossimo riavvio, prima della schermata di accesso. Puoi continuare a lavorare." 2>/dev/null)"
+  NUOVA="$(cat /var/lib/alba/aggiornamento/versione 2>/dev/null)"
+  TITOLO="$(cat /var/lib/alba/aggiornamento/titolo 2>/dev/null)"
+  if [ -n "$NUOVA" ]; then INTEST="Alba $NUOVA è pronta"; else INTEST="Aggiornamento pronto"; fi
+  TESTO="${TITOLO:+$TITOLO. }Si installa al prossimo riavvio, prima della schermata di accesso. Puoi continuare a lavorare."
+  R="$(notify-send -a "Alba" -i system-software-update -A novita="Cosa c'è di nuovo" -A riavvia="Riavvia e aggiorna" \
+        "$INTEST" "$TESTO" 2>/dev/null)"
   [ "$R" = "riavvia" ] && systemctl reboot
+  [ "$R" = "novita" ] && setsid -f /usr/bin/alba-impostazioni --pagina aggiornamenti >/dev/null 2>&1
   exit 0
 fi
 

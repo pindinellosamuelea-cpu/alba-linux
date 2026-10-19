@@ -29,13 +29,19 @@ for p in $(xfconf-query -c xfce4-desktop -l 2>/dev/null | grep last-image) /back
   xfconf-query -c xfce4-desktop -p "$p" -n -t string -s /usr/share/backgrounds/alba/alba.png 2>/dev/null || \
   xfconf-query -c xfce4-desktop -p "$p" -s /usr/share/backgrounds/alba/alba.png
 done
-xfce4-panel >/dev/null 2>&1 &
+xfce4-panel >/tmp/pannello.log 2>&1 &
 foto 01-desktop-scuro 6
 
 xfce4-popup-whiskermenu >/dev/null 2>&1
+# fotogrammi dell'animazione di apertura
+for n in 1 2 3; do import -window root "$OUT/03-start-anim-$n.png" 2>/dev/null; done
 foto 02-menu-start 3
 xdotool key Escape 2>/dev/null || pkill -f whiskermenu-popup 2>/dev/null
 
+/usr/bin/alba-rapido controlli >/dev/null 2>&1 &
+PID=$!
+for n in 1 2 3; do import -window root "$OUT/04-rapido-anim-$n.png" 2>/dev/null; done
+sleep 1; kill $PID 2>/dev/null; rm -f /tmp/alba-rapido.pid; sleep 0.5
 for modo in controlli notifiche; do
   /usr/bin/alba-rapido "$modo" >/dev/null 2>&1 &
   PID=$!
@@ -78,6 +84,8 @@ if false && command -v slick-greeter >/dev/null; then
   kill $PID 2>/dev/null
 fi
 
+echo "== Avvisi del tema/CSS della barra =="
+grep -iE "css|theme|parsing|warning" /tmp/pannello.log | sort | uniq -c | head -30
 kill %1 2>/dev/null
 pkill -P $$ 2>/dev/null
 exit 0

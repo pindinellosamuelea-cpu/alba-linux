@@ -33,6 +33,15 @@ for f in org.gnome.Software.desktop gnome-software-service.desktop; do
   fi
 done
 
+# 2a-bis. Icone Fluent sempre attive (se qualcosa le avesse cambiate)
+. /usr/share/alba/tema.conf 2>/dev/null
+case "$(cat "$CONF/tema" 2>/dev/null)" in chiaro) ICONE_GIUSTE="${ICONE_CHIARO:-}" ;; *) ICONE_GIUSTE="${ICONE_SCURO:-}" ;; esac
+if [ -n "$ICONE_GIUSTE" ] && [ -d "/usr/share/icons/$ICONE_GIUSTE" ] && \
+   [ "$(xfconf-query -c xsettings -p /Net/IconThemeName 2>/dev/null)" != "$ICONE_GIUSTE" ]; then
+  xfconf-query -c xsettings -p /Net/IconThemeName -s "$ICONE_GIUSTE" 2>/dev/null
+  gsettings set org.gnome.desktop.interface icon-theme "$ICONE_GIUSTE" 2>/dev/null
+fi
+
 # 2b. Bluetooth: resta attivo per le associazioni, ma senza icona doppia
 #     (c'è già il menu Bluetooth di Alba nella barra)
 gsettings set org.blueman.general plugin-list "['!StatusIcon', '!ShowConnected']" 2>/dev/null

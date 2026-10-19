@@ -3,7 +3,7 @@
 # Con --se-serve lo fa solo se l'aspetto è cambiato dall'ultima volta
 # (per non cancellare le personalizzazioni a ogni aggiornamento).
 set -u
-VERSIONE_ASPETTO=11
+VERSIONE_ASPETTO=12
 CONF="${XDG_CONFIG_HOME:-$HOME/.config}/alba"
 MARCA="$CONF/aspetto-versione"
 mkdir -p "$CONF"

@@ -46,4 +46,15 @@
   transition: background-color 140ms ease-out, -gtk-icon-transform 140ms ease-out;
 }
 #whiskermenu-window button:hover { -gtk-icon-transform: scale(1.06); }
+/* Menu Start senza il bordo nero quadrato: niente ombra/margine del tema
+   attorno alla finestra, angoli arrotondati veri (trasparenti). */
+#whiskermenu-window,
+#whiskermenu-window decoration {
+  box-shadow: none;
+  margin: 0;
+}
+#whiskermenu-window {
+  border-radius: 14px;
+  border: 1px solid alpha(#ffffff, 0.08);
+}
 /* ALBA-BARRA-FINE */

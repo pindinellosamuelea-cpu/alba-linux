@@ -798,6 +798,7 @@ class Rapido(Gtk.Window):
                                      }.get(st.get("modo"), ""))
         riga, cur, _ = self.riga_luce
         if st.get("luce") is not None:
+            riga.set_no_show_all(False)
             riga.show_all()
             cur.imposta(st["luce"])
         self.resize(1, 1)

@@ -20,29 +20,39 @@ cp pacchetto/DEBIAN/postinst pacchetto/DEBIAN/triggers "$P/DEBIAN/"
 echo "$VERSIONE" > "$P/usr/share/alba/versione"
 
 # --- Tema ---------------------------------------------------------------------
+# Prima scelta: WhiteSur (stile macOS). Riserva: Fluent (stile Windows 11),
+# poi Materia dai repository Debian.
 TEMA_CHIARO="Materia-light"
 TEMA_SCURO="Materia-dark"
+T="$P/usr/share/themes"
+scegli_tema() {  # nome-ricerca-chiaro nome-ricerca-scuro
+  local c s
+  c="$(cd "$T" && ls -d $1 2>/dev/null | grep -viE 'compact|solid|nord|hdpi|xhdpi' | while read -r d; do [ -d "$d/gtk-3.0" ] && echo "$d"; done | head -1)"
+  s="$(cd "$T" && ls -d $2 2>/dev/null | grep -viE 'compact|solid|nord|hdpi|xhdpi' | while read -r d; do [ -d "$d/gtk-3.0" ] && echo "$d"; done | head -1)"
+  if [ -n "$c" ] && [ -n "$s" ]; then TEMA_CHIARO="$c"; TEMA_SCURO="$s"; return 0; fi
+  return 1
+}
 if [ "${TEMA_FLUENT:-0}" = 1 ]; then
-  echo ">> Integro il tema Fluent"
-  if git clone --depth 1 https://github.com/vinceliuice/Fluent-gtk-theme.git "$LAVORO/fluent"; then
-    ( cd "$LAVORO/fluent" && \
-      { ./install.sh -d "$P/usr/share/themes" -c light dark -s standard --tweaks round || \
-        ./install.sh -d "$P/usr/share/themes"; } ) || echo "ATTENZIONE: installazione Fluent non riuscita"
-    # licenza del tema
-    mkdir -p "$P/usr/share/doc/alba-sistema"
-    cp "$LAVORO/fluent/COPYING" "$P/usr/share/doc/alba-sistema/LICENZA-tema-Fluent" 2>/dev/null || true
+  mkdir -p "$P/usr/share/doc/alba-sistema"
+  echo ">> Integro il tema WhiteSur (stile macOS)"
+  if git clone --depth 1 https://github.com/vinceliuice/WhiteSur-gtk-theme.git "$LAVORO/whitesur-gtk"; then
+    ( cd "$LAVORO/whitesur-gtk" && ./install.sh -d "$T" -c Light -c Dark -o normal -t default ) \
+      || ( cd "$LAVORO/whitesur-gtk" && ./install.sh -d "$T" ) || echo "ATTENZIONE: WhiteSur non installato"
+    cp "$LAVORO/whitesur-gtk/COPYING" "$P/usr/share/doc/alba-sistema/LICENZA-tema-WhiteSur" 2>/dev/null || true
   fi
-  chiaro="$(cd "$P/usr/share/themes" && ls -d *Light* 2>/dev/null | grep -vi compact | while read -r d; do [ -d "$d/gtk-3.0" ] && echo "$d"; done | head -1)"
-  scuro="$(cd "$P/usr/share/themes" && ls -d *Dark* 2>/dev/null | grep -vi compact | while read -r d; do [ -d "$d/gtk-3.0" ] && echo "$d"; done | head -1)"
-  if [ -n "$chiaro" ] && [ -n "$scuro" ]; then
-    TEMA_CHIARO="$chiaro"; TEMA_SCURO="$scuro"
-    # Teniamo solo le due varianti usate (pacchetto più leggero)
-    ( cd "$P/usr/share/themes" && for d in *; do
-        [ "$d" = "$TEMA_CHIARO" ] || [ "$d" = "$TEMA_SCURO" ] || [ "$d" = "Alba" ] || rm -rf "$d"; done )
-  else
-    echo "ATTENZIONE: tema Fluent non trovato, uso Materia"
-    find "$P/usr/share/themes" -mindepth 1 -maxdepth 1 ! -name Alba -exec rm -rf {} +
+  if ! scegli_tema 'WhiteSur*Light*' 'WhiteSur*Dark*'; then
+    echo ">> WhiteSur non disponibile, provo Fluent"
+    find "$T" -mindepth 1 -maxdepth 1 ! -name Alba -exec rm -rf {} +
+    if git clone --depth 1 https://github.com/vinceliuice/Fluent-gtk-theme.git "$LAVORO/fluent"; then
+      ( cd "$LAVORO/fluent" && { ./install.sh -d "$T" -c light dark -s standard --tweaks round || ./install.sh -d "$T"; } ) \
+        || echo "ATTENZIONE: installazione Fluent non riuscita"
+      cp "$LAVORO/fluent/COPYING" "$P/usr/share/doc/alba-sistema/LICENZA-tema-Fluent" 2>/dev/null || true
+    fi
+    scegli_tema '*Light*' '*Dark*' || echo "ATTENZIONE: nessun tema scaricato, uso Materia"
   fi
+  # Teniamo solo le due varianti usate (pacchetto più leggero)
+  ( cd "$T" && for d in *; do
+      [ "$d" = "$TEMA_CHIARO" ] || [ "$d" = "$TEMA_SCURO" ] || [ "$d" = "Alba" ] || rm -rf "$d"; done )
 fi
 # --- Icone in stile macOS (WhiteSur, GPL) -------------------------------------
 ICONE_CHIARO="Papirus"

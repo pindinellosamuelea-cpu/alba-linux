@@ -238,9 +238,17 @@ class DriverNvidia:
 class Vulkan:
     @staticmethod
     def pacchetti_mancanti():
-        installati = esegui(["dpkg-query", "-W", "-f=${binary:Package} ${Status}\n"])[1]
+        nativa = esegui(["dpkg", "--print-architecture"])[1].strip() or "amd64"
+        installati = set()
+        for riga in esegui(["dpkg-query", "-W", "-f=${binary:Package} ${Status}\n"])[1].splitlines():
+            if riga.endswith("install ok installed"):
+                nome = riga.split()[0]
+                installati.add(nome)
+                if nome.endswith(":" + nativa):
+                    installati.add(nome[: -len(nativa) - 1])
+
         def ha(p):
-            return re.search(rf"^{re.escape(p)} install ok installed", installati, re.M) is not None
+            return p in installati
         voluti = ["mesa-vulkan-drivers", "libvulkan1"]
         if "i386" in esegui(["dpkg", "--print-foreign-architectures"])[1]:
             voluti += ["mesa-vulkan-drivers:i386", "libvulkan1:i386"]
@@ -369,7 +377,10 @@ class Firmware:
         testo = esegui(["dmesg"], 10)[1] + esegui(["journalctl", "-k", "-b", "--no-pager", "-o", "cat"], 30)[1]
         nomi = set(re.findall(r"firmware: failed to load ([^\s(]+)", testo))
         nomi |= set(re.findall(r"Direct firmware load for ([^\s]+) failed", testo))
-        return sorted(n for n in nomi if not os.path.exists(f"/lib/firmware/{n}") and not os.path.exists(f"/usr/lib/firmware/{n}"))
+        facoltativi = re.compile(r"(iwl-debug|yoyo|regulatory\.db|\.clm_blob|\.txcap_blob|brcmfmac.*\.txt|"
+                                 r"\.bin\.zst$|i915/.*_guc|amdgpu/.*_ta\.bin|qca/.*\.tlv|intel/ibt-.*\.ddc)", re.I)
+        return sorted(n for n in nomi if not facoltativi.search(n)
+                      and not os.path.exists(f"/lib/firmware/{n}") and not os.path.exists(f"/usr/lib/firmware/{n}"))
 
     @staticmethod
     def controllo():
@@ -486,8 +497,16 @@ def registra(id_, titolo, risolto, dettaglio):
 
 def automatico():
     """In sottofondo: ripara da solo solo i problemi marcati come sicuri."""
+    falliti = set()
+    for l in leggi(REGISTRO).splitlines():
+        try:
+            d = json.loads(l)
+        except ValueError:
+            continue
+        if not d.get("risolto") and time.time() - d.get("ora", 0) < 86400:
+            falliti.add(d.get("id"))
     for t in controlla(scarica=True):
-        if t["auto"] and t["risolvibile"]:
+        if t["auto"] and t["risolvibile"] and t["id"] not in falliti:
             ripara(t["id"])
     with open(os.path.join(STATO, "diagnosi.json"), "w") as f:
         json.dump(dict(ora=int(time.time()), problemi=controlla()), f)

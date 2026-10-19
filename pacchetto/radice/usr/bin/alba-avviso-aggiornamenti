@@ -10,7 +10,7 @@ mkdir -p "$CONF"
 REG=/var/lib/alba/riparazioni.log
 if [ -f "$REG" ]; then
   VISTO="$(cat "$CONF/riparazioni-viste" 2>/dev/null || echo 0)"
-  python3 - "$REG" "$VISTO" <<'PY' | while IFS='|' read -r ora titolo risolto; do
+  python3 - "$REG" "$VISTO" <<'PY' | while IFS='|' read -r ora titolo risolto id; do
 import json, sys
 for l in open(sys.argv[1]):
     try:
@@ -18,15 +18,26 @@ for l in open(sys.argv[1]):
     except ValueError:
         continue
     if d.get("ora", 0) > int(sys.argv[2]):
-        print(f"{d['ora']}|{d.get('titolo', '')}|{d.get('risolto')}")
+        print(f"{d['ora']}|{d.get('titolo', '')}|{d.get('risolto')}|{d.get('id', '')}")
 PY
     if [ "$risolto" = "True" ]; then
       notify-send -a "Alba" -i emblem-ok-symbolic "Ho sistemato un problema" "$titolo: risolto." 2>/dev/null
-    else
+    elif ! grep -qx "$(date +%F) $id" "$CONF/avvisi-problemi" 2>/dev/null; then
+      echo "$(date +%F) $id" >> "$CONF/avvisi-problemi"
       notify-send -a "Alba" -i dialog-warning-symbolic "Problema da controllare" "$titolo. Apri Impostazioni → Risoluzione problemi." 2>/dev/null
     fi
     echo "$ora" > "$CONF/riparazioni-viste"
   done
+fi
+
+# Kernel per Surface installato: serve un riavvio
+if [ -f /var/lib/alba/surface-riavvio ] && ! uname -r | grep -q surface && \
+   [ "$(cat "$CONF/avviso-surface" 2>/dev/null)" != "$(date +%F)" ]; then
+  date +%F > "$CONF/avviso-surface"
+  TESTO="Riavvia per attivare touchscreen e penna del Surface."
+  [ -f /var/lib/alba/surface-mok ] && TESTO="$TESTO Nella schermata blu scegli Enroll MOK → Continue → Yes, password: surface."
+  R="$(notify-send -a "Alba" -i input-tablet -A riavvia="Riavvia ora" "Supporto Surface installato" "$TESTO" 2>/dev/null)"
+  [ "$R" = "riavvia" ] && systemctl reboot
 fi
 
 # Driver NVIDIA installato in automatico: serve un riavvio

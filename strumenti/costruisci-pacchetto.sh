@@ -56,19 +56,18 @@ if [ "${TEMA_FLUENT:-0}" = 1 ]; then
   ( cd "$T" && for d in *; do
       [ "$d" = "$TEMA_CHIARO" ] || [ "$d" = "$TEMA_SCURO" ] || [ "$d" = "Alba" ] || rm -rf "$d"; done )
 fi
-# --- Icone in stile macOS (WhiteSur, GPL) -------------------------------------
+# --- Icone: Fluent (pulite e professionali, GPL) -------------------------------
 ICONE_CHIARO="Papirus"
 ICONE_SCURO="Papirus-Dark"
 if [ "${TEMA_FLUENT:-0}" = 1 ]; then
-  echo ">> Integro le icone WhiteSur (stile macOS)"
-  if git clone --depth 1 https://github.com/vinceliuice/WhiteSur-icon-theme.git "$LAVORO/whitesur"; then
-    mkdir -p "$P/usr/share/icons"
-    ( cd "$LAVORO/whitesur" && ./install.sh -d "$P/usr/share/icons" -t default ) || echo "ATTENZIONE: icone WhiteSur non installate"
-    mkdir -p "$P/usr/share/doc/alba-sistema"
-    cp "$LAVORO/whitesur/COPYING" "$P/usr/share/doc/alba-sistema/LICENZA-icone-WhiteSur" 2>/dev/null || true
-    if [ -d "$P/usr/share/icons/WhiteSur-dark" ] && [ -d "$P/usr/share/icons/WhiteSur" ]; then
-      ICONE_CHIARO="WhiteSur"; ICONE_SCURO="WhiteSur-dark"
-      rm -rf "$P/usr/share/icons/WhiteSur-light"   # variante non usata
+  echo ">> Integro le icone Fluent"
+  if git clone --depth 1 https://github.com/vinceliuice/Fluent-icon-theme.git "$LAVORO/fluent-icone"; then
+    mkdir -p "$P/usr/share/icons" "$P/usr/share/doc/alba-sistema"
+    ( cd "$LAVORO/fluent-icone" && ./install.sh -d "$P/usr/share/icons" ) || echo "ATTENZIONE: icone Fluent non installate"
+    cp "$LAVORO/fluent-icone/COPYING" "$P/usr/share/doc/alba-sistema/LICENZA-icone-Fluent" 2>/dev/null || true
+    if [ -d "$P/usr/share/icons/Fluent-dark" ] && [ -d "$P/usr/share/icons/Fluent" ]; then
+      ICONE_CHIARO="Fluent"; ICONE_SCURO="Fluent-dark"
+      rm -rf "$P/usr/share/icons/Fluent-light"
     fi
   fi
 fi

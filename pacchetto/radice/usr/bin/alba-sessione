@@ -33,6 +33,16 @@ if [ -e /proc/driver/nvidia/version ] && command -v nvidia-settings >/dev/null &
   nvidia-settings --assign CurrentMetaMode="nvidia-auto-select +0+0 { ForceFullCompositionPipeline = On }" >/dev/null 2>&1
 fi
 
+# 2d. Touchscreen: tastiera sullo schermo che compare quando tocchi un campo di testo
+if [ ! -f "$CONF/tastiera-spenta" ] && command -v onboard >/dev/null && \
+   xinput list 2>/dev/null | grep -qiE "touch ?screen|finger|ipts|wacom.*touch|elan.*touch"; then
+  gsettings set org.onboard.auto-show enabled true 2>/dev/null
+  gsettings set org.onboard start-minimized true 2>/dev/null
+  gsettings set org.onboard show-status-icon false 2>/dev/null
+  gsettings set org.onboard.window docking-enabled true 2>/dev/null
+  pgrep -u "$(id -u)" -x onboard >/dev/null || setsid -f onboard >/dev/null 2>&1
+fi
+
 # 3. Risoluzione e frequenza dello schermo scelte nelle Impostazioni
 [ -f "$CONF/schermo.sh" ] && bash "$CONF/schermo.sh" >/dev/null 2>&1
 

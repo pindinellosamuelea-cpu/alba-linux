@@ -1643,6 +1643,32 @@ def app_cie():
     return None
 
 
+def touchscreen_presente():
+    if DEMO:
+        return True
+    return bool(re.search(r"touch ?screen|finger|ipts|elan.*touch|wacom.*touch", uscita(["xinput", "list"]), re.I))
+
+
+VELOCITA_USB = {"1.5": "USB 1.0 (lenta)", "12": "USB 1.1", "480": "USB 2.0 · fino a 60 MB/s",
+                "5000": "USB 3.0 · fino a 625 MB/s", "10000": "USB 3.1 · fino a 1,2 GB/s",
+                "20000": "USB 3.2 · fino a 2,5 GB/s", "40000": "USB4 · fino a 5 GB/s"}
+
+
+def dispositivi_usb():
+    if DEMO:
+        return [("Chiavetta SanDisk Ultra", "5000"), ("Mouse Logitech", "12"), ("Hub USB", "480")]
+    elenco = []
+    base = "/sys/bus/usb/devices"
+    for d in sorted(os.listdir(base)) if os.path.isdir(base) else []:
+        if ":" in d or d.startswith("usb"):
+            continue
+        nome = (leggi_file(f"{base}/{d}/manufacturer") + " " + leggi_file(f"{base}/{d}/product")).strip()
+        if not nome or "Linux Foundation" in nome:
+            continue
+        elenco.append((nome, leggi_file(f"{base}/{d}/speed")))
+    return elenco
+
+
 class PaginaDispositivi(Pagina):
     nome, titolo, icona = "dispositivi", "Dispositivi", "input-gaming-symbolic"
     parole = "dispositivi controller joystick gamepad xbox playstation smart card lettore cie carta identità firma stampante scanner"
@@ -1657,12 +1683,39 @@ class PaginaDispositivi(Pagina):
         self.pulsante_cie = pulsante("Installa", self._cie)
         self.riga_cie = r.aggiungi(Riga("CIE ID", "Il programma ufficiale per usare la Carta d'Identità Elettronica",
                                         self.pulsante_cie, icona="contact-new"))
+        r = self.sezione("Touchscreen")
+        self.tastiera = Interruttore(self._tastiera)
+        self.riga_touch = r.aggiungi(Riga("Tastiera sullo schermo",
+                                          "Compare da sola quando tocchi un campo di testo", self.tastiera,
+                                          icona="input-keyboard"))
+        self.colonna.pack_start(etichetta("PORTE USB", "etichetta-sezione"), False, False, 0)
+        self.usb = Riquadro()
+        self.colonna.pack_start(self.usb, False, False, 0)
+        nota = etichetta("Alba riconosce tutte le porte USB. La velocità dipende dalla porta: una porta USB 2.0 "
+                         "non può diventare 3.0, perché il limite è nel circuito del computer. Per i dispositivi "
+                         "veloci (dischi, chiavette 3.0) usa le porte blu o con il simbolo «SS».",
+                         "riga-sottotitolo", wrap=True)
+        nota.set_margin_top(6)
+        self.colonna.pack_start(nota, False, False, 0)
+
         r = self.sezione("Stampanti e scanner")
         r.aggiungi(Riga("Stampanti", "Le stampanti di rete e USB si aggiungono da sole",
                         pulsante("Gestisci", lambda: avvia(["system-config-printer"])), icona="printer"))
         r.aggiungi(Riga("Scanner", "Acquisisci documenti e foto",
                         pulsante("Apri", lambda: avvia(["simple-scan"])), icona="scanner"))
         GLib.timeout_add_seconds(3, self._periodico)
+
+    def _tastiera(self, attiva):
+        segno = os.path.join(CONF, "tastiera-spenta")
+        os.makedirs(CONF, exist_ok=True)
+        if attiva:
+            if os.path.exists(segno):
+                os.remove(segno)
+            esegui(["gsettings", "set", "org.onboard.auto-show", "enabled", "true"])
+            avvia(["onboard"])
+        else:
+            open(segno, "w").close()
+            esegui(["pkill", "-u", str(os.getuid()), "-x", "onboard"])
 
     def _periodico(self):
         if self.get_mapped():
@@ -1696,6 +1749,21 @@ class PaginaDispositivi(Pagina):
             self.riga_lettori.imposta_sottotitolo("Collegato: " + ", ".join(lettori) + " ✓")
         else:
             self.riga_lettori.imposta_sottotitolo("Nessun lettore collegato. Funzionano i lettori USB di tutte le marche principali.")
+        touch = touchscreen_presente()
+        self.tastiera.set_sensitive(touch and esiste("onboard"))
+        self.tastiera.imposta(touch and not os.path.exists(os.path.join(CONF, "tastiera-spenta")))
+        self.riga_touch.imposta_sottotitolo(
+            ("Touchscreen rilevato ✓  La tastiera compare da sola quando tocchi un campo di testo"
+             if esiste("onboard") or DEMO else "Touchscreen rilevato ✓  La tastiera si sta installando in sottofondo")
+            if touch else "Nessun touchscreen su questo computer")
+        self.usb.svuota()
+        elenco = dispositivi_usb()
+        if not elenco:
+            self.usb.aggiungi(Riga("Nessun dispositivo USB collegato"))
+        for nome, velocita in elenco:
+            self.usb.aggiungi(Riga(nome, VELOCITA_USB.get(velocita, f"{velocita} Mbit/s" if velocita else ""),
+                                   icona="drive-removable-media"))
+        self.usb.show_all()
         if app_cie():
             self.pulsante_cie.set_label("Apri")
             self.riga_cie.imposta_sottotitolo("Installato ✓  Inserisci la carta nel lettore e apri CIE ID")

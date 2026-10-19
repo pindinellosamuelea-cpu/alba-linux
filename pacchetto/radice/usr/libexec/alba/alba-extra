@@ -47,6 +47,37 @@ apt_extra telefono kdeconnect
 apt_extra exe winetricks cabextract
 apt_extra audio libspa-0.2-bluetooth alsa-ucm-conf firmware-sof-signed
 
+# Touchscreen: tastiera sullo schermo, gesti, rotazione (solo se c'è un touch)
+TOUCH=0
+udevadm info --export-db 2>/dev/null | grep -q "ID_INPUT_TOUCHSCREEN=1" && TOUCH=1
+PRODUTTORE="$(cat /sys/devices/virtual/dmi/id/sys_vendor 2>/dev/null)"
+MODELLO="$(cat /sys/devices/virtual/dmi/id/product_name 2>/dev/null)"
+SURFACE=0
+case "$PRODUTTORE $MODELLO" in *Microsoft*Surface*) SURFACE=1; TOUCH=1 ;; esac
+[ "$TOUCH" = 1 ] && apt_extra touch onboard touchegg iio-sensor-proxy
+
+# Microsoft Surface: kernel linux-surface (touchscreen, penna, fotocamere,
+# batteria) dal progetto ufficiale linux-surface
+if [ "$SURFACE" = 1 ] && ! fatto surface; then
+  mkdir -p /etc/apt/keyrings
+  if curl -fsSL -o /etc/apt/keyrings/linux-surface.asc \
+       https://raw.githubusercontent.com/linux-surface/linux-surface/master/pkg/keys/surface.asc; then
+    echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/linux-surface.asc] https://pkg.surfacelinux.com/debian release main" \
+      > /etc/apt/sources.list.d/linux-surface.list
+    "${APT[@]}" update >/dev/null 2>&1 || true
+    if "${APT[@]}" install linux-image-surface linux-headers-surface libwacom-surface iptsd; then
+      # Con Secure Boot attivo serve la chiave linux-surface (password "surface" al riavvio)
+      if mokutil --sb-state 2>/dev/null | grep -qi enabled; then
+        "${APT[@]}" install linux-surface-secureboot-mok && echo surface > /var/lib/alba/surface-mok
+      fi
+      echo riavvio > /var/lib/alba/surface-riavvio
+      segna surface
+    else
+      echo "ATTENZIONE: kernel linux-surface non installato"
+    fi
+  fi
+fi
+
 # Ultimo .deb pubblicato su GitHub da un progetto (filtro sul nome del file)
 deb_github() {  # nome progetto filtro
   local nome="$1" progetto="$2" filtro="$3"

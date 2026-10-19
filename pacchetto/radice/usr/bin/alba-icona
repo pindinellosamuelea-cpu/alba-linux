@@ -36,9 +36,9 @@ case "${1:-}" in
     ;;
   notifiche)
     if [ "$(xfconf-query -c xfce4-notifyd -p /do-not-disturb 2>/dev/null)" = "true" ]; then
-      echo "<icon>notifications-disabled-symbolic</icon><iconclick>alba-rapido notifiche</iconclick><tool>Non disturbare attivo</tool>"
+      echo "<icon>alba-campanella-spenta-symbolic</icon><iconclick>alba-rapido notifiche</iconclick><tool>Non disturbare attivo</tool>"
     else
-      echo "<icon>preferences-system-notifications-symbolic</icon><iconclick>alba-rapido notifiche</iconclick><tool>Notifiche e calendario</tool>"
+      echo "<icon>alba-campanella-symbolic</icon><iconclick>alba-rapido notifiche</iconclick><tool>Notifiche e calendario</tool>"
     fi
     ;;
 esac

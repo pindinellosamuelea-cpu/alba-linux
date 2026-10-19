@@ -1,0 +1,40 @@
+// Alba Linux: meno richieste di password, come su Windows e macOS.
+// Per gli amministratori seduti davanti al computer (sessione locale e
+// attiva) queste operazioni comuni non chiedono più la password.
+// Restano protette: spegnere il firewall, "sudo" nel terminale e tutto
+// ciò che non è elencato qui.
+polkit.addRule(function (azione, utente) {
+  if (!(utente.local && utente.active && utente.isInGroup("sudo"))) {
+    return polkit.Result.NOT_HANDLED;
+  }
+  var id = azione.id;
+  if (id == "org.alba.root") {
+    var comando = azione.lookup("command_line") || "";
+    if (comando.indexOf("firewall off") >= 0) {
+      return polkit.Result.AUTH_ADMIN_KEEP;
+    }
+    return polkit.Result.YES;
+  }
+  var consentite = [
+    "org.freedesktop.packagekit.",          // installare/aggiornare app dal Negozio
+    "org.freedesktop.timedate1.",           // data, ora, fuso orario
+    "org.freedesktop.NetworkManager.",      // reti Wi-Fi e cablate
+    "org.freedesktop.udisks2.filesystem-mount", // chiavette e dischi
+    "org.freedesktop.udisks2.encrypted-unlock",
+    "org.freedesktop.login1.reboot",        // riavvio e spegnimento
+    "org.freedesktop.login1.power-off",
+    "org.freedesktop.login1.suspend",
+    "org.freedesktop.login1.hibernate",
+    "org.freedesktop.UPower.PowerProfiles.", // modalità energia
+    "net.hadess.PowerProfiles.",
+    "org.freedesktop.Flatpak.",             // app da Flathub
+    "org.blueman.",                         // Bluetooth
+    "org.opensuse.cupspkhelper.mechanism."  // stampanti
+  ];
+  for (var i = 0; i < consentite.length; i++) {
+    if (id.indexOf(consentite[i]) == 0) {
+      return polkit.Result.YES;
+    }
+  }
+  return polkit.Result.NOT_HANDLED;
+});

@@ -1,7 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Alba - impostazioni iniziali
-Exec=/usr/local/bin/alba-primo-avvio
-NoDisplay=true
-OnlyShowIn=XFCE;
-X-XFCE-Autostart-Override=true

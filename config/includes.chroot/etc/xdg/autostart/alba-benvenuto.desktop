@@ -1,6 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Benvenuto in Alba
-Exec=/usr/local/bin/alba-benvenuto --avvio
-NoDisplay=true
-OnlyShowIn=XFCE;

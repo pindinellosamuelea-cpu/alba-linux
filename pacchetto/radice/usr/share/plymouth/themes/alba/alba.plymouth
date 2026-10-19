@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Alba
+Description=Avvio di Alba Linux: logo e animazione di caricamento
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/alba
+ScriptFile=/usr/share/plymouth/themes/alba/alba.script

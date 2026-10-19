@@ -1,0 +1,164 @@
+# Costruisce Alba Linux sui server di GitHub, a ogni modifica del progetto.
+#  1. pacchetto: crea "alba-sistema", lo installa e lo prova su uno schermo
+#     virtuale (con foto dell'interfaccia). Se tutto va bene lo pubblica
+#     sul canale aggiornamenti: i computer con Alba lo ricevono da soli.
+#  2. iso: crea l'immagine ISO completa (si scarica da "Artifacts").
+# Avvio manuale: scheda "Actions" -> "Costruisci Alba" -> "Run workflow".
+name: Costruisci Alba
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore: ["README.md", "aggiorna-alba.sh"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: costruisci-alba
+  cancel-in-progress: true
+
+jobs:
+  pacchetto:
+    runs-on: ubuntu-latest
+    container: debian:trixie
+    timeout-minutes: 60
+    outputs:
+      versione: ${{ steps.versione.outputs.versione }}
+      ok: ${{ steps.prova.outputs.ok }}
+    steps:
+      - name: Strumenti
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git ca-certificates dpkg-dev apt-utils sassc \
+            python3 python3-pil gzip
+
+      - name: Scarica il progetto
+        uses: actions/checkout@v4
+
+      - name: Numero di versione
+        id: versione
+        run: echo "versione=1.1.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      - name: Costruisci il pacchetto
+        run: TEMA_FLUENT=1 bash strumenti/costruisci-pacchetto.sh "${{ steps.versione.outputs.versione }}" dist
+
+      - name: Installa e prova il pacchetto
+        id: prova
+        run: |
+          mkdir -p registro
+          R=registro/riepilogo.txt
+          echo "Versione ${{ steps.versione.outputs.versione }} - $(date -u)" > $R
+          OK=true
+          export DEBIAN_FRONTEND=noninteractive
+          if apt-get install -y ./dist/alba-sistema_*.deb > registro/installazione.log 2>&1; then
+            echo "OK  installazione del pacchetto" >> $R
+          else
+            echo "ERR installazione del pacchetto" >> $R; OK=false
+          fi
+          apt-get install -y xvfb xauth dbus-x11 x11-utils x11-xserver-utils imagemagick xdotool \
+            xfwm4 xfce4-panel xfdesktop4 xfce4-settings xfce4-whiskermenu-plugin xfce4-docklike-plugin \
+            xfce4-pulseaudio-plugin xfce4-power-manager papirus-icon-theme fonts-inter fonts-noto-core \
+            adwaita-icon-theme librsvg2-common locales-all shellcheck >> registro/installazione.log 2>&1 || true
+
+          {
+            echo "== temi"; cat /usr/share/alba/tema.conf; ls /usr/share/themes
+            echo "== menu riordinato"; ls /usr/local/share/applications 2>&1
+            echo "== shellcheck"
+            for f in /usr/bin/alba-* /usr/libexec/alba/* /var/lib/dpkg/info/alba-sistema.postinst; do
+              head -1 "$f" | grep -q 'sh$' && shellcheck -S error "$f"
+            done
+          } > registro/controlli.log 2>&1
+          if grep -q "error" registro/controlli.log; then echo "ERR shellcheck (vedi controlli.log)" >> $R; OK=false
+          else echo "OK  shellcheck" >> $R; fi
+
+          if ALBA_DEMO=1 LC_ALL=it_IT.UTF-8 xvfb-run -a -s "-screen 0 1400x900x24" \
+               dbus-launch --exit-with-session python3 /usr/bin/alba-impostazioni --autotest \
+               > registro/autotest.log 2>&1; then
+            echo "OK  Impostazioni: tutte le pagine si aprono" >> $R
+          else
+            echo "ERR Impostazioni (vedi autotest.log)" >> $R; OK=false
+          fi
+          timeout 300 bash strumenti/anteprima.sh registro/anteprime > registro/anteprima.log 2>&1 || true
+          echo "Foto: $(ls registro/anteprime 2>/dev/null | wc -l)" >> $R
+          cat $R
+          echo "ok=$OK" >> "$GITHUB_OUTPUT"
+
+      - name: Salva il pacchetto
+        uses: actions/upload-artifact@v4
+        with:
+          name: alba-sistema
+          path: dist/*.deb
+
+      - name: Pubblica sul canale aggiornamenti
+        if: steps.prova.outputs.ok == 'true' && github.ref == 'refs/heads/main'
+        run: |
+          mkdir -p /tmp/apt && cp dist/*.deb /tmp/apt/ && cd /tmp/apt
+          apt-ftparchive packages . > Packages
+          gzip -k9 Packages
+          apt-ftparchive -o APT::FTPArchive::Release::Origin=Alba -o APT::FTPArchive::Release::Label=Alba \
+            -o APT::FTPArchive::Release::Suite=alba -o APT::FTPArchive::Release::Codename=alba release . > Release
+          git init -q -b apt
+          git add -A
+          git -c user.name="Alba Linux" -c user.email="noreply@anthropic.com" commit -qm "Alba ${{ steps.versione.outputs.versione }}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" apt
+
+      - name: Pubblica il registro dei controlli
+        if: always()
+        run: |
+          mkdir -p registro && cd registro
+          git init -q -b registro-pacchetto
+          git add -A
+          git -c user.name="Alba Linux" -c user.email="noreply@anthropic.com" commit -qm "Registro ${{ steps.versione.outputs.versione }}" || exit 0
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" registro-pacchetto
+
+  iso:
+    needs: pacchetto
+    if: needs.pacchetto.outputs.ok == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - name: Libera spazio sul disco
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          sudo docker image prune --all --force
+          df -h /
+
+      - name: Scarica il progetto
+        uses: actions/checkout@v4
+
+      - name: Prendi il pacchetto appena provato
+        uses: actions/download-artifact@v4
+        with:
+          name: alba-sistema
+          path: config/packages.chroot
+
+      - name: Costruisci l'ISO
+        run: sudo ALBA_VERSIONE="${{ needs.pacchetto.outputs.versione }}" ./build.sh
+
+      - name: Pubblica l'ISO
+        uses: actions/upload-artifact@v4
+        with:
+          name: alba-linux-iso
+          path: |
+            alba-linux*.iso
+            alba-linux*.iso.sha256
+          compression-level: 0
+          retention-days: 14
+
+      - name: Pubblica il registro della costruzione
+        if: always()
+        run: |
+          mkdir -p /tmp/reg && cd /tmp/reg
+          if [ -f "$GITHUB_WORKSPACE/build.log" ]; then
+            grep -nE "ATTENZIONE|^E: |^W: |Err:|errore|error:|Unable to locate|non disponibile" "$GITHUB_WORKSPACE/build.log" | tail -400 > problemi.txt
+            tail -200 "$GITHUB_WORKSPACE/build.log" > fine.txt
+            gzip -c "$GITHUB_WORKSPACE/build.log" > build.log.gz
+          fi
+          ls -la "$GITHUB_WORKSPACE"/*.iso > iso.txt 2>&1 || true
+          git init -q -b registro-iso
+          git add -A
+          git -c user.name="Alba Linux" -c user.email="noreply@anthropic.com" commit -qm "Registro ISO ${{ needs.pacchetto.outputs.versione }}" || exit 0
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" registro-iso

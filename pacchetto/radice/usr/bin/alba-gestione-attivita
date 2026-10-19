@@ -1,0 +1,25 @@
+#!/bin/bash
+# Alba Linux - Gestione attività (Ctrl+Shift+Esc), come su Windows:
+# processore, memoria, disco, rete e scheda grafica in un'unica finestra.
+# Usa Mission Center; se non c'è ancora, propone di scaricarlo.
+set -u
+APP=io.missioncenter.MissionCenter
+
+if flatpak info "$APP" >/dev/null 2>&1 || flatpak info --user "$APP" >/dev/null 2>&1; then
+  exec flatpak run "$APP"
+fi
+
+if command -v flatpak >/dev/null && zenity --question --title="Gestione attività" --width=420 \
+     --text="Vuoi installare la <b>Gestione attività completa</b>?\n\nMostra processore, memoria, disco, rete e <b>scheda grafica</b>, come su Windows. Si scarica una volta sola (circa 200 MB)." \
+     --ok-label="Installa" --cancel-label="Usa quella semplice" 2>/dev/null; then
+  (
+    flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+    flatpak install --user -y --noninteractive flathub "$APP"
+  ) 2>&1 | zenity --progress --pulsate --auto-close --no-cancel --title="Gestione attività" \
+       --text="Scarico la Gestione attività…" 2>/dev/null
+  if flatpak info --user "$APP" >/dev/null 2>&1; then
+    exec flatpak run "$APP"
+  fi
+  zenity --error --text="Download non riuscito. Controlla la connessione e riprova." 2>/dev/null
+fi
+exec xfce4-taskmanager

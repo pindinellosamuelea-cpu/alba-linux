@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Impostazioni
+Comment=Wi-Fi, Bluetooth, schermo, suono, batteria, aspetto e aggiornamenti
+Keywords=impostazioni;wifi;bluetooth;schermo;suono;batteria;aspetto;sfondo;tema;aggiornamenti;
+Exec=/usr/bin/alba-impostazioni %u
+Icon=preferences-system
+Terminal=false
+Categories=Settings;
+StartupNotify=true

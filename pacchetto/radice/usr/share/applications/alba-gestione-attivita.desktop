@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Gestione attività
+Comment=Processore, memoria, disco, rete e scheda grafica (Ctrl+Shift+Esc)
+Keywords=task;manager;processi;cpu;ram;gpu;memoria;prestazioni;
+Exec=/usr/bin/alba-gestione-attivita
+Icon=utilities-system-monitor
+Terminal=false
+Categories=System;

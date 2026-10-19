@@ -1,0 +1,135 @@
+#!/bin/sh
+# Alba Linux - configurazione del sistema dopo installazione/aggiornamento.
+# Ogni passo è "idempotente": si può ripetere senza fare danni.
+set -e
+
+LIB=/usr/libexec/alba
+STATO=/var/lib/alba
+mkdir -p "$STATO"
+
+# Vero se siamo su un sistema avviato (non durante la costruzione dell'ISO)
+sistema_avviato() {
+  [ -d /run/systemd/system ] && [ "$(stat -Lc %d:%i / 2>/dev/null)" = "$(stat -Lc %d:%i /proc/1/root 2>/dev/null)" ]
+}
+
+# Esegue un passo una sola volta per sistema (rispetta le scelte successive dell'utente)
+una_volta() {  # nome
+  [ -e "$STATO/fatto-$1" ] && return 1
+  touch "$STATO/fatto-$1"
+  return 0
+}
+
+case "$1" in
+  triggered)
+    "$LIB/alba-aggiorna-menu" || true
+    exit 0 ;;
+  configure) ;;
+  *) exit 0 ;;
+esac
+
+# --- Vecchi percorsi delle versioni precedenti --------------------------------
+mkdir -p /usr/local/bin
+for f in /usr/bin/alba-*; do
+  n="$(basename "$f")"
+  [ -e "/usr/local/bin/$n" ] && [ ! -L "/usr/local/bin/$n" ] && rm -f "/usr/local/bin/$n"
+  ln -sfn "$f" "/usr/local/bin/$n"
+done
+ln -sfn /usr/bin/alba-impostazioni /usr/local/bin/alba-data-ora
+rm -f /etc/xdg/autostart/alba-primo-avvio.desktop \
+      /usr/share/applications/alba-data-ora.desktop
+
+# --- Repository Debian completi (servono per i driver NVIDIA e Steam) --------
+if ! grep -rhsE '^[[:space:]]*(deb[[:space:]].*[[:space:]]non-free([[:space:]]|$)|Components:.*[[:space:]]non-free([[:space:]]|$))' \
+     /etc/apt/sources.list /etc/apt/sources.list.d/ >/dev/null 2>&1; then
+  cat > /etc/apt/sources.list.d/alba-debian-extra.sources <<'EOF'
+# Aggiunto da Alba: componenti contrib e non-free (driver e firmware)
+Types: deb
+URIs: http://deb.debian.org/debian
+Suites: trixie trixie-updates
+Components: contrib non-free
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+
+Types: deb
+URIs: http://security.debian.org/debian-security
+Suites: trixie-security
+Components: contrib non-free
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+EOF
+fi
+
+# --- Sicurezza (impostazioni predefinite, applicate una sola volta) ----------
+if [ -f /etc/ufw/ufw.conf ] && una_volta firewall; then
+  sed -i 's/^ENABLED=.*/ENABLED=yes/' /etc/ufw/ufw.conf
+  sed -i 's/^DEFAULT_INPUT_POLICY=.*/DEFAULT_INPUT_POLICY="DROP"/' /etc/default/ufw
+  sed -i 's/^DEFAULT_OUTPUT_POLICY=.*/DEFAULT_OUTPUT_POLICY="ACCEPT"/' /etc/default/ufw
+  sed -i 's/^DEFAULT_FORWARD_POLICY=.*/DEFAULT_FORWARD_POLICY="DROP"/' /etc/default/ufw
+  systemctl enable ufw.service >/dev/null 2>&1 || true
+  sistema_avviato && ufw --force enable >/dev/null 2>&1 || true
+fi
+cat > /etc/apt/apt.conf.d/20auto-upgrades <<'EOF'
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
+APT::Periodic::AutocleanInterval "7";
+EOF
+# Gli aggiornamenti automatici includono anche quelli di Alba
+cat > /etc/apt/apt.conf.d/52alba-unattended <<'EOF'
+Unattended-Upgrade::Origins-Pattern:: "origin=Alba";
+EOF
+for s in apparmor clamav-freshclam systemd-timesyncd power-profiles-daemon; do
+  systemctl enable "$s.service" >/dev/null 2>&1 || true
+done
+if una_volta servizi-remoti; then
+  systemctl disable ssh.service >/dev/null 2>&1 || true
+  systemctl disable cups-browsed.service >/dev/null 2>&1 || true
+  systemctl disable docker.service containerd.service >/dev/null 2>&1 || true
+  systemctl enable docker.socket >/dev/null 2>&1 || true
+fi
+if sistema_avviato; then
+  sysctl -q --system >/dev/null 2>&1 || true
+  timedatectl set-ntp true >/dev/null 2>&1 || true
+fi
+
+# --- RAM compressa (PC con poca memoria) ---------------------------------------
+if [ -f /etc/default/zramswap ]; then
+  sed -i 's/^#\?PERCENT=.*/PERCENT=50/; s/^#\?ALGO=.*/ALGO=zstd/' /etc/default/zramswap
+fi
+
+# --- Aspetto: sfondo, associazioni file, menu ----------------------------------
+for f in /usr/share/backgrounds/xfce/xfce-shapes.svg /usr/share/backgrounds/xfce/xfce-x.svg \
+         /usr/share/backgrounds/xfce/xfce-verticals.png /usr/share/backgrounds/xfce/xfce-leaves.svg; do
+  [ -e "$f" ] && ln -sf /usr/share/backgrounds/alba/alba.png "$f"
+done
+cp /etc/xdg/mimeapps.list /etc/xdg/xfce-mimeapps.list
+"$LIB/alba-aggiorna-menu" || true
+update-desktop-database -q /usr/share/applications 2>/dev/null || true
+gtk-update-icon-cache -qf /usr/share/icons/hicolor 2>/dev/null || true
+
+# --- Avvio: logo Alba e niente menu di GRUB ------------------------------------
+if command -v plymouth-set-default-theme >/dev/null 2>&1; then
+  if [ "$(plymouth-set-default-theme 2>/dev/null)" != "alba" ]; then
+    plymouth-set-default-theme alba || true
+    if ls /boot/initrd.img-* >/dev/null 2>&1; then
+      update-initramfs -u -k all >/dev/null 2>&1 || echo "Alba: aggiornamento initramfs non riuscito"
+    fi
+  fi
+fi
+if [ -e /boot/grub/grub.cfg ] && command -v update-grub >/dev/null 2>&1; then
+  update-grub >/dev/null 2>&1 || echo "Alba: update-grub non riuscito"
+fi
+
+# --- Driver grafico automatico (NVIDIA) --------------------------------------
+systemctl enable alba-driver-auto.service >/dev/null 2>&1 || true
+if sistema_avviato; then
+  systemctl daemon-reload >/dev/null 2>&1 || true
+  systemctl start --no-block alba-driver-auto.service >/dev/null 2>&1 || true
+fi
+
+# --- Nome e versione ---------------------------------------------------------------
+VERSIONE="$(cat /usr/share/alba/versione 2>/dev/null || echo 1)"
+cat > /etc/alba-release <<EOF
+NAME="Alba Linux"
+VERSION="$VERSIONE"
+BASE="Debian 13 trixie"
+EOF
+
+exit 0

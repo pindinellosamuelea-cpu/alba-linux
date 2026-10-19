@@ -1,0 +1,83 @@
+#!/bin/bash
+# Alba Linux - rileva la scheda grafica e installa il driver migliore.
+#  - Intel e AMD: i driver sono già nel sistema, non serve niente.
+#  - NVIDIA: se la scheda è supportata installa il driver ufficiale più
+#    recente per quel modello, con le librerie Vulkan a 64 e 32 bit
+#    (servono a Steam e Proton per non bloccarsi sugli shader).
+#
+# Uso: alba-driver-auto                 (all'accensione, una volta sola)
+#      alba-driver-auto --aggiornamento  (insieme agli aggiornamenti di sistema)
+#      alba-driver-auto --forza          (richiesto dall'utente: riprova sempre)
+#
+# Codici di uscita: 0 fatto/niente da fare, 3 scheda troppo datata,
+#                   4 niente Internet, 5 Secure Boot (serve conferma), 1 errore
+set -u
+STATO=/var/lib/alba
+LOG="$STATO/driver-auto.log"
+FORZA=0; MODO=auto
+case "${1:-}" in
+  --forza) FORZA=1; MODO=forza ;;
+  --aggiornamento) MODO=aggiornamento ;;
+esac
+mkdir -p "$STATO"
+exec > >(tee -a "$LOG") 2>&1
+echo "== $(date) (modo=$MODO) =="
+
+[ -d /run/live/medium ] && { echo "Sessione di prova: niente da fare"; exit 0; }
+[ "$MODO" = auto ] && [ -f "$STATO/driver-auto.fatto" ] && exit 0
+
+fine() { echo "$2"; [ "$1" = 0 ] && touch "$STATO/driver-auto.fatto"; exit "$1"; }
+
+lspci -nn | grep -Ei 'vga|3d|display' | grep -qi nvidia || fine 0 "Nessuna scheda NVIDIA: i driver sono già a posto"
+[ -e /proc/driver/nvidia/version ] && fine 0 "Driver NVIDIA ufficiale già attivo"
+if dpkg -l 'nvidia-driver' 'nvidia-open-kernel-dkms' 'nvidia-kernel-dkms' 2>/dev/null | grep -q '^ii'; then
+  echo riavvio > "$STATO/driver-riavvio"
+  fine 0 "Driver NVIDIA installato: manca solo il riavvio"
+fi
+
+# Aspetta Internet (automatico: fino a 10 minuti; manuale: 30 secondi)
+ATTESA=120; [ "$MODO" != auto ] && ATTESA=6
+for _ in $(seq 1 "$ATTESA"); do
+  getent hosts deb.debian.org >/dev/null 2>&1 && break
+  sleep 5
+done
+getent hosts deb.debian.org >/dev/null 2>&1 || { echo "Niente Internet"; exit 4; }
+
+export DEBIAN_FRONTEND=noninteractive
+APT=(apt-get -y -q -o DPkg::Lock::Timeout=1800 -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold)
+"${APT[@]}" update || true
+apt-cache policy nvidia-driver 2>/dev/null | grep -q 'Candidate: [0-9]' || \
+  { echo "Il driver NVIDIA non si trova nei repository (mancano contrib/non-free?)"; exit 1; }
+"${APT[@]}" install nvidia-detect pciutils mokutil || exit 1
+
+PACCHETTO="$(nvidia-detect 2>/dev/null | grep -Eo '^ *nvidia-[a-z0-9-]*driver' | tr -d ' ' | head -1)"
+[ -n "$PACCHETTO" ] || fine 3 "Scheda NVIDIA troppo datata per il driver ufficiale: resta il driver libero"
+
+SECURE=0
+mokutil --sb-state 2>/dev/null | grep -qi 'SecureBoot enabled' && SECURE=1
+if [ "$SECURE" = 1 ] && [ "$FORZA" = 0 ]; then
+  echo "secure-boot" > "$STATO/driver-secure-boot"
+  echo "Secure Boot attivo: serve una conferma al riavvio, aspetto che l'utente lo chieda"
+  exit 5
+fi
+
+TESTATE="linux-headers-$(uname -r)"
+apt-cache show "$TESTATE" >/dev/null 2>&1 || TESTATE="linux-headers-amd64"
+EXTRA=(nvidia-vulkan-icd nvidia-settings firmware-misc-nonfree)
+if dpkg --print-foreign-architectures | grep -qx i386; then
+  EXTRA+=(nvidia-driver-libs:i386 nvidia-vulkan-icd:i386)
+fi
+
+echo "Installo $PACCHETTO"
+"${APT[@]}" install "$TESTATE" "$PACCHETTO" "${EXTRA[@]}" || { echo "Installazione non riuscita"; exit 1; }
+"${APT[@]}" install firmware-nvidia-gsp >/dev/null 2>&1 || true
+
+if [ "$SECURE" = 1 ] && [ -f /var/lib/dkms/mok.pub ]; then
+  # Al riavvio comparirà una schermata blu per confermare la chiave
+  if ! mokutil --test-key /var/lib/dkms/mok.pub 2>/dev/null | grep -q "already enrolled"; then
+    printf 'albalinux\nalbalinux\n' | mokutil --import /var/lib/dkms/mok.pub && echo mok > "$STATO/driver-mok"
+  fi
+fi
+rm -f "$STATO/driver-secure-boot"
+echo riavvio > "$STATO/driver-riavvio"
+fine 0 "Driver NVIDIA installato: serve un riavvio"

@@ -15,9 +15,14 @@ costruisci() {
   export DEBIAN_FRONTEND=noninteractive
   apt-get update
   apt-get install -y live-build debootstrap xorriso squashfs-tools mtools \
-    dosfstools ca-certificates curl gnupg python3 python3-pil fonts-dejavu-core
-  chmod +x auto/* config/hooks/normal/*.hook.chroot config/includes.chroot/usr/local/bin/*
-  [ -f config/includes.chroot/usr/share/backgrounds/alba/alba.png ] || python3 strumenti/genera-grafica.py
+    dosfstools ca-certificates curl gnupg python3 python3-pil fonts-dejavu-core \
+    dpkg-dev git sassc
+  chmod +x auto/* config/hooks/normal/*.hook.chroot strumenti/*.sh
+  # Il pacchetto alba-sistema (aspetto, Impostazioni, aggiornamenti)
+  mkdir -p config/packages.chroot
+  if ! ls config/packages.chroot/alba-sistema_*.deb >/dev/null 2>&1; then
+    TEMA_FLUENT=1 bash strumenti/costruisci-pacchetto.sh "${ALBA_VERSIONE:-1.1.0}" config/packages.chroot
+  fi
   lb clean --purge 2>/dev/null || true
   lb config
   lb build
@@ -35,7 +40,7 @@ fi
 if command -v docker >/dev/null 2>&1; then
   echo ">> Costruzione in un contenitore Debian 13 (trixie)…"
   docker run --rm --privileged \
-    -v "$PWD":/alba -w /alba \
+    -v "$PWD":/alba -w /alba -e ALBA_VERSIONE \
     debian:trixie bash /alba/build.sh --dentro
 elif grep -q 'VERSION_CODENAME=trixie' /etc/os-release 2>/dev/null; then
   [ "$(id -u)" -eq 0 ] || { echo "Esegui con sudo: sudo ./build.sh"; exit 1; }

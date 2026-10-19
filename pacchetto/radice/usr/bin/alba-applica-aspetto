@@ -1,0 +1,67 @@
+#!/bin/bash
+# Alba Linux - applica il nuovo aspetto di Alba all'utente corrente.
+# Con --se-serve lo fa solo se l'aspetto è cambiato dall'ultima volta
+# (per non cancellare le personalizzazioni a ogni aggiornamento).
+set -u
+VERSIONE_ASPETTO=2
+CONF="${XDG_CONFIG_HOME:-$HOME/.config}/alba"
+MARCA="$CONF/aspetto-versione"
+mkdir -p "$CONF"
+ATTUALE="$(cat "$MARCA" 2>/dev/null || echo 0)"
+
+if [ "${1:-}" = "--se-serve" ] && [ "$ATTUALE" -ge "$VERSIONE_ASPETTO" ]; then exit 0; fi
+[ -n "${DISPLAY:-}" ] || exit 0
+pgrep -u "$(id -u)" -x xfce4-session >/dev/null || [ "${1:-}" = "--forza" ] || exit 0
+
+# Mantieni la scelta chiaro/scuro dell'utente (predefinito: scuro)
+TEMA="$(cat "$CONF/tema" 2>/dev/null)"
+if [ -z "$TEMA" ]; then
+  case "$(xfconf-query -c xsettings -p /Net/ThemeName 2>/dev/null)" in
+    *[Ll]ight*) TEMA=chiaro ;;
+    Arc|Adwaita|Materia) TEMA=chiaro ;;
+    *) TEMA=scuro ;;
+  esac
+fi
+
+# Utente nuovo: i file sono già quelli giusti, basta scegliere il tema
+if [ ! -f "$CONF/primo-avvio-v1" ] && [ "${1:-}" != "--forza" ]; then
+  /usr/bin/alba-tema "$TEMA"
+  echo "$VERSIONE_ASPETTO" > "$MARCA"
+  exit 0
+fi
+
+SKEL=/etc/skel/.config
+X="$HOME/.config/xfce4/xfconf/xfce-perchannel-xml"
+mkdir -p "$X" "$HOME/.config/xfce4/panel" "$HOME/.config/autostart" "$HOME/.config/Thunar"
+
+# Ferma barra e configurazione, sostituisci i file, riavvia
+xfce4-panel --quit >/dev/null 2>&1
+sleep 1
+pkill -u "$(id -u)" -x xfconfd 2>/dev/null
+sleep 0.5
+for f in xfce4-panel.xml xsettings.xml xfwm4.xml xfce4-power-manager.xml; do
+  [ -f "$SKEL/xfce4/xfconf/xfce-perchannel-xml/$f" ] && cp "$SKEL/xfce4/xfconf/xfce-perchannel-xml/$f" "$X/$f"
+done
+rm -f "$HOME"/.config/xfce4/panel/whiskermenu-*.rc "$HOME"/.config/xfce4/panel/docklike-*.rc
+cp "$SKEL"/xfce4/panel/*.rc "$HOME/.config/xfce4/panel/"
+cp "$SKEL"/autostart/*.desktop "$HOME/.config/autostart/" 2>/dev/null
+cp "$SKEL/Thunar/uca.xml" "$HOME/.config/Thunar/uca.xml" 2>/dev/null
+
+setsid -f xfsettingsd --replace >/dev/null 2>&1
+sleep 1
+/usr/bin/alba-tema "$TEMA"
+setsid -f xfwm4 --replace >/dev/null 2>&1
+setsid -f xfce4-panel >/dev/null 2>&1
+
+# Scorciatoie aggiornate (Impostazioni e Gestione attività)
+for k in "<Super>i=alba-impostazioni" "<Primary><Shift>Escape=alba-gestione-attivita" "<Primary><Alt>Delete=alba-gestione-attivita"; do
+  xfconf-query -c xfce4-keyboard-shortcuts -p "/commands/custom/${k%%=*}" -n -t string -s "${k#*=}" 2>/dev/null || \
+  xfconf-query -c xfce4-keyboard-shortcuts -p "/commands/custom/${k%%=*}" -s "${k#*=}" 2>/dev/null
+done
+
+echo "$VERSIONE_ASPETTO" > "$MARCA"
+if [ "$ATTUALE" -gt 0 ] || [ -f "$CONF/primo-avvio-v1" ]; then
+  notify-send -a "Alba" -i alba-logo "Alba è stata aggiornata" \
+    "Il nuovo aspetto è pronto. Trovi tutte le opzioni in Impostazioni." 2>/dev/null
+fi
+exit 0

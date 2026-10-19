@@ -1,0 +1,39 @@
+#!/bin/bash
+# Alba Linux - avviato a ogni accesso, in silenzio e con poca memoria.
+set -u
+CONF="${XDG_CONFIG_HOME:-$HOME/.config}/alba"
+mkdir -p "$CONF"
+
+# 1. Agente per le richieste di password (finestra "inserisci la password")
+if ! pgrep -u "$(id -u)" -f 'polkit-gnome-authentication-agent|polkit-mate-authentication-agent|lxpolkit|xfce-polkit|polkit-kde-authentication' >/dev/null; then
+  for a in /usr/lib/policykit-1-gnome/polkit-gnome-authentication-agent-1 \
+           /usr/libexec/polkit-gnome-authentication-agent-1 \
+           /usr/libexec/polkit-mate-authentication-agent-1 \
+           /usr/lib/x86_64-linux-gnu/polkit-mate/polkit-mate-authentication-agent-1 \
+           /usr/bin/lxpolkit; do
+    if [ -x "$a" ]; then setsid -f "$a" >/dev/null 2>&1; break; fi
+  done
+fi
+
+# 2. Prime impostazioni (scorciatoie, sfondo) e aspetto aggiornato
+/usr/bin/alba-applica-aspetto --se-serve
+/usr/bin/alba-primo-avvio
+
+# 3. Risoluzione e frequenza dello schermo scelte nelle Impostazioni
+[ -f "$CONF/schermo.sh" ] && bash "$CONF/schermo.sh" >/dev/null 2>&1
+
+# 4. Steam: elaborazione degli shader più veloce (usa tutti i core)
+for d in "$HOME/.steam/steam" "$HOME/.local/share/Steam"; do
+  if [ -d "$d" ] && [ ! -f "$d/steam_dev.cfg" ]; then
+    echo "unShaderBackgroundProcessingThreads $(nproc)" > "$d/steam_dev.cfg"
+  fi
+done
+
+# 5. Avviso quando ci sono aggiornamenti (controlla ogni 6 ore)
+(
+  sleep 90
+  while true; do
+    /usr/bin/alba-avviso-aggiornamenti
+    sleep 21600
+  done
+) >/dev/null 2>&1 &

@@ -1,0 +1,13 @@
+[user]
+noWindowsListIfSingle=true
+onlyDisplayVisible=false
+onlyDisplayScreen=false
+showPreviews=true
+showWindowCount=false
+middleButtonBehavior=1
+indicatorOrientation=0
+indicatorStyle=1
+indicatorColorFromTheme=false
+indicatorColor=rgb(255,138,76)
+inactiveColor=rgb(150,150,170)
+pinned=/usr/share/applications/thunar.desktop;/usr/share/applications/firefox-esr.desktop;/usr/share/applications/org.gnome.Software.desktop;/usr/share/applications/alba-impostazioni.desktop;/usr/share/applications/steam.desktop;

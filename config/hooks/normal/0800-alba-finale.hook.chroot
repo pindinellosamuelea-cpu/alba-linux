@@ -1,0 +1,13 @@
+#!/bin/sh
+# Ultimi ritocchi dopo che tutti i programmi sono installati:
+# menu Start in ordine, logo di avvio, Gestione attività con GPU.
+set -e
+/usr/libexec/alba/alba-aggiorna-menu || true
+plymouth-set-default-theme alba 2>/dev/null || true
+
+# Gestione attività stile Windows (CPU, RAM, disco, GPU) già pronta
+if command -v flatpak >/dev/null; then
+  flatpak remote-add --system --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo || true
+  flatpak install --system -y --noninteractive flathub io.missioncenter.MissionCenter || \
+    echo "ATTENZIONE: Mission Center non installato"
+fi

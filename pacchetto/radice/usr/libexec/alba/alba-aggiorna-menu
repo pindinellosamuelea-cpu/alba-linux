@@ -1,0 +1,150 @@
+#!/usr/bin/python3
+"""Alba Linux - riordina il menu Start.
+
+Crea in /usr/local/share/applications delle versioni "Alba" di alcune voci:
+ - gli strumenti tecnici finiscono nella cartella "Strumenti avanzati";
+ - giochi ed editor partono sulla scheda grafica dedicata;
+ - alcune voci vengono rinominate (es. "Install Debian" -> "Installa Alba").
+I file originali non vengono toccati: se un programma si aggiorna, questo
+script viene rieseguito in automatico (trigger di dpkg).
+"""
+import configparser
+import fnmatch
+import glob
+import os
+
+ORIGINE = "/usr/share/applications"
+DEST = "/usr/local/share/applications"
+SEGNO = "X-Alba-Generato"
+GPU = "/usr/bin/alba-gpu-dedicata"
+
+AVANZATI = [
+    "htop", "gparted", "*xterm", "debian-*xterm", "vim", "nvim", "gvim", "im-config",
+    "org.gnome.DiskUtility", "gnome-disks", "xfce4-taskmanager", "org.xfce.taskmanager",
+    "lightdm-gtk-greeter-settings", "menulibre", "catfish", "org.xfce.Catfish", "clamtk",
+    "gufw", "nm-connection-editor", "blueman-manager", "blueman-adapters", "pavucontrol",
+    "org.pulseaudio.pavucontrol", "xfce-settings-manager", "xfce4-settings-manager",
+    "xfce4-settings-editor", "xfce4-accessibility-settings", "xfce4-color-settings",
+    "xfce-display-settings", "xfce-keyboard-settings", "xfce-mouse-settings",
+    "xfce4-mime-settings", "xfce4-notifyd-config", "xfce4-power-manager-settings",
+    "xfce4-session-settings", "xfce-ui-settings", "xfce-wm-settings",
+    "xfce-wmtweaks-settings", "xfce-workspaces-settings", "xfce-backdrop-settings",
+    "panel-preferences", "xfce4-screensaver-preferences", "xfce4-about",
+    "thunar-settings", "thunar-volman-settings", "thunar-bulk-rename",
+    "exo-preferred-applications", "xfce4-web-browser", "xfce4-mail-reader",
+    "xfce4-file-manager", "xfce4-terminal-emulator", "xfce4-appfinder", "xfce4-run",
+    "xfce4-dict", "xfce4-sensors", "xfce4-clipman", "xfce4-clipman-settings",
+    "org.xfce.mousepad-settings", "mugshot", "display-im6*", "display-im7*",
+    "avahi-discover", "bssh", "bvnc", "openjdk-*", "*-java-*", "info", "yelp",
+    "org.gnome.Yelp", "reportbug", "file-roller", "org.gnome.FileRoller",
+    "libreoffice-startcenter", "libreoffice-xsltfilter", "winetricks", "wine",
+    "alba-impostazioni-windows", "alba-programmi-windows-installati", "lstopo",
+    "vkcube", "vulkan-*", "nvidia-settings", "corectrl", "org.corectrl.CoreCtrl",
+    "timeshift-gtk", "system-config-printer", "xfce4-screenshooter",
+    "org.xfce.ristretto", "gcr-*", "galculator", "xsane", "mpv", "debian-*",
+    "python3*", "lutris", "net.lutris.Lutris", "gamemoderun", "mangohud",
+    "org.gnome.Software.Editor", "xdg-*", "x11-*",
+]
+# Restano visibili nel menu anche se compaiono qui sopra per somiglianza
+SEMPRE_VISIBILI = {"lutris", "net.lutris.Lutris", "timeshift-gtk", "system-config-printer",
+                   "xfce4-screenshooter", "org.xfce.ristretto", "galculator"}
+
+SCHEDA_DEDICATA = [
+    "steam", "lutris", "net.lutris.Lutris", "blender", "org.kde.kdenlive", "kdenlive",
+    "org.kde.krita", "krita", "gimp", "org.gimp.GIMP", "obs", "com.obsproject.Studio",
+    "darktable", "org.darktable.darktable", "shotcut", "org.shotcut.Shotcut",
+    "inkscape", "org.inkscape.Inkscape", "audacity",
+]
+
+RINOMINA = {
+    "install-debian": ("Installa Alba", "alba-logo"),
+    "calamares-install-debian": ("Installa Alba", "alba-logo"),
+    "calamares": ("Installa Alba", "alba-logo"),
+    "org.gnome.Software": ("Negozio di app", None),
+    "xfce4-terminal": ("Terminale", None),
+    "thunar": ("Esplora file", None),
+    "firefox-esr": ("Firefox", None),
+    "codium": ("VSCodium", None),
+    "steam": ("Steam", None),
+    "xfce4-screenshooter": ("Cattura schermo", None),
+    "org.xfce.ristretto": ("Foto", None),
+    "atril": ("Documenti PDF", None),
+    "org.xfce.mousepad": ("Blocco note", None),
+    "galculator": ("Calcolatrice", None),
+    "timeshift-gtk": ("Punti di ripristino", None),
+    "system-config-printer": ("Stampanti", None),
+}
+
+
+def corrisponde(nome, schemi):
+    return any(fnmatch.fnmatch(nome, s) for s in schemi)
+
+
+def leggi(percorso):
+    cp = configparser.RawConfigParser(strict=False, interpolation=None, delimiters=("=",))
+    cp.optionxform = str
+    with open(percorso, encoding="utf-8", errors="replace") as f:
+        cp.read_file(f)
+    return cp
+
+
+def scrivi(cp, percorso):
+    with open(percorso, "w", encoding="utf-8") as f:
+        for sezione in cp.sections():
+            f.write(f"[{sezione}]\n")
+            for k, v in cp.items(sezione):
+                f.write(f"{k}={v}\n")
+            f.write("\n")
+
+
+def main():
+    os.makedirs(DEST, exist_ok=True)
+    # Togli le versioni generate in precedenza
+    for f in glob.glob(os.path.join(DEST, "*.desktop")):
+        try:
+            if SEGNO in open(f, encoding="utf-8", errors="replace").read():
+                os.remove(f)
+        except OSError:
+            pass
+
+    for percorso in sorted(glob.glob(os.path.join(ORIGINE, "*.desktop"))):
+        nome = os.path.basename(percorso)[:-len(".desktop")]
+        avanzato = corrisponde(nome, AVANZATI) and nome not in SEMPRE_VISIBILI
+        dedicata = nome in SCHEDA_DEDICATA
+        rinomina = RINOMINA.get(nome)
+        if not (avanzato or dedicata or rinomina):
+            continue
+        try:
+            cp = leggi(percorso)
+        except Exception:  # file non valido: lo lasciamo stare
+            continue
+        if not cp.has_section("Desktop Entry"):
+            continue
+        voce = cp["Desktop Entry"]
+        if voce.get("NoDisplay", "false").lower() == "true" and not dedicata:
+            continue
+
+        if avanzato:
+            vecchie = [c for c in voce.get("Categories", "").split(";") if c.startswith("X-XFCE")]
+            voce["Categories"] = ";".join(["X-Alba-Avanzati"] + vecchie) + ";"
+            voce.pop("OnlyShowIn", None)
+        if dedicata:
+            for sezione in cp.sections():
+                ex = cp[sezione].get("Exec")
+                if ex and GPU not in ex:
+                    cp[sezione]["Exec"] = f"{GPU} {ex}"
+            voce["PrefersNonDefaultGPU"] = "true"
+        if rinomina:
+            nuovo_nome, icona = rinomina
+            voce["Name"] = nuovo_nome
+            for k in list(voce.keys()):
+                if k.startswith("Name[it"):
+                    voce[k] = nuovo_nome
+            if icona:
+                voce["Icon"] = icona
+        voce[SEGNO] = "true"
+        scrivi(cp, os.path.join(DEST, os.path.basename(percorso)))
+
+
+if __name__ == "__main__":
+    main()

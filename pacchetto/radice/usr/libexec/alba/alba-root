@@ -1,0 +1,71 @@
+#!/bin/bash
+# Alba Linux - piccole operazioni da amministratore richieste dall'app
+# Impostazioni (tramite pkexec, che chiede la password).
+# Accetta solo i comandi elencati qui sotto, con argomenti controllati.
+set -u
+[ "$(id -u)" -eq 0 ] || { echo "Servono i permessi di amministratore" >&2; exit 1; }
+export DEBIAN_FRONTEND=noninteractive
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+
+ARG="${2:-}"
+case "${1:-}" in
+  aggiorna-lista)
+    apt-get update -q
+    ;;
+  aggiorna-installa)
+    apt-get update -q || true
+    apt-get -y -q -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
+      --with-new-pkgs upgrade
+    esito=$?
+    command -v flatpak >/dev/null && flatpak update -y --noninteractive --system >/dev/null 2>&1
+    # Driver grafico migliore per questo computer (se serve)
+    /usr/libexec/alba/alba-driver-auto --aggiornamento >/dev/null 2>&1
+    exit $esito
+    ;;
+  firewall)
+    case "$ARG" in
+      on)  ufw --force enable ;;
+      off) ufw disable ;;
+      *) exit 2 ;;
+    esac
+    ;;
+  ntp)
+    case "$ARG" in
+      on)  timedatectl set-ntp true ;;
+      off) timedatectl set-ntp false ;;
+      *) exit 2 ;;
+    esac
+    ;;
+  fuso)
+    timedatectl list-timezones | grep -qxF -- "$ARG" || exit 2
+    timedatectl set-timezone "$ARG"
+    ;;
+  imposta-ora)
+    [[ "$ARG" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9]{2}:[0-9]{2}$ ]] || exit 2
+    timedatectl set-ntp false
+    timedatectl set-time "$ARG:00"
+    ;;
+  ora-windows)
+    case "$ARG" in
+      0|1) timedatectl set-local-rtc "$ARG" --adjust-system-clock ;;
+      *) exit 2 ;;
+    esac
+    ;;
+  driver)
+    exec /usr/libexec/alba/alba-driver-auto --forza
+    ;;
+  installa)
+    # Solo pacchetti della lista consentita
+    case "$ARG" in
+      systemd-timesyncd|corectrl|power-profiles-daemon|brightnessctl|mangohud) ;;
+      *) exit 2 ;;
+    esac
+    apt-get update -q || true
+    apt-get install -y -q "$ARG"
+    [ "$ARG" = systemd-timesyncd ] && timedatectl set-ntp true
+    ;;
+  *)
+    echo "Comando non riconosciuto" >&2
+    exit 2
+    ;;
+esac

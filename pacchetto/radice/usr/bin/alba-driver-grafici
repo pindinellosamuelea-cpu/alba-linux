@@ -1,0 +1,50 @@
+#!/bin/bash
+# Alba Linux - controlla la scheda grafica e installa il driver migliore.
+set -u
+TITOLO="Alba · Driver grafici"
+LOG=/var/lib/alba/driver-auto.log
+
+GPU="$(lspci | grep -Ei 'vga|3d|display' | sed -E 's/^[^ ]+ [^:]+: //; s/ \(rev [0-9a-f]+\)//')"
+[ -z "$GPU" ] && GPU="(nessuna scheda rilevata)"
+
+if ! echo "$GPU" | grep -qi nvidia; then
+  zenity --info --title="$TITOLO" --width=460 \
+    --text="<b>Scheda grafica:</b>\n$GPU\n\n✔ È già supportata dai driver inclusi in Alba, con accelerazione 3D e Vulkan.\nNon serve installare altro." 2>/dev/null
+  exit 0
+fi
+if [ -e /proc/driver/nvidia/version ]; then
+  V="$(sed -nE 's/.*Kernel Module( for [^ ]+)? +([0-9.]+).*/\2/p' /proc/driver/nvidia/version | head -1)"
+  zenity --info --title="$TITOLO" --width=460 \
+    --text="<b>Scheda grafica:</b>\n$GPU\n\n✔ Il driver NVIDIA ufficiale è attivo (versione $V).\nGli aggiornamenti arrivano da soli con quelli di sistema." 2>/dev/null
+  exit 0
+fi
+
+zenity --question --title="$TITOLO" --width=480 \
+  --text="<b>Scheda grafica:</b>\n$GPU\n\nOra usa il driver libero, più lento. Installo il driver NVIDIA ufficiale più adatto al tuo modello?\n\nServe Internet, ci vogliono alcuni minuti e alla fine un riavvio." \
+  --ok-label="Installa" --cancel-label="Non ora" 2>/dev/null || exit 0
+
+RISULTATO="$(mktemp)"
+( pkexec /usr/libexec/alba/alba-root driver; echo "$?" > "$RISULTATO" ) | \
+  zenity --progress --pulsate --auto-close --no-cancel --title="$TITOLO" --width=460 \
+    --text="Installazione del driver NVIDIA in corso…\nPuoi continuare a usare il computer." 2>/dev/null
+CODICE="$(cat "$RISULTATO" 2>/dev/null || echo 1)"
+rm -f "$RISULTATO"
+
+case "$CODICE" in
+  0)
+    TESTO="Driver installato! Riavvia il computer per attivarlo."
+    if [ -f /var/lib/alba/driver-mok ]; then
+      TESTO="$TESTO\n\n<b>Importante (Secure Boot):</b> al riavvio comparirà una schermata blu.\nScegli <b>Enroll MOK</b> → <b>Continue</b> → <b>Yes</b>, poi scrivi la password <b>albalinux</b> e scegli <b>Reboot</b>."
+    fi
+    zenity --question --title="$TITOLO" --width=480 --text="$TESTO" \
+      --ok-label="Riavvia ora" --cancel-label="Più tardi" 2>/dev/null && systemctl reboot
+    ;;
+  3) zenity --info --title="$TITOLO" --width=460 \
+       --text="Questa scheda NVIDIA è troppo datata per il driver ufficiale.\nContinua a usare il driver libero già incluso, che la supporta." 2>/dev/null ;;
+  4) zenity --error --title="$TITOLO" --width=460 \
+       --text="Non riesco a collegarmi a Internet.\nCollegati a una rete e riprova." 2>/dev/null ;;
+  126|127) ;;  # password annullata
+  *) DETTAGLI="$(tail -n 8 "$LOG" 2>/dev/null | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')"
+     zenity --error --title="$TITOLO" --width=560 \
+       --text="Installazione non riuscita.\n\n<small><tt>$DETTAGLI</tt></small>\n\nSe vuoi aiuto, fai una foto di questa finestra." 2>/dev/null ;;
+esac

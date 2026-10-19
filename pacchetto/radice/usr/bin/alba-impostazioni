@@ -1,0 +1,1979 @@
+#!/usr/bin/python3
+"""Alba Linux - Impostazioni.
+
+Una sola finestra, semplice, con le impostazioni che servono davvero.
+Tutto il resto resta in "Strumenti avanzati".
+
+Uso:  alba-impostazioni [--pagina NOME] [--autotest]
+"""
+import json
+import math
+import os
+import re
+import shutil
+import subprocess
+import sys
+import threading
+import time
+
+import gi
+gi.require_version("Gtk", "3.0")
+gi.require_version("Gdk", "3.0")
+from gi.repository import Gdk, GdkPixbuf, GLib, Gtk, Pango  # noqa: E402
+
+CONF = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")), "alba")
+ROOT = "/usr/libexec/alba/alba-root"
+DEMO = os.environ.get("ALBA_DEMO") == "1"   # dati di esempio per le anteprime
+ERRORI = []
+
+CSS = b"""
+.barra-laterale { background-color: alpha(@theme_fg_color, 0.035); }
+.barra-laterale list { background-color: transparent; }
+.barra-laterale row { border-radius: 8px; margin: 1px 10px; padding: 6px 8px; }
+.barra-laterale row:selected { background-color: alpha(#ff8a4c, 0.22); color: @theme_fg_color; }
+.barra-laterale row:selected label { color: @theme_fg_color; }
+.voce-laterale { font-size: 10.5pt; }
+.icona-quadrata { border-radius: 7px; padding: 5px; color: #ffffff; }
+.cerca { margin: 12px 12px 8px 12px; border-radius: 8px; }
+.titolo-pagina { font-size: 21pt; font-weight: 800; }
+.sottotitolo-pagina { opacity: 0.65; }
+.riquadro { background-color: @theme_base_color; border-radius: 12px;
+            border: 1px solid alpha(@theme_fg_color, 0.09); }
+.riga { padding: 11px 16px; }
+.riga-titolo { font-weight: 600; }
+.riga-sottotitolo { font-size: 9pt; opacity: 0.6; }
+.etichetta-sezione { font-size: 9pt; font-weight: 700; opacity: 0.55; margin: 14px 4px 6px 4px; }
+.numero-grande { font-size: 40pt; font-weight: 800; }
+.numero-medio { font-size: 20pt; font-weight: 800; }
+.verde { color: #2fbf71; }
+.arancio { color: #ff8a4c; }
+.rosso { color: #ef4a5a; }
+.pulsante-principale { background-image: none; background-color: #ff8a4c; color: #ffffff;
+                       border: none; border-radius: 8px; padding: 6px 16px; font-weight: 700; }
+.pulsante-principale:hover { background-color: #ff9d66; }
+.pulsante-principale label { color: #ffffff; }
+.segmentato button { padding: 6px 14px; }
+.tessera { border-radius: 12px; padding: 6px; border: 2px solid transparent; background: none; }
+.tessera:checked { border-color: #ff8a4c; }
+.avviso { background-color: alpha(#ff8a4c, 0.12); border-radius: 12px;
+          border: 1px solid alpha(#ff8a4c, 0.35); }
+levelbar block.filled { background-color: #ff8a4c; }
+"""
+
+COLORI = {
+    "wifi": "#0a84ff", "bluetooth": "#0a84ff", "schermo": "#5e5ce6", "suono": "#ff375f",
+    "batteria": "#30b158", "aspetto": "#bf5af2", "data-ora": "#8e8e93",
+    "scheda-grafica": "#ff9f0a", "sicurezza": "#64748b", "aggiornamenti": "#8e8e93",
+    "info": "#8e8e93",
+}
+
+
+# ---------------------------------------------------------------------------
+# Strumenti
+# ---------------------------------------------------------------------------
+def esegui(cmd, timeout=15, env=None):
+    """Esegue un comando e restituisce (codice, uscita). Non solleva errori."""
+    try:
+        e = dict(os.environ)
+        if env:
+            e.update(env)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=e)
+        return r.returncode, (r.stdout or "") + (r.stderr if r.returncode else "")
+    except (OSError, subprocess.SubprocessError) as ex:
+        return 127, str(ex)
+
+
+def uscita(cmd, timeout=15):
+    codice, testo = esegui(cmd, timeout, env={"LC_ALL": "C"})
+    return testo.strip() if codice == 0 else ""
+
+
+def esiste(prog):
+    return shutil.which(prog) is not None
+
+
+def avvia(*comandi):
+    for c in comandi:
+        if esiste(c[0]):
+            subprocess.Popen(c, start_new_session=True,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return True
+    return False
+
+
+def in_sottofondo(funzione, fatto=None):
+    """Esegue funzione() in un thread, poi fatto(risultato) nel thread grafico."""
+    def lavoro():
+        try:
+            r = funzione()
+        except Exception as ex:  # noqa: BLE001
+            ERRORI.append(repr(ex))
+            r = None
+        if fatto:
+            GLib.idle_add(lambda: (fatto(r), False)[1])
+    threading.Thread(target=lavoro, daemon=True).start()
+
+
+def come_amministratore(*argomenti):
+    return esegui(["pkexec", ROOT, *argomenti], timeout=None)
+
+
+def xfconf_leggi(canale, prop):
+    return uscita(["xfconf-query", "-c", canale, "-p", prop])
+
+
+def xfconf_scrivi(canale, prop, tipo, valore):
+    valore = str(valore).lower() if tipo == "bool" else str(valore)
+    c, _ = esegui(["xfconf-query", "-c", canale, "-p", prop, "-s", valore])
+    if c != 0:
+        esegui(["xfconf-query", "-c", canale, "-p", prop, "-n", "-t", tipo, "-s", valore])
+
+
+def leggi_file(percorso, predefinito=""):
+    try:
+        with open(percorso, encoding="utf-8", errors="replace") as f:
+            return f.read().strip()
+    except OSError:
+        return predefinito
+
+
+def messaggio(finestra, titolo, testo="", tipo=Gtk.MessageType.INFO):
+    d = Gtk.MessageDialog(transient_for=finestra, modal=True, message_type=tipo,
+                          buttons=Gtk.ButtonsType.OK, text=titolo)
+    if testo:
+        d.format_secondary_text(testo)
+    d.run()
+    d.destroy()
+
+
+def domanda(finestra, titolo, testo, si="Sì", no="Annulla", scadenza=None):
+    d = Gtk.MessageDialog(transient_for=finestra, modal=True,
+                          message_type=Gtk.MessageType.QUESTION, text=titolo)
+    if testo:
+        d.format_secondary_text(testo)
+    d.add_buttons(no, Gtk.ResponseType.CANCEL, si, Gtk.ResponseType.OK)
+    if scadenza:  # nessuna risposta entro N secondi = Annulla
+        GLib.timeout_add_seconds(scadenza, lambda: (d.response(Gtk.ResponseType.CANCEL), False)[1])
+    r = d.run()
+    d.destroy()
+    return r == Gtk.ResponseType.OK
+
+
+def rettangolo_arrotondato(cr, x, y, w, h, r):
+    r = min(r, w / 2, h / 2)
+    cr.new_sub_path()
+    cr.arc(x + w - r, y + r, r, -math.pi / 2, 0)
+    cr.arc(x + w - r, y + h - r, r, 0, math.pi / 2)
+    cr.arc(x + r, y + h - r, r, math.pi / 2, math.pi)
+    cr.arc(x + r, y + r, r, math.pi, 3 * math.pi / 2)
+    cr.close_path()
+
+
+def esadecimale(c):
+    c = c.lstrip("#")
+    return tuple(int(c[i:i + 2], 16) / 255 for i in (0, 2, 4))
+
+
+# ---------------------------------------------------------------------------
+# Mattoncini grafici
+# ---------------------------------------------------------------------------
+def etichetta(testo, classe=None, xalign=0, wrap=False, selezionabile=False):
+    e = Gtk.Label(label=testo, xalign=xalign)
+    e.set_line_wrap(wrap)
+    if wrap:
+        e.set_max_width_chars(60)
+    if selezionabile:
+        e.set_selectable(True)
+    if classe:
+        for c in classe.split():
+            e.get_style_context().add_class(c)
+    return e
+
+
+def pulsante(testo, azione=None, principale=False, icona=None):
+    p = Gtk.Button(label=testo)
+    if icona:
+        p.set_image(Gtk.Image.new_from_icon_name(icona, Gtk.IconSize.BUTTON))
+        p.set_always_show_image(True)
+    if principale:
+        p.get_style_context().add_class("pulsante-principale")
+    if azione:
+        p.connect("clicked", lambda *_: azione())
+    p.set_valign(Gtk.Align.CENTER)
+    return p
+
+
+class Riquadro(Gtk.Box):
+    """Un gruppo di righe con bordi arrotondati, come su macOS/iOS."""
+
+    def __init__(self):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL)
+        self.get_style_context().add_class("riquadro")
+        self._righe = 0
+
+    def aggiungi(self, widget):
+        if self._righe:
+            self.pack_start(Gtk.Separator(), False, False, 0)
+        self.pack_start(widget, False, False, 0)
+        self._righe += 1
+        return widget
+
+    def svuota(self):
+        for c in self.get_children():
+            self.remove(c)
+        self._righe = 0
+
+
+class Riga(Gtk.Box):
+    def __init__(self, titolo, sottotitolo=None, controllo=None, icona=None):
+        super().__init__(spacing=12)
+        self.get_style_context().add_class("riga")
+        if icona:
+            self.pack_start(Gtk.Image.new_from_icon_name(icona, Gtk.IconSize.LARGE_TOOLBAR), False, False, 0)
+        testi = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        testi.set_valign(Gtk.Align.CENTER)
+        self.titolo = etichetta(titolo, "riga-titolo")
+        self.titolo.set_ellipsize(Pango.EllipsizeMode.END)
+        testi.pack_start(self.titolo, False, False, 0)
+        self.sottotitolo = etichetta(sottotitolo or "", "riga-sottotitolo", wrap=True)
+        testi.pack_start(self.sottotitolo, False, False, 0)
+        self.sottotitolo.set_no_show_all(not sottotitolo)
+        self.pack_start(testi, True, True, 0)
+        if controllo is not None:
+            controllo.set_valign(Gtk.Align.CENTER)
+            self.pack_end(controllo, False, False, 0)
+
+    def imposta_sottotitolo(self, testo):
+        self.sottotitolo.set_text(testo or "")
+        self.sottotitolo.set_no_show_all(False)
+        self.sottotitolo.set_visible(bool(testo))
+
+
+class Interruttore(Gtk.Switch):
+    """Gtk.Switch che non richiama l'azione quando lo aggiorniamo noi."""
+
+    def __init__(self, azione):
+        super().__init__()
+        self._muto = False
+        self._azione = azione
+        self.connect("notify::active", self._cambiato)
+
+    def _cambiato(self, *_):
+        if not self._muto:
+            self._azione(self.get_active())
+
+    def imposta(self, valore):
+        self._muto = True
+        self.set_active(bool(valore))
+        self._muto = False
+
+
+class Cursore(Gtk.Scale):
+    """Cursore con ritardo: applica il valore quando smetti di muoverlo."""
+
+    def __init__(self, azione, minimo=0, massimo=100):
+        super().__init__(orientation=Gtk.Orientation.HORIZONTAL)
+        self.set_range(minimo, massimo)
+        self.set_increments(1, 10)
+        self.set_draw_value(False)
+        self.set_hexpand(True)
+        self.set_size_request(240, -1)
+        self._muto = False
+        self._timer = None
+        self._azione = azione
+        self.connect("value-changed", self._cambiato)
+
+    def _cambiato(self, *_):
+        if self._muto:
+            return
+        if self._timer:
+            GLib.source_remove(self._timer)
+        self._timer = GLib.timeout_add(120, self._applica)
+
+    def _applica(self):
+        self._timer = None
+        self._azione(int(self.get_value()))
+        return False
+
+    def imposta(self, valore):
+        self._muto = True
+        self.set_value(valore)
+        self._muto = False
+
+
+class Segmentato(Gtk.Box):
+    """Pulsanti uniti in stile macOS (es. Risparmio | Bilanciata | Prestazioni)."""
+
+    def __init__(self, voci, azione):
+        super().__init__()
+        self.get_style_context().add_class("linked")
+        self.get_style_context().add_class("segmentato")
+        self._pulsanti = {}
+        self._muto = False
+        self._azione = azione
+        for chiave, testo in voci:
+            b = Gtk.ToggleButton(label=testo)
+            b.connect("toggled", self._premuto, chiave)
+            self.pack_start(b, False, False, 0)
+            self._pulsanti[chiave] = b
+
+    def _premuto(self, bottone, chiave):
+        if self._muto:
+            return
+        if not bottone.get_active():
+            self._muto = True
+            bottone.set_active(True)
+            self._muto = False
+            return
+        self.imposta(chiave)
+        self._azione(chiave)
+
+    def imposta(self, chiave):
+        self._muto = True
+        for k, b in self._pulsanti.items():
+            b.set_active(k == chiave)
+        self._muto = False
+
+
+class Pagina(Gtk.ScrolledWindow):
+    nome = ""
+    titolo = ""
+    icona = ""
+    parole = ""
+
+    def __init__(self, finestra):
+        super().__init__()
+        self.finestra = finestra
+        self.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        esterno = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.colonna = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.colonna.set_margin_start(36)
+        self.colonna.set_margin_end(36)
+        self.colonna.set_margin_top(28)
+        self.colonna.set_margin_bottom(32)
+        esterno.pack_start(self.colonna, False, False, 0)
+        self.add(esterno)
+        self.colonna.pack_start(etichetta(self.titolo, "titolo-pagina"), False, False, 0)
+        self.sottotitolo = etichetta("", "sottotitolo-pagina", wrap=True)
+        self.colonna.pack_start(self.sottotitolo, False, False, 0)
+        self.costruisci()
+
+    def sezione(self, testo=None):
+        if testo:
+            self.colonna.pack_start(etichetta(testo.upper(), "etichetta-sezione"), False, False, 0)
+        r = Riquadro()
+        self.colonna.pack_start(r, False, False, 0)
+        if not testo:
+            r.set_margin_top(14)
+        return r
+
+    def costruisci(self):
+        pass
+
+    def aggiorna(self):
+        """Chiamata ogni volta che la pagina viene mostrata."""
+
+
+# ---------------------------------------------------------------------------
+# Wi-Fi
+# ---------------------------------------------------------------------------
+def dividi_nmcli(riga):
+    parti, cur, esc = [], "", False
+    for ch in riga:
+        if esc:
+            cur += ch
+            esc = False
+        elif ch == "\\":
+            esc = True
+        elif ch == ":":
+            parti.append(cur)
+            cur = ""
+        else:
+            cur += ch
+    parti.append(cur)
+    return parti
+
+
+class PaginaWifi(Pagina):
+    nome, titolo, icona = "wifi", "Wi-Fi", "network-wireless-symbolic"
+    parole = "wifi wi-fi rete internet wireless connessione password"
+
+    def costruisci(self):
+        self.sottotitolo.set_text("Collegati a una rete senza fili.")
+        r = self.sezione()
+        self.interruttore = Interruttore(self.accendi)
+        self.riga_stato = r.aggiungi(Riga("Wi-Fi", "", self.interruttore))
+        intestazione = Gtk.Box(spacing=8)
+        intestazione.pack_start(etichetta("RETI DISPONIBILI", "etichetta-sezione"), True, True, 0)
+        self.rotella = Gtk.Spinner()
+        intestazione.pack_start(self.rotella, False, False, 0)
+        b = Gtk.Button.new_from_icon_name("view-refresh-symbolic", Gtk.IconSize.BUTTON)
+        b.set_relief(Gtk.ReliefStyle.NONE)
+        b.set_tooltip_text("Cerca di nuovo")
+        b.connect("clicked", lambda *_: self.aggiorna(cerca=True))
+        intestazione.pack_start(b, False, False, 0)
+        self.colonna.pack_start(intestazione, False, False, 0)
+        self.reti = Riquadro()
+        self.colonna.pack_start(self.reti, False, False, 0)
+        avanzate = pulsante("Impostazioni di rete avanzate…",
+                            lambda: avvia(["nm-connection-editor"]))
+        avanzate.set_halign(Gtk.Align.START)
+        avanzate.set_margin_top(10)
+        self.colonna.pack_start(avanzate, False, False, 0)
+
+    def accendi(self, acceso):
+        esegui(["nmcli", "radio", "wifi", "on" if acceso else "off"])
+        GLib.timeout_add(1500, lambda: (self.aggiorna(), False)[1])
+
+    def aggiorna(self, cerca=False):
+        if not esiste("nmcli"):
+            self.riga_stato.imposta_sottotitolo("Gestione della rete non disponibile")
+            self.interruttore.set_sensitive(False)
+            self.reti.svuota()
+            if DEMO:
+                self._mostra(("enabled", "CasaMia", [("*", "CasaMia", 92, "WPA2"),
+                              ("", "Vodafone-5G", 70, "WPA2"), ("", "Ospiti", 41, "")], set()))
+            return
+        self.rotella.start()
+
+        def leggi():
+            stato = uscita(["nmcli", "radio", "wifi"])
+            attiva = uscita(["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show", "--active"])
+            conn = ""
+            for l in attiva.splitlines():
+                p = dividi_nmcli(l)
+                if len(p) >= 2 and "wireless" in p[1]:
+                    conn = p[0]
+            elenco = uscita(["nmcli", "-t", "-e", "yes", "-f", "IN-USE,SSID,SIGNAL,SECURITY",
+                             "device", "wifi", "list", "--rescan", "yes" if cerca else "auto"], timeout=25)
+            reti = {}
+            for l in elenco.splitlines():
+                p = dividi_nmcli(l)
+                if len(p) < 4 or not p[1]:
+                    continue
+                uso, ssid, segnale, sic = p[0], p[1], int(p[2] or 0), p[3]
+                if ssid not in reti or segnale > reti[ssid][2]:
+                    reti[ssid] = (uso, ssid, segnale, sic)
+            note = set()
+            for l in uscita(["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show"]).splitlines():
+                p = dividi_nmcli(l)
+                if len(p) >= 2 and "wireless" in p[1]:
+                    note.add(p[0])
+            ordinate = sorted(reti.values(), key=lambda x: (x[0] != "*", -x[2]))
+            return stato, conn, ordinate, note
+
+        in_sottofondo(leggi, self._mostra)
+
+    def _mostra(self, dati):
+        self.rotella.stop()
+        if not dati:
+            return
+        stato, conn, reti, note = dati
+        acceso = stato == "enabled"
+        self.interruttore.imposta(acceso)
+        self.riga_stato.imposta_sottotitolo(f"Collegato a {conn}" if conn else
+                                            ("Non collegato" if acceso else "Spento"))
+        self.reti.svuota()
+        if not acceso:
+            self.reti.aggiungi(Riga("Il Wi-Fi è spento", "Accendilo per vedere le reti vicine."))
+        elif not reti:
+            self.reti.aggiungi(Riga("Nessuna rete trovata", "Premi ↻ per cercare di nuovo."))
+        for uso, ssid, segnale, sic in reti[:20]:
+            livello = "excellent" if segnale > 75 else "good" if segnale > 50 else "ok" if segnale > 25 else "weak"
+            box = Gtk.Box(spacing=6)
+            if sic:
+                box.pack_start(Gtk.Image.new_from_icon_name("changes-prevent-symbolic", Gtk.IconSize.MENU), False, False, 0)
+            if uso == "*":
+                box.pack_start(etichetta("Collegato", "riga-sottotitolo"), False, False, 0)
+            else:
+                box.pack_start(pulsante("Collega", lambda s=ssid, k=sic, n=(ssid in note): self.collega(s, k, n)), False, False, 0)
+            self.reti.aggiungi(Riga(ssid, None, box, icona=f"network-wireless-signal-{livello}-symbolic"))
+        self.reti.show_all()
+
+    def collega(self, ssid, sicurezza, nota):
+        password = None
+        if sicurezza and not nota:
+            d = Gtk.Dialog(title=f"Collegati a {ssid}", transient_for=self.finestra, modal=True)
+            d.add_buttons("Annulla", Gtk.ResponseType.CANCEL, "Collega", Gtk.ResponseType.OK)
+            d.set_default_response(Gtk.ResponseType.OK)
+            area = d.get_content_area()
+            area.set_spacing(8)
+            area.set_border_width(16)
+            area.pack_start(etichetta(f"Inserisci la password della rete «{ssid}»"), False, False, 0)
+            campo = Gtk.Entry(visibility=False, activates_default=True)
+            campo.set_input_purpose(Gtk.InputPurpose.PASSWORD)
+            area.pack_start(campo, False, False, 0)
+            mostra = Gtk.CheckButton(label="Mostra password")
+            mostra.connect("toggled", lambda c: campo.set_visibility(c.get_active()))
+            area.pack_start(mostra, False, False, 0)
+            d.show_all()
+            ok = d.run() == Gtk.ResponseType.OK
+            password = campo.get_text()
+            d.destroy()
+            if not ok:
+                return
+        self.rotella.start()
+
+        def fai():
+            if nota:
+                return esegui(["nmcli", "connection", "up", "id", ssid], timeout=45)
+            cmd = ["nmcli", "device", "wifi", "connect", ssid]
+            if password:
+                cmd += ["password", password]
+            return esegui(cmd, timeout=45)
+
+        def fatto(r):
+            self.rotella.stop()
+            if r and r[0] != 0:
+                messaggio(self.finestra, "Collegamento non riuscito",
+                          "Controlla la password e riprova." if sicurezza else r[1][-200:],
+                          Gtk.MessageType.WARNING)
+            self.aggiorna()
+        in_sottofondo(fai, fatto)
+
+
+# ---------------------------------------------------------------------------
+# Bluetooth
+# ---------------------------------------------------------------------------
+class PaginaBluetooth(Pagina):
+    nome, titolo, icona = "bluetooth", "Bluetooth", "bluetooth-active-symbolic"
+    parole = "bluetooth cuffie auricolari mouse tastiera casse altoparlante"
+
+    def costruisci(self):
+        self.sottotitolo.set_text("Cuffie, casse, mouse e tastiere senza fili.")
+        r = self.sezione()
+        self.interruttore = Interruttore(self.accendi)
+        self.riga_stato = r.aggiungi(Riga("Bluetooth", "", self.interruttore))
+        self.colonna.pack_start(etichetta("I MIEI DISPOSITIVI", "etichetta-sezione"), False, False, 0)
+        self.dispositivi = Riquadro()
+        self.colonna.pack_start(self.dispositivi, False, False, 0)
+        aggiungi = pulsante("Aggiungi un dispositivo…", lambda: avvia(["blueman-manager"]),
+                            principale=True, icona="list-add-symbolic")
+        aggiungi.set_halign(Gtk.Align.START)
+        aggiungi.set_margin_top(12)
+        self.colonna.pack_start(aggiungi, False, False, 0)
+
+    def accendi(self, acceso):
+        def fai():
+            if acceso:
+                esegui(["rfkill", "unblock", "bluetooth"])
+            esegui(["bluetoothctl", "power", "on" if acceso else "off"], timeout=10)
+        in_sottofondo(fai, lambda _: GLib.timeout_add(800, lambda: (self.aggiorna(), False)[1]))
+
+    def aggiorna(self):
+        if not esiste("bluetoothctl"):
+            self.riga_stato.imposta_sottotitolo("Bluetooth non disponibile su questo computer")
+            self.interruttore.set_sensitive(False)
+            return
+
+        def leggi():
+            info = uscita(["bluetoothctl", "show"], timeout=5)
+            if not info:
+                return None
+            acceso = "Powered: yes" in info
+            elenco = []
+            for l in uscita(["bluetoothctl", "devices", "Paired"], timeout=5).splitlines():
+                p = l.split(" ", 2)
+                if len(p) == 3 and p[0] == "Device":
+                    dett = uscita(["bluetoothctl", "info", p[1]], timeout=5)
+                    icona = re.search(r"Icon: (\S+)", dett)
+                    elenco.append((p[1], p[2], "Connected: yes" in dett, icona.group(1) if icona else "bluetooth"))
+            return acceso, elenco
+
+        in_sottofondo(leggi, self._mostra)
+
+    def _mostra(self, dati):
+        self.dispositivi.svuota()
+        if dati is None:
+            self.riga_stato.imposta_sottotitolo("Nessun adattatore Bluetooth trovato")
+            self.interruttore.set_sensitive(False)
+            if DEMO:
+                dati = (True, [("00", "AirPods di Ale", True, "audio-headphones"),
+                               ("01", "Mouse MX", False, "input-mouse")])
+            else:
+                return
+        acceso, elenco = dati
+        self.interruttore.set_sensitive(True)
+        self.interruttore.imposta(acceso)
+        self.riga_stato.imposta_sottotitolo("Acceso: il computer è visibile ai tuoi dispositivi" if acceso else "Spento")
+        if not elenco:
+            self.dispositivi.aggiungi(Riga("Nessun dispositivo", "Premi «Aggiungi un dispositivo» per associarne uno."))
+        for mac, nome, connesso, icona in elenco:
+            b = pulsante("Disconnetti" if connesso else "Connetti",
+                         lambda m=mac, c=connesso: self.collega(m, c))
+            b.set_sensitive(acceso)
+            self.dispositivi.aggiungi(Riga(nome, "Connesso" if connesso else "Non connesso", b,
+                                           icona=icona if icona != "bluetooth" else "bluetooth-active-symbolic"))
+        self.dispositivi.show_all()
+
+    def collega(self, mac, connesso):
+        in_sottofondo(lambda: esegui(["bluetoothctl", "--timeout", "15",
+                                      "disconnect" if connesso else "connect", mac], timeout=20),
+                      lambda _: self.aggiorna())
+
+
+# ---------------------------------------------------------------------------
+# Schermo
+# ---------------------------------------------------------------------------
+class PaginaSchermo(Pagina):
+    nome, titolo, icona = "schermo", "Schermo", "video-display-symbolic"
+    parole = "schermo luminosità risoluzione hz frequenza monitor dimensione testo scala zoom"
+
+    def costruisci(self):
+        self.sottotitolo.set_text("Luminosità, risoluzione e dimensione degli elementi.")
+        r = self.sezione()
+        self.luminosita = Cursore(lambda v: esegui(["brightnessctl", "-q", "-c", "backlight", "set", f"{max(v, 3)}%"]), 0, 100)
+        riga = Gtk.Box(spacing=10)
+        riga.pack_start(Gtk.Image.new_from_icon_name("display-brightness-symbolic", Gtk.IconSize.MENU), False, False, 0)
+        riga.pack_start(self.luminosita, True, True, 0)
+        self.riga_luce = r.aggiungi(Riga("Luminosità", None, riga))
+
+        r = self.sezione("Monitor")
+        self.uscita = None
+        self.combo_ris = Gtk.ComboBoxText()
+        self.combo_ris.connect("changed", self._cambia_risoluzione)
+        self.riga_ris = r.aggiungi(Riga("Risoluzione", None, self.combo_ris))
+        self.combo_hz = Gtk.ComboBoxText()
+        self.combo_hz.connect("changed", self._cambia_hz)
+        r.aggiungi(Riga("Frequenza di aggiornamento", "Più alta = movimenti più fluidi (utile nei giochi)", self.combo_hz))
+        self.combo_scala = Gtk.ComboBoxText()
+        for v in ("100", "125", "150", "175", "200"):
+            self.combo_scala.append(v, f"{v}%" + ("  (consigliata)" if v == "100" else ""))
+        self.combo_scala.connect("changed", self._cambia_scala)
+        r.aggiungi(Riga("Dimensione di testo e app", "Ingrandisci tutto se lo schermo è piccolo o ad alta risoluzione", self.combo_scala))
+        self._muto = False
+        self.modi = {}
+
+    def aggiorna(self):
+        self._muto = True
+        b = uscita(["brightnessctl", "-m", "-c", "backlight"]) if esiste("brightnessctl") else ""
+        if b:
+            try:
+                self.luminosita.imposta(int(b.split(",")[3].rstrip("%")))
+                self.riga_luce.imposta_sottotitolo(None)
+                self.luminosita.set_sensitive(True)
+            except (IndexError, ValueError):
+                b = ""
+        if not b:
+            self.luminosita.set_sensitive(False)
+            self.riga_luce.imposta_sottotitolo("Regolabile solo sugli schermi dei portatili")
+
+        self.modi, attuale, hz_attuale = {}, None, None
+        testo = uscita(["xrandr", "--query"]) if esiste("xrandr") else ""
+        uscite = re.findall(r"^(\S+) connected( primary)?", testo, re.M)
+        if uscite:
+            scelta = next((u for u, p in uscite if p), uscite[0][0])
+            self.uscita = scelta
+            blocco = testo.split(f"\n{scelta} connected", 1)[1].split("\n")[1:]
+            for l in blocco:
+                if not l.startswith("   "):
+                    break
+                parti = l.split()
+                ris = parti[0]
+                freq = []
+                for f in parti[1:]:
+                    num = re.sub(r"[*+]", "", f)
+                    try:
+                        freq.append(float(num))
+                    except ValueError:
+                        continue
+                    if "*" in f:
+                        attuale, hz_attuale = ris, float(num)
+                self.modi.setdefault(ris, [])
+                self.modi[ris] += [x for x in freq if x not in self.modi[ris]]
+        self.combo_ris.remove_all()
+        for ris in self.modi:
+            self.combo_ris.append(ris, ris.replace("x", " × "))
+        if attuale:
+            self.combo_ris.set_active_id(attuale)
+        self.combo_ris.set_sensitive(bool(self.modi))
+        self.riga_ris.imposta_sottotitolo(f"Monitor: {self.uscita}" if self.uscita else "Non disponibile")
+        self._riempi_hz(attuale, hz_attuale)
+
+        dpi = xfconf_leggi("xsettings", "/Xft/DPI")
+        fattore = xfconf_leggi("xsettings", "/Gdk/WindowScalingFactor")
+        if fattore == "2":
+            scala = "200"
+        else:
+            try:
+                scala = str(min((100, 125, 150, 175, 200), key=lambda s: abs(int(dpi) / 96 * 100 - s)))
+            except ValueError:
+                scala = "100"
+        self.combo_scala.set_active_id(scala)
+        self._muto = False
+
+    def _riempi_hz(self, ris, hz_attuale=None):
+        self.combo_hz.remove_all()
+        for f in sorted(self.modi.get(ris, []), reverse=True):
+            self.combo_hz.append(f"{f:.2f}", f"{round(f)} Hz")
+        if hz_attuale:
+            self.combo_hz.set_active_id(f"{hz_attuale:.2f}")
+        elif self.modi.get(ris):
+            self.combo_hz.set_active(0)
+        self.combo_hz.set_sensitive(bool(self.modi.get(ris)))
+
+    def _applica_modo(self, ris, hz):
+        if not self.uscita or not ris:
+            return
+        precedente = uscita(["xrandr", "--query"])
+        cmd = ["xrandr", "--output", self.uscita, "--mode", ris]
+        if hz:
+            cmd += ["--rate", hz]
+        esegui(cmd)
+        if domanda(self.finestra, "Mantenere queste impostazioni?",
+                   "Se lo schermo non si vede bene premi Annulla: tra pochi secondi tornerà come prima.",
+                   si="Mantieni", no="Annulla", scadenza=15):
+            os.makedirs(CONF, exist_ok=True)
+            with open(os.path.join(CONF, "schermo.sh"), "w") as f:
+                f.write("#!/bin/sh\n" + " ".join(cmd) + "\n")
+        else:
+            m = re.search(rf"^{re.escape(self.uscita)} connected(?: primary)? (\d+x\d+)", precedente, re.M)
+            if m:
+                esegui(["xrandr", "--output", self.uscita, "--mode", m.group(1)])
+        self.aggiorna()
+
+    def _cambia_risoluzione(self, combo):
+        if self._muto or not combo.get_active_id():
+            return
+        self._muto = True
+        self._riempi_hz(combo.get_active_id())
+        self._muto = False
+        self._applica_modo(combo.get_active_id(), self.combo_hz.get_active_id())
+
+    def _cambia_hz(self, combo):
+        if self._muto or not combo.get_active_id():
+            return
+        self._applica_modo(self.combo_ris.get_active_id(), combo.get_active_id())
+
+    def _cambia_scala(self, combo):
+        if self._muto:
+            return
+        s = int(combo.get_active_id())
+        if s == 200:
+            xfconf_scrivi("xsettings", "/Gdk/WindowScalingFactor", "int", 2)
+            xfconf_scrivi("xsettings", "/Xft/DPI", "int", 96)
+        else:
+            xfconf_scrivi("xsettings", "/Gdk/WindowScalingFactor", "int", 1)
+            xfconf_scrivi("xsettings", "/Xft/DPI", "int", round(96 * s / 100))
+
+
+# ---------------------------------------------------------------------------
+# Suono
+# ---------------------------------------------------------------------------
+class PaginaSuono(Pagina):
+    nome, titolo, icona = "suono", "Suono", "audio-volume-high-symbolic"
+    parole = "suono audio volume casse cuffie microfono altoparlanti"
+
+    def costruisci(self):
+        self.sottotitolo.set_text("Volume, casse, cuffie e microfono.")
+        r = self.sezione("Uscita")
+        self.volume = Cursore(lambda v: esegui(["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{v}%"]), 0, 100)
+        self.muto = Gtk.ToggleButton()
+        self.muto.set_image(Gtk.Image.new_from_icon_name("audio-volume-muted-symbolic", Gtk.IconSize.BUTTON))
+        self.muto.set_tooltip_text("Disattiva audio")
+        self.muto.connect("toggled", lambda b: None if self._muto_agg else
+                          esegui(["pactl", "set-sink-mute", "@DEFAULT_SINK@", "1" if b.get_active() else "0"]))
+        box = Gtk.Box(spacing=8)
+        box.pack_start(self.volume, True, True, 0)
+        box.pack_start(self.muto, False, False, 0)
+        r.aggiungi(Riga("Volume", None, box))
+        self.combo_uscita = Gtk.ComboBoxText()
+        self.combo_uscita.connect("changed", lambda c: None if self._muto_agg or not c.get_active_id()
+                                  else (esegui(["pactl", "set-default-sink", c.get_active_id()]), self.aggiorna()))
+        r.aggiungi(Riga("Riproduci da", None, self.combo_uscita))
+
+        r = self.sezione("Microfono")
+        self.mic = Cursore(lambda v: esegui(["pactl", "set-source-volume", "@DEFAULT_SOURCE@", f"{v}%"]), 0, 100)
+        r.aggiungi(Riga("Volume del microfono", None, self.mic))
+        self.combo_ingresso = Gtk.ComboBoxText()
+        self.combo_ingresso.connect("changed", lambda c: None if self._muto_agg or not c.get_active_id()
+                                    else esegui(["pactl", "set-default-source", c.get_active_id()]))
+        r.aggiungi(Riga("Microfono in uso", None, self.combo_ingresso))
+        self._muto_agg = False
+
+    @staticmethod
+    def _dispositivi(tipo):
+        codice, testo = esegui(["pactl", "-f", "json", "list", tipo])
+        if codice == 0:
+            try:
+                return [(d["name"], d.get("description") or d["name"]) for d in json.loads(testo)
+                        if not d["name"].endswith(".monitor")]
+            except (ValueError, KeyError, TypeError):
+                pass
+        return [(l.split("\t")[1], l.split("\t")[1]) for l in uscita(["pactl", "list", "short", tipo]).splitlines()
+                if "\t" in l and not l.split("\t")[1].endswith(".monitor")]
+
+    def aggiorna(self):
+        disponibile = esiste("pactl") and bool(uscita(["pactl", "info"]))
+        for w in (self.volume, self.muto, self.combo_uscita, self.mic, self.combo_ingresso):
+            w.set_sensitive(disponibile)
+        if not disponibile:
+            return
+        self._muto_agg = True
+        v = re.search(r"(\d+)%", uscita(["pactl", "get-sink-volume", "@DEFAULT_SINK@"]))
+        self.volume.imposta(int(v.group(1)) if v else 0)
+        self.muto.set_active("yes" in uscita(["pactl", "get-sink-mute", "@DEFAULT_SINK@"]))
+        v = re.search(r"(\d+)%", uscita(["pactl", "get-source-volume", "@DEFAULT_SOURCE@"]))
+        self.mic.imposta(int(v.group(1)) if v else 0)
+        for combo, tipo, predefinito in ((self.combo_uscita, "sinks", "get-default-sink"),
+                                         (self.combo_ingresso, "sources", "get-default-source")):
+            combo.remove_all()
+            for nome, descr in self._dispositivi(tipo):
+                combo.append(nome, descr)
+            combo.set_active_id(uscita(["pactl", predefinito]))
+        self._muto_agg = False
+
+
+# ---------------------------------------------------------------------------
+# Batteria (stile iPhone)
+# ---------------------------------------------------------------------------
+def dati_batteria():
+    if DEMO:
+        ora = time.time()
+        storia = [(ora - 86400 + i * 600, max(8, 100 - (i % 72) * 1.3), "discharging") for i in range(144)]
+        return {"livello": 76, "stato": "Discharging", "salute": 87.4, "cicli": 213,
+                "tempo": "Circa 3 h 40 min rimanenti", "storia": storia, "modello": "Batteria di esempio"}
+    basi = [os.path.join("/sys/class/power_supply", d) for d in sorted(os.listdir("/sys/class/power_supply"))
+            if leggi_file(f"/sys/class/power_supply/{d}/type") == "Battery"] if os.path.isdir("/sys/class/power_supply") else []
+    if not basi:
+        return None
+    b = basi[0]
+    livello = int(leggi_file(f"{b}/capacity", "0") or 0)
+    stato = leggi_file(f"{b}/status", "Unknown")
+    pieno = leggi_file(f"{b}/energy_full") or leggi_file(f"{b}/charge_full")
+    progetto = leggi_file(f"{b}/energy_full_design") or leggi_file(f"{b}/charge_full_design")
+    try:
+        salute = min(100.0, int(pieno) / int(progetto) * 100)
+    except (ValueError, ZeroDivisionError):
+        salute = None
+    try:
+        cicli = int(leggi_file(f"{b}/cycle_count", "0"))
+    except ValueError:
+        cicli = 0
+    tempo = ""
+    dispositivo = next((d for d in uscita(["upower", "-e"]).splitlines() if "BAT" in d), "") if esiste("upower") else ""
+    if dispositivo:
+        info = uscita(["upower", "-i", dispositivo])
+        m = re.search(r"time to (empty|full):\s+([\d.]+) (hours|minutes)", info)
+        if m:
+            minuti = float(m.group(2)) * (60 if m.group(3) == "hours" else 1)
+            h, mi = int(minuti // 60), int(minuti % 60)
+            durata = (f"{h} h {mi} min" if h else f"{mi} min")
+            tempo = f"Circa {durata} rimanenti" if m.group(1) == "empty" else f"Carica completa tra circa {durata}"
+    storia = []
+    try:
+        file_storia = [os.path.join("/var/lib/upower", f) for f in os.listdir("/var/lib/upower")
+                       if f.startswith("history-charge-")]
+    except OSError:
+        file_storia = []
+    if file_storia:
+        recente = max(file_storia, key=os.path.getmtime)
+        limite = time.time() - 86400
+        for l in leggi_file(recente).splitlines():
+            p = l.split("\t")
+            try:
+                if len(p) >= 2 and float(p[0]) >= limite:
+                    storia.append((float(p[0]), float(p[1]), p[2] if len(p) > 2 else ""))
+            except ValueError:
+                continue
+    modello = leggi_file(f"{b}/model_name")
+    return {"livello": livello, "stato": stato, "salute": salute, "cicli": cicli,
+            "tempo": tempo, "storia": storia, "modello": modello}
+
+
+class DisegnoBatteria(Gtk.DrawingArea):
+    def __init__(self):
+        super().__init__()
+        self.set_size_request(120, 56)
+        self.livello, self.in_carica = 0, False
+        self.connect("draw", self._disegna)
+
+    def _disegna(self, w, cr):
+        fg = w.get_style_context().get_color(Gtk.StateFlags.NORMAL)
+        L, A = 104, 50
+        cr.set_line_width(3)
+        cr.set_source_rgba(fg.red, fg.green, fg.blue, 0.35)
+        rettangolo_arrotondato(cr, 2, 3, L, A, 12)
+        cr.stroke()
+        rettangolo_arrotondato(cr, L + 5, 3 + A / 2 - 9, 6, 18, 3)
+        cr.fill()
+        colore = "#2fbf71" if self.livello > 20 or self.in_carica else "#ff9f0a" if self.livello > 10 else "#ef4a5a"
+        cr.set_source_rgb(*esadecimale(colore))
+        larghezza = max(6, (L - 10) * self.livello / 100)
+        rettangolo_arrotondato(cr, 7, 8, larghezza, A - 10, 8)
+        cr.fill()
+        if self.in_carica:
+            cr.set_source_rgb(1, 1, 1)
+            x, y = 2 + L / 2, 3 + A / 2
+            cr.move_to(x + 4, y - 17)
+            cr.line_to(x - 9, y + 3)
+            cr.line_to(x - 1, y + 3)
+            cr.line_to(x - 4, y + 17)
+            cr.line_to(x + 9, y - 3)
+            cr.line_to(x + 1, y - 3)
+            cr.close_path()
+            cr.fill()
+
+
+class GraficoBatteria(Gtk.DrawingArea):
+    """Livello della batteria nelle ultime 24 ore, a barre come su iPhone."""
+
+    def __init__(self):
+        super().__init__()
+        self.set_size_request(-1, 170)
+        self.storia = []
+        self.connect("draw", self._disegna)
+
+    def _disegna(self, w, cr):
+        fg = w.get_style_context().get_color(Gtk.StateFlags.NORMAL)
+        L, A = w.get_allocated_width(), w.get_allocated_height()
+        sx, dx, alto, basso = 8, 40, 10, 26
+        area_l, area_a = L - sx - dx, A - alto - basso
+        cr.set_line_width(1)
+        cr.set_font_size(10)
+        for valore in (0, 50, 100):
+            y = alto + area_a * (1 - valore / 100)
+            cr.set_source_rgba(fg.red, fg.green, fg.blue, 0.12)
+            cr.set_dash([3, 3] if valore else [])
+            cr.move_to(sx, y)
+            cr.line_to(sx + area_l, y)
+            cr.stroke()
+            cr.set_dash([])
+            cr.set_source_rgba(fg.red, fg.green, fg.blue, 0.5)
+            cr.move_to(sx + area_l + 6, y + 4)
+            cr.show_text(f"{valore}%")
+        adesso = time.time()
+        inizio_ora = adesso - (adesso % 3600)
+        fasce = 24
+        passo = area_l / fasce
+        for i in range(fasce):
+            da = inizio_ora - (fasce - 1 - i) * 3600
+            valori = [v for t, v, _ in self.storia if da <= t < da + 3600]
+            stati = [s for t, _, s in self.storia if da <= t < da + 3600]
+            if valori:
+                v = valori[-1]
+                altezza = max(3, area_a * v / 100)
+                x = sx + i * passo + passo * 0.18
+                colore = "#ef4a5a" if v <= 20 else "#2fbf71"
+                cr.set_source_rgb(*esadecimale(colore))
+                if "charging" in stati:
+                    cr.set_source_rgba(*esadecimale(colore), 0.55)
+                rettangolo_arrotondato(cr, x, alto + area_a - altezza, passo * 0.64, altezza, 3)
+                cr.fill()
+            if i % 6 == 0:
+                cr.set_source_rgba(fg.red, fg.green, fg.blue, 0.5)
+                cr.move_to(sx + i * passo, A - 8)
+                cr.show_text(time.strftime("%H:00", time.localtime(da)))
+        if not self.storia:
+            cr.set_source_rgba(fg.red, fg.green, fg.blue, 0.55)
+            cr.set_font_size(12)
+            testo = "I dati compariranno dopo qualche ora di utilizzo"
+            est = cr.text_extents(testo)
+            cr.move_to(sx + (area_l - est.width) / 2, alto + area_a / 2)
+            cr.show_text(testo)
+
+
+class PaginaBatteria(Pagina):
+    nome, titolo, icona = "batteria", "Batteria", "battery-full-symbolic"
+    parole = "batteria carica energia salute stato risparmio prestazioni cicli autonomia"
+
+    def costruisci(self):
+        self.sottotitolo.set_text("Carica, stato della batteria e consumi.")
+        r = self.sezione()
+        alto = Gtk.Box(spacing=22)
+        alto.set_margin_start(20)
+        alto.set_margin_end(20)
+        alto.set_margin_top(18)
+        alto.set_margin_bottom(18)
+        self.disegno = DisegnoBatteria()
+        alto.pack_start(self.disegno, False, False, 0)
+        testi = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        testi.set_valign(Gtk.Align.CENTER)
+        self.percentuale = etichetta("—", "numero-grande")
+        self.stato = etichetta("", "riga-sottotitolo")
+        testi.pack_start(self.percentuale, False, False, 0)
+        testi.pack_start(self.stato, False, False, 0)
+        alto.pack_start(testi, True, True, 0)
+        r.aggiungi(alto)
+
+        self.colonna.pack_start(etichetta("ULTIME 24 ORE", "etichetta-sezione"), False, False, 0)
+        r = Riquadro()
+        self.grafico = GraficoBatteria()
+        self.grafico.set_margin_start(10)
+        self.grafico.set_margin_end(10)
+        self.grafico.set_margin_top(10)
+        r.aggiungi(self.grafico)
+        self.colonna.pack_start(r, False, False, 0)
+
+        self.colonna.pack_start(etichetta("STATO DELLA BATTERIA", "etichetta-sezione"), False, False, 0)
+        r = Riquadro()
+        self.colonna.pack_start(r, False, False, 0)
+        self.capacita = etichetta("—", "numero-medio")
+        self.riga_capacita = r.aggiungi(Riga("Capacità massima", "", self.capacita))
+        self.barra_capacita = Gtk.LevelBar()
+        self.barra_capacita.set_min_value(0)
+        self.barra_capacita.set_max_value(100)
+        self.barra_capacita.set_margin_start(16)
+        self.barra_capacita.set_margin_end(16)
+        self.barra_capacita.set_margin_bottom(12)
+        self.barra_capacita.remove_offset_value(Gtk.LEVEL_BAR_OFFSET_LOW)
+        self.barra_capacita.remove_offset_value(Gtk.LEVEL_BAR_OFFSET_HIGH)
+        self.barra_capacita.remove_offset_value(Gtk.LEVEL_BAR_OFFSET_FULL)
+        r.pack_start(self.barra_capacita, False, False, 0)
+        self.riga_condizione = r.aggiungi(Riga("Condizione", ""))
+        self.riga_cicli = r.aggiungi(Riga("Cicli di carica", ""))
+
+        r = self.sezione("Modalità energia")
+        self.modalita = Segmentato([("power-saver", "Risparmio"), ("balanced", "Bilanciata"),
+                                    ("performance", "Prestazioni")], self._cambia_modalita)
+        self.riga_modalita = r.aggiungi(Riga("Uso dell'energia", "Risparmio allunga l'autonomia, Prestazioni è ideale per giochi ed editing", self.modalita))
+        self.mostra_perc = Interruttore(lambda v: xfconf_scrivi("xfce4-power-manager",
+                                        "/xfce4-power-manager/show-panel-label", "int", 1 if v else 0))
+        r.aggiungi(Riga("Mostra la percentuale nella barra", None, self.mostra_perc))
+
+    def _cambia_modalita(self, m):
+        esegui(["powerprofilesctl", "set", m])
+
+    def aggiorna(self):
+        in_sottofondo(dati_batteria, self._mostra)
+        modo = uscita(["powerprofilesctl", "get"]) if esiste("powerprofilesctl") else ""
+        self.modalita.set_sensitive(bool(modo))
+        if modo:
+            self.modalita.imposta(modo)
+        else:
+            self.riga_modalita.imposta_sottotitolo("Non disponibile su questo computer")
+        self.mostra_perc.imposta(xfconf_leggi("xfce4-power-manager", "/xfce4-power-manager/show-panel-label") != "0")
+
+    def _mostra(self, d):
+        if not d:
+            self.percentuale.set_text("—")
+            self.stato.set_text("Questo computer non ha una batteria (alimentato dalla corrente).")
+            self.riga_capacita.imposta_sottotitolo("Non disponibile")
+            return
+        self.disegno.livello = d["livello"]
+        self.disegno.in_carica = d["stato"] in ("Charging", "Full")
+        self.disegno.queue_draw()
+        self.percentuale.set_text(f"{d['livello']}%")
+        stati = {"Charging": "In carica", "Discharging": "In uso a batteria", "Full": "Carica completa",
+                 "Not charging": "Collegato alla corrente, non in carica"}
+        stato = stati.get(d["stato"], "Collegato alla corrente")
+        self.stato.set_text(stato + (f" · {d['tempo']}" if d["tempo"] else ""))
+        self.grafico.storia = d["storia"]
+        self.grafico.queue_draw()
+        s = d["salute"]
+        if s is None:
+            self.capacita.set_text("—")
+            self.riga_capacita.imposta_sottotitolo("La batteria non fornisce questo dato")
+            self.riga_condizione.imposta_sottotitolo("")
+        else:
+            self.capacita.set_text(f"{round(s)}%")
+            self.barra_capacita.set_value(s)
+            self.riga_capacita.imposta_sottotitolo("Rispetto a quando era nuova")
+            for c in ("verde", "arancio", "rosso"):
+                self.capacita.get_style_context().remove_class(c)
+            if s >= 80:
+                testo, classe = "Ottima: la batteria funziona al meglio delle sue capacità.", "verde"
+            elif s >= 60:
+                testo, classe = "Usurata: dura un po' meno di quando era nuova. È normale col tempo.", "arancio"
+            else:
+                testo, classe = "Molto usurata: l'autonomia è ridotta, valuta di sostituirla.", "rosso"
+            self.capacita.get_style_context().add_class(classe)
+            self.riga_condizione.imposta_sottotitolo(testo)
+        self.riga_cicli.imposta_sottotitolo(
+            f"{d['cicli']} cariche complete finora" if d["cicli"] else "Dato non fornito dalla batteria")
+
+
+# ---------------------------------------------------------------------------
+# Aspetto
+# ---------------------------------------------------------------------------
+class AnteprimaTema(Gtk.DrawingArea):
+    def __init__(self, scuro):
+        super().__init__()
+        self.scuro = scuro
+        self.set_size_request(180, 110)
+        self.connect("draw", self._disegna)
+
+    def _disegna(self, w, cr):
+        sf, fin, barra, testo = (("#1b1d2e", "#2a2c3f", "#22243a", "#8a8ca8") if self.scuro else
+                                 ("#dfe3ec", "#ffffff", "#f2f3f7", "#c3c7d3"))
+        cr.set_source_rgb(*esadecimale(sf))
+        rettangolo_arrotondato(cr, 0, 0, 180, 110, 10)
+        cr.fill()
+        cr.set_source_rgb(*esadecimale(fin))
+        rettangolo_arrotondato(cr, 18, 14, 144, 70, 7)
+        cr.fill()
+        cr.set_source_rgb(*esadecimale(barra))
+        rettangolo_arrotondato(cr, 18, 14, 40, 70, 7)
+        cr.fill()
+        cr.set_source_rgb(*esadecimale(testo))
+        for i in range(3):
+            rettangolo_arrotondato(cr, 66, 26 + i * 14, 70 - i * 18, 6, 3)
+            cr.fill()
+        cr.set_source_rgb(*esadecimale("#ff8a4c"))
+        rettangolo_arrotondato(cr, 24, 22, 28, 7, 3)
+        cr.fill()
+        cr.set_source_rgb(*esadecimale(barra))
+        rettangolo_arrotondato(cr, 50, 92, 80, 12, 6)
+        cr.fill()
+
+
+class PaginaAspetto(Pagina):
+    nome, titolo, icona = "aspetto", "Aspetto", "preferences-desktop-appearance-symbolic"
+    parole = "aspetto tema chiaro scuro sfondo colori barra icone desktop"
+
+    def costruisci(self):
+        self.sottotitolo.set_text("Tema, sfondo e barra delle applicazioni.")
+        r = self.sezione("Tema")
+        riga = Gtk.Box(spacing=18, halign=Gtk.Align.CENTER)
+        riga.set_margin_top(14)
+        riga.set_margin_bottom(14)
+        self.tessere = {}
+        for chiave, testo in (("chiaro", "Chiaro"), ("scuro", "Scuro")):
+            t = Gtk.ToggleButton()
+            t.get_style_context().add_class("tessera")
+            box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+            box.pack_start(AnteprimaTema(chiave == "scuro"), False, False, 0)
+            box.pack_start(etichetta(testo, "riga-titolo", xalign=0.5), False, False, 0)
+            t.add(box)
+            t.connect("toggled", self._tema, chiave)
+            riga.pack_start(t, False, False, 0)
+            self.tessere[chiave] = t
+        r.aggiungi(riga)
+
+        self.colonna.pack_start(etichetta("SFONDO", "etichetta-sezione"), False, False, 0)
+        r = Riquadro()
+        self.colonna.pack_start(r, False, False, 0)
+        self.sfondi = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, max_children_per_line=4,
+                                  min_children_per_line=2, column_spacing=10, row_spacing=10)
+        self.sfondi.set_margin_start(14)
+        self.sfondi.set_margin_end(14)
+        self.sfondi.set_margin_top(14)
+        self.sfondi.set_margin_bottom(6)
+        r.aggiungi(self.sfondi)
+        scegli = pulsante("Scegli una tua foto…", self._scegli_foto, icona="document-open-symbolic")
+        scegli.set_halign(Gtk.Align.START)
+        scegli.set_margin_start(14)
+        scegli.set_margin_bottom(14)
+        r.pack_start(scegli, False, False, 0)
+
+        r = self.sezione("Barra delle applicazioni")
+        self.posizione = Segmentato([("centro", "Al centro"), ("sinistra", "A sinistra")], self._posizione)
+        r.aggiungi(Riga("Icone della barra", None, self.posizione))
+        self.nascondi = Interruttore(lambda v: xfconf_scrivi("xfce4-panel", "/panels/panel-1/autohide-behavior", "uint", 2 if v else 0))
+        r.aggiungi(Riga("Nascondi automaticamente la barra", "Compare quando porti il mouse in basso", self.nascondi))
+        self._muto = False
+        self._carica_sfondi()
+
+    def _carica_sfondi(self):
+        cartella = "/usr/share/backgrounds/alba"
+        immagini = sorted(os.path.join(cartella, f) for f in os.listdir(cartella)
+                          if f.lower().endswith((".png", ".jpg", ".jpeg"))) if os.path.isdir(cartella) else []
+        for percorso in immagini:
+            try:
+                pix = GdkPixbuf.Pixbuf.new_from_file_at_scale(percorso, 160, 90, False)
+            except GLib.Error:
+                continue
+            b = Gtk.Button()
+            b.set_relief(Gtk.ReliefStyle.NONE)
+            b.add(Gtk.Image.new_from_pixbuf(pix))
+            b.set_tooltip_text(os.path.basename(percorso).rsplit(".", 1)[0].replace("-", " ").capitalize())
+            b.connect("clicked", lambda _b, p=percorso: imposta_sfondo(p))
+            self.sfondi.add(b)
+
+    def _scegli_foto(self):
+        d = Gtk.FileChooserDialog(title="Scegli lo sfondo", transient_for=self.finestra,
+                                  action=Gtk.FileChooserAction.OPEN)
+        d.add_buttons("Annulla", Gtk.ResponseType.CANCEL, "Usa come sfondo", Gtk.ResponseType.ACCEPT)
+        filtro = Gtk.FileFilter()
+        filtro.set_name("Immagini")
+        filtro.add_mime_type("image/*")
+        d.add_filter(filtro)
+        d.set_current_folder(os.path.expanduser("~/Immagini") if os.path.isdir(os.path.expanduser("~/Immagini"))
+                             else os.path.expanduser("~"))
+        if d.run() == Gtk.ResponseType.ACCEPT:
+            imposta_sfondo(d.get_filename())
+        d.destroy()
+
+    def _tema(self, bottone, chiave):
+        if self._muto:
+            return
+        if not bottone.get_active():
+            self._muto = True
+            bottone.set_active(True)
+            self._muto = False
+            return
+        self._muto = True
+        for k, t in self.tessere.items():
+            t.set_active(k == chiave)
+        self._muto = False
+        esegui(["/usr/bin/alba-tema", chiave])
+
+    def _posizione(self, chiave):
+        xfconf_scrivi("xfce4-panel", "/plugins/plugin-1/expand", "bool", chiave == "centro")
+
+    def aggiorna(self):
+        self._muto = True
+        tema = leggi_file(os.path.join(CONF, "tema"))
+        if not tema:
+            tema = "scuro" if "dark" in xfconf_leggi("xsettings", "/Net/ThemeName").lower() else "chiaro"
+        for k, t in self.tessere.items():
+            t.set_active(k == tema)
+        self._muto = False
+        self.posizione.imposta("centro" if xfconf_leggi("xfce4-panel", "/plugins/plugin-1/expand") != "false" else "sinistra")
+        self.nascondi.imposta(xfconf_leggi("xfce4-panel", "/panels/panel-1/autohide-behavior") not in ("", "0"))
+
+
+def imposta_sfondo(percorso):
+    proprieta = [p for p in uscita(["xfconf-query", "-c", "xfce4-desktop", "-l"]).splitlines()
+                 if p.endswith("/last-image")]
+    for u in re.findall(r"^(\S+) connected", uscita(["xrandr", "--query"]), re.M):
+        p = f"/backdrop/screen0/monitor{u}/workspace0/last-image"
+        if p not in proprieta:
+            proprieta.append(p)
+    for p in proprieta:
+        xfconf_scrivi("xfce4-desktop", p, "string", percorso)
+        xfconf_scrivi("xfce4-desktop", p.rsplit("/", 1)[0] + "/image-style", "int", 5)
+
+
+# ---------------------------------------------------------------------------
+# Data e ora
+# ---------------------------------------------------------------------------
+class PaginaDataOra(Pagina):
+    nome, titolo, icona = "data-ora", "Data e ora", "preferences-system-time-symbolic"
+    parole = "data ora orologio fuso orario automatico windows"
+
+    def costruisci(self):
+        self.orologio = etichetta("", "numero-medio")
+        self.colonna.pack_start(self.orologio, False, False, 6)
+        self.sottotitolo.set_text("Di solito non serve toccare niente: l'ora si regola da sola.")
+        r = self.sezione()
+        self.auto = Interruttore(self._auto)
+        self.riga_auto = r.aggiungi(Riga("Ora automatica da Internet", "", self.auto))
+        self.fuso = Gtk.Entry()
+        self.fuso.set_width_chars(22)
+        self.fuso.set_placeholder_text("es. Europe/Rome")
+        lista = Gtk.ListStore(str)
+        for z in uscita(["timedatectl", "list-timezones"]).splitlines():
+            lista.append([z])
+        comp = Gtk.EntryCompletion(model=lista, text_column=0, minimum_key_length=2)
+        comp.set_match_func(lambda c, chiave, it, *_: chiave.lower() in (lista[it][0] or "").lower())
+        comp.connect("match-selected", lambda c, m, it: (self._applica_fuso(m[it][0]), False)[1])
+        self.fuso.set_completion(comp)
+        self.fuso.connect("activate", lambda e: self._applica_fuso(e.get_text()))
+        r.aggiungi(Riga("Fuso orario", "Scrivi una città (es. Rome, Zurich) e scegli dall'elenco", self.fuso))
+
+        r = self.sezione("Imposta a mano")
+        box = Gtk.Box(spacing=6)
+        self.calendario = Gtk.Calendar()
+        self.data = Gtk.MenuButton()
+        pop = Gtk.Popover()
+        pop.add(self.calendario)
+        self.calendario.show()
+        self.data.set_popover(pop)
+        self.calendario.connect("day-selected", lambda *_: self._etichetta_data())
+        self.ore = Gtk.SpinButton.new_with_range(0, 23, 1)
+        self.minuti = Gtk.SpinButton.new_with_range(0, 59, 1)
+        for s in (self.ore, self.minuti):
+            s.set_wrap(True)
+            s.set_width_chars(2)
+            s.connect("output", self._due_cifre)
+        box.pack_start(self.data, False, False, 0)
+        box.pack_start(self.ore, False, False, 0)
+        box.pack_start(etichetta(":"), False, False, 0)
+        box.pack_start(self.minuti, False, False, 0)
+        box.pack_start(pulsante("Imposta", self._imposta_manuale), False, False, 4)
+        self.riga_manuale = r.aggiungi(Riga("Data e ora", "Disponibile quando l'ora automatica è spenta", box))
+        self.manuale = box
+
+        r = self.sezione("Se usi anche Windows")
+        self.windows = Interruttore(lambda v: in_sottofondo(lambda: come_amministratore("ora-windows", "1" if v else "0"),
+                                                            lambda _: self.aggiorna()))
+        r.aggiungi(Riga("Stessa ora di Windows", "Attivalo se, passando da Windows ad Alba, l'ora risulta sbagliata di 1-2 ore", self.windows))
+        GLib.timeout_add_seconds(1, self._tic)
+
+    @staticmethod
+    def _due_cifre(spin):
+        spin.set_text(f"{int(spin.get_value()):02d}")
+        return True
+
+    def _tic(self):
+        self.orologio.set_text(time.strftime("%H:%M:%S  ·  %A %d %B %Y"))
+        return True
+
+    def _etichetta_data(self):
+        a, m, g = self.calendario.get_date()
+        self.data.set_label(f"{g:02d}/{m + 1:02d}/{a}")
+
+    def _auto(self, attiva):
+        if attiva and not os.path.exists("/lib/systemd/systemd-timesyncd") and not os.path.exists("/usr/lib/systemd/systemd-timesyncd"):
+            in_sottofondo(lambda: come_amministratore("installa", "systemd-timesyncd"), lambda _: self.aggiorna())
+            return
+        in_sottofondo(lambda: come_amministratore("ntp", "on" if attiva else "off"), lambda _: self.aggiorna())
+
+    def _applica_fuso(self, z):
+        z = (z or "").strip()
+        if z:
+            in_sottofondo(lambda: come_amministratore("fuso", z), lambda r: (
+                messaggio(self.finestra, "Fuso orario non valido", "Scegli una voce dall'elenco che compare mentre scrivi.")
+                if r and r[0] == 2 else None, self.aggiorna()))
+
+    def _imposta_manuale(self):
+        a, m, g = self.calendario.get_date()
+        valore = f"{a:04d}-{m + 1:02d}-{g:02d} {int(self.ore.get_value()):02d}:{int(self.minuti.get_value()):02d}"
+        in_sottofondo(lambda: come_amministratore("imposta-ora", valore), lambda _: self.aggiorna())
+
+    def aggiorna(self):
+        info = uscita(["timedatectl", "show"])
+        valori = dict(l.split("=", 1) for l in info.splitlines() if "=" in l)
+        ntp = valori.get("NTP") == "yes"
+        self.auto.imposta(ntp)
+        if valori.get("CanNTP") == "no":
+            self.riga_auto.imposta_sottotitolo("Servizio non installato: attivalo per installarlo")
+        else:
+            self.riga_auto.imposta_sottotitolo("Sincronizzata" if valori.get("NTPSynchronized") == "yes"
+                                               else ("In attesa di Internet…" if ntp else "Spenta"))
+        if not self.fuso.has_focus():
+            self.fuso.set_text(valori.get("Timezone", ""))
+        self.windows.imposta(valori.get("LocalRTC") == "yes")
+        self.manuale.set_sensitive(not ntp)
+        t = time.localtime()
+        self.calendario.select_month(t.tm_mon - 1, t.tm_year)
+        self.calendario.select_day(t.tm_mday)
+        self.ore.set_value(t.tm_hour)
+        self.minuti.set_value(t.tm_min)
+        self._etichetta_data()
+
+
+# ---------------------------------------------------------------------------
+# Scheda grafica
+# ---------------------------------------------------------------------------
+def schede_grafiche():
+    if DEMO:
+        return [("NVIDIA GeForce RTX 2060 Mobile", "nouveau"), ("Intel UHD Graphics 630", "i915")]
+    testo = uscita(["lspci", "-k"])
+    schede, attuale = [], None
+    for l in testo.splitlines():
+        if not l.startswith(("\t", " ")):
+            m = re.match(r"\S+ (VGA compatible controller|3D controller|Display controller): (.*)", l)
+            attuale = [m.group(2), ""] if m else None
+            if attuale:
+                schede.append(attuale)
+        elif attuale is not None and "Kernel driver in use:" in l:
+            attuale[1] = l.split(":", 1)[1].strip()
+    puliti = []
+    for nome, driver in schede:
+        nome = re.sub(r"\s*\(rev [0-9a-f]+\)", "", nome)
+        nome = re.sub(r"^(NVIDIA Corporation|Advanced Micro Devices, Inc\. \[AMD/ATI\]|Intel Corporation)\s*", "", nome)
+        marca = re.search(r"\[(.+?)\]", nome)
+        nome = marca.group(1) if marca else nome
+        if driver == "nouveau" or driver == "nvidia":
+            nome = "NVIDIA " + nome if "NVIDIA" not in nome else nome
+        elif driver == "i915" or driver == "xe":
+            nome = "Intel " + nome if "Intel" not in nome else nome
+        elif driver in ("amdgpu", "radeon"):
+            nome = "AMD " + nome if "AMD" not in nome and "Radeon" not in nome else nome
+        puliti.append((nome, driver))
+    return puliti
+
+
+DRIVER = {"nvidia": "NVIDIA ufficiale", "nouveau": "libero (nouveau)", "i915": "Intel", "xe": "Intel",
+          "amdgpu": "AMD", "radeon": "AMD (schede datate)", "": "nessuno"}
+
+
+def statistiche_gpu():
+    """Utilizzo, temperatura e memoria video per tipo di driver."""
+    stat = {}
+    if DEMO:
+        return {"nvidia": "Utilizzo 37% · 61 °C · Memoria video 2,1 / 6,0 GB",
+                "i915": "In uso per desktop e video"}
+    if esiste("nvidia-smi"):
+        r = uscita(["nvidia-smi", "--query-gpu=utilization.gpu,temperature.gpu,memory.used,memory.total",
+                    "--format=csv,noheader,nounits"], timeout=5)
+        try:
+            uso, temp, usata, totale = [x.strip() for x in r.splitlines()[0].split(",")]
+            stat["nvidia"] = (f"Utilizzo {uso}% · {temp} °C · Memoria video "
+                              f"{int(usata) / 1024:.1f} / {int(totale) / 1024:.1f} GB").replace(".", ",")
+        except (ValueError, IndexError):
+            pass
+    base = "/sys/class/drm"
+    for carta in sorted(os.listdir(base)) if os.path.isdir(base) else []:
+        if not re.fullmatch(r"card\d+", carta):
+            continue
+        dev = os.path.join(base, carta, "device")
+        driver = os.path.basename(os.path.realpath(os.path.join(dev, "driver")))
+        if driver == "amdgpu" and "amdgpu" not in stat:
+            parti = []
+            uso = leggi_file(os.path.join(dev, "gpu_busy_percent"))
+            if uso:
+                parti.append(f"Utilizzo {uso}%")
+            for h in sorted(os.listdir(os.path.join(dev, "hwmon"))) if os.path.isdir(os.path.join(dev, "hwmon")) else []:
+                t = leggi_file(os.path.join(dev, "hwmon", h, "temp1_input"))
+                if t:
+                    parti.append(f"{int(t) // 1000} °C")
+                    break
+            usata, totale = leggi_file(os.path.join(dev, "mem_info_vram_used")), leggi_file(os.path.join(dev, "mem_info_vram_total"))
+            if usata and totale:
+                parti.append(f"Memoria video {int(usata) / 2**30:.1f} / {int(totale) / 2**30:.1f} GB".replace(".", ","))
+            stat["amdgpu"] = " · ".join(parti)
+        elif driver in ("i915", "xe") and driver not in stat:
+            mhz = leggi_file(os.path.join(base, carta, "gt_cur_freq_mhz"))
+            stat[driver] = f"Attiva · {mhz} MHz" if mhz else "Attiva"
+        elif driver == "nouveau" and "nouveau" not in stat:
+            stat["nouveau"] = "Funziona, ma con prestazioni ridotte (driver libero)"
+    return stat
+
+
+def renderer(dedicata=False):
+    """Quale scheda disegna davvero le finestre (o i giochi, se dedicata=True)."""
+    if DEMO:
+        return "NVIDIA GeForce RTX 2060" if dedicata else "Intel UHD Graphics 630"
+    if not esiste("glxinfo"):
+        return ""
+    env = {"DRI_PRIME": "1", "__NV_PRIME_RENDER_OFFLOAD": "1", "__GLX_VENDOR_LIBRARY_NAME": "nvidia"} if dedicata else {}
+    if dedicata and not os.path.exists("/proc/driver/nvidia/version"):
+        env = {"DRI_PRIME": "1"}
+    codice, testo = esegui(["glxinfo", "-B"], timeout=8, env=env)
+    m = re.search(r"OpenGL renderer string: (.+)", testo) if codice == 0 else None
+    if not m:
+        return ""
+    nome = re.sub(r"\s*\(.*?\)|/PCIe/SSE2|Mesa ", "", m.group(1)).strip()
+    return nome
+
+
+class PaginaGrafica(Pagina):
+    nome, titolo, icona = "scheda-grafica", "Scheda grafica", "applications-games-symbolic"
+    parole = "scheda grafica gpu driver nvidia amd intel giochi fps overclock ventole vulkan temperatura"
+
+    def costruisci(self):
+        self.sottotitolo.set_text("Giochi, programmi Windows ed editor usano in automatico la scheda più potente.")
+        self.avviso = Gtk.Box(spacing=14)
+        self.avviso.get_style_context().add_class("avviso")
+        self.avviso.set_margin_top(14)
+        interno = Gtk.Box(spacing=14)
+        interno.set_border_width(16)
+        self.avviso_icona = Gtk.Image.new_from_icon_name("dialog-information-symbolic", Gtk.IconSize.DIALOG)
+        interno.pack_start(self.avviso_icona, False, False, 0)
+        testi = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        self.avviso_titolo = etichetta("", "riga-titolo")
+        self.avviso_testo = etichetta("", "riga-sottotitolo", wrap=True)
+        testi.pack_start(self.avviso_titolo, False, False, 0)
+        testi.pack_start(self.avviso_testo, False, False, 0)
+        interno.pack_start(testi, True, True, 0)
+        self.avviso_rotella = Gtk.Spinner()
+        interno.pack_end(self.avviso_rotella, False, False, 0)
+        self.avviso_pulsante = pulsante("Installa", self._azione_avviso, principale=True)
+        interno.pack_end(self.avviso_pulsante, False, False, 0)
+        self.avviso.pack_start(interno, True, True, 0)
+        self.avviso.set_no_show_all(True)
+        interno.show_all()
+        self.colonna.pack_start(self.avviso, False, False, 0)
+        self._azione = None
+
+        self.colonna.pack_start(etichetta("LE TUE SCHEDE", "etichetta-sezione"), False, False, 0)
+        self.schede = Riquadro()
+        self.colonna.pack_start(self.schede, False, False, 0)
+        self.righe_schede = []
+
+        r = self.sezione("Chi disegna cosa")
+        self.uso_desktop = etichetta("…", xalign=1)
+        self.uso_giochi = etichetta("…", xalign=1)
+        r.aggiungi(Riga("Desktop, finestre e video", "La scheda che consuma meno", self.uso_desktop))
+        r.aggiungi(Riga("Giochi, programmi Windows ed editor", "La scheda più potente", self.uso_giochi))
+
+        r = self.sezione("Controllo e prestazioni")
+        r.aggiungi(Riga("Gestione attività", "Utilizzo di processore, memoria e scheda grafica (Ctrl+Shift+Esc)",
+                        pulsante("Apri", lambda: avvia(["alba-gestione-attivita"]))))
+        self.riga_pannello = r.aggiungi(Riga("Pannello della scheda grafica", "Frequenze, ventole e consumi",
+                                             pulsante("Apri", self._pannello)))
+        self.fps = Interruttore(self._fps)
+        r.aggiungi(Riga("Mostra FPS e temperature nei giochi", "Un piccolo riquadro in alto a sinistra durante il gioco", self.fps))
+        r.aggiungi(Riga("Driver", "Controlla se c'è un driver migliore per la tua scheda",
+                        pulsante("Controlla", lambda: avvia(["alba-driver-grafici"]))))
+        self._timer = None
+
+    def _azione_avviso(self):
+        if self._azione == "riavvia":
+            if domanda(self.finestra, "Riavviare ora?", "Salva il tuo lavoro prima di continuare.", si="Riavvia"):
+                esegui(["systemctl", "reboot"])
+        else:
+            avvia(["alba-driver-grafici"])
+
+    def _mostra_avviso(self, titolo, testo, azione=None, etichetta_pulsante="Installa", in_corso=False):
+        self.avviso_titolo.set_text(titolo)
+        self.avviso_testo.set_text(testo)
+        self._azione = azione
+        self.avviso_pulsante.set_label(etichetta_pulsante)
+        self.avviso_pulsante.set_visible(azione is not None)
+        if in_corso:
+            self.avviso_rotella.start()
+        else:
+            self.avviso_rotella.stop()
+        self.avviso_rotella.set_visible(in_corso)
+        self.avviso.set_visible(True)
+
+    def _fps(self, attivo):
+        os.makedirs(CONF, exist_ok=True)
+        marca = os.path.join(CONF, "mangohud")
+        if attivo:
+            open(marca, "w").close()
+        elif os.path.exists(marca):
+            os.remove(marca)
+
+    def _pannello(self):
+        driver = {d for _, d in self.elenco}
+        if "nvidia" in driver:
+            if uscita(["flatpak", "info", "--user", "com.leinardi.gwe"]):
+                avvia(["flatpak", "run", "com.leinardi.gwe"])
+            elif domanda(self.finestra, "Installare GreenWithEnvy?",
+                         "È il pannello per regolare frequenze e ventole delle schede NVIDIA (simile a MSI Afterburner). "
+                         "Si scarica da Flathub.", si="Installa"):
+                def installa():
+                    esegui(["flatpak", "remote-add", "--user", "--if-not-exists", "flathub",
+                            "https://dl.flathub.org/repo/flathub.flatpakrepo"], timeout=60)
+                    return esegui(["flatpak", "install", "--user", "-y", "--noninteractive", "flathub", "com.leinardi.gwe"], timeout=900)
+                in_sottofondo(installa, lambda r: avvia(["flatpak", "run", "com.leinardi.gwe"]) if r and r[0] == 0 else
+                              messaggio(self.finestra, "Installazione non riuscita", "Controlla la connessione e riprova."))
+            return
+        if "amdgpu" in driver:
+            if not avvia(["corectrl"]):
+                in_sottofondo(lambda: come_amministratore("installa", "corectrl"), lambda _: avvia(["corectrl"]))
+            return
+        if "nouveau" in driver:
+            messaggio(self.finestra, "Prima serve il driver NVIDIA ufficiale",
+                      "Il pannello di controllo funziona con il driver ufficiale. Alba lo installa da sola quando sei "
+                      "connesso a Internet, oppure premi «Controlla» nella riga Driver.")
+            return
+        messaggio(self.finestra, "Nessun pannello necessario",
+                  "La tua scheda grafica si regola da sola: non ci sono impostazioni da cambiare.")
+
+    def aggiorna(self):
+        self.elenco = schede_grafiche()
+        self.schede.svuota()
+        self.righe_schede = []
+        if not self.elenco:
+            self.schede.aggiungi(Riga("Nessuna scheda grafica rilevata"))
+        for nome, driver in self.elenco:
+            riga = self.schede.aggiungi(Riga(nome, f"Driver: {DRIVER.get(driver, driver)}", icona="video-display"))
+            self.righe_schede.append((riga, driver))
+        self.schede.show_all()
+        self.fps.imposta(os.path.exists(os.path.join(CONF, "mangohud")))
+
+        nouveau = any(d == "nouveau" for _, d in self.elenco)
+        nvidia_attivo = any(d == "nvidia" for _, d in self.elenco)
+        in_corso = uscita(["systemctl", "is-active", "alba-driver-auto"]) == "active"
+        if os.path.exists("/var/lib/alba/driver-riavvio") and not nvidia_attivo and (nouveau or DEMO):
+            self._mostra_avviso("Driver NVIDIA installato", "Riavvia il computer per attivarlo: giochi e app "
+                                "useranno la scheda al massimo delle prestazioni.", "riavvia", "Riavvia")
+        elif os.path.exists("/var/lib/alba/driver-secure-boot") and nouveau:
+            self._mostra_avviso("Driver NVIDIA ufficiale consigliato", "Il tuo computer ha il Secure Boot attivo: "
+                                "l'installazione richiede una conferma al riavvio. Premi Installa e segui le istruzioni.",
+                                "installa")
+        elif in_corso and nouveau:
+            self._mostra_avviso("Sto installando il driver NVIDIA ufficiale…", "Succede da solo in sottofondo, "
+                                "puoi continuare a usare il computer. Ti avviso quando serve il riavvio.", in_corso=True)
+        elif nouveau or (DEMO and not nvidia_attivo):
+            self._mostra_avviso("Installa il driver NVIDIA ufficiale", "La scheda ora usa il driver libero, più lento: "
+                                "i giochi Vulkan possono bloccarsi sugli shader. Con il driver ufficiale vanno molto più "
+                                "veloci. Serve Internet e un riavvio.", "installa")
+        else:
+            self.avviso.set_visible(False)
+
+        in_sottofondo(lambda: (renderer(False), renderer(True)), self._mostra_renderer)
+        self._monitor()
+        if self._timer is None:
+            self._timer = GLib.timeout_add_seconds(2, self._monitor)
+
+    def _mostra_renderer(self, r):
+        desktop, giochi = r or ("", "")
+        self.uso_desktop.set_text(desktop or "—")
+        self.uso_giochi.set_text((giochi + "  ✓") if giochi else "—")
+
+    def _monitor(self):
+        if not self.get_mapped():
+            self._timer = None
+            return False
+        stat = statistiche_gpu()
+        for riga, driver in self.righe_schede:
+            dettaglio = stat.get(driver)
+            base = f"Driver: {DRIVER.get(driver, driver)}"
+            riga.imposta_sottotitolo(f"{base}\n{dettaglio}" if dettaglio else base)
+        return True
+
+
+# ---------------------------------------------------------------------------
+# Sicurezza
+# ---------------------------------------------------------------------------
+class PaginaSicurezza(Pagina):
+    nome, titolo, icona = "sicurezza", "Sicurezza", "security-high-symbolic"
+    parole = "sicurezza firewall antivirus virus protezione privacy exe"
+
+    def costruisci(self):
+        self.sottotitolo.set_text("Alba è protetta già di serie. Qui puoi controllare tutto a colpo d'occhio.")
+        r = self.sezione()
+        self.firewall = Interruttore(lambda v: in_sottofondo(lambda: come_amministratore("firewall", "on" if v else "off"),
+                                                             lambda _: self.aggiorna()))
+        self.riga_firewall = r.aggiungi(Riga("Firewall", "Blocca le connessioni non richieste da Internet", self.firewall,
+                                             icona="security-high"))
+        self.riga_agg = r.aggiungi(Riga("Aggiornamenti di sicurezza automatici", "", icona="system-software-update"))
+        self.riga_av = r.aggiungi(Riga("Antivirus", "", pulsante("Controlla un file…", self._controlla), icona="security-medium"))
+        r = self.sezione("Programmi Windows")
+        r.aggiungi(Riga("Controllo dei file .exe",
+                        "La prima volta che apri un programma Windows, Alba ti mostra da dove arriva e ti propone un controllo antivirus",
+                        pulsante("Azzera", self._azzera)))
+
+    def _controlla(self):
+        d = Gtk.FileChooserDialog(title="Scegli il file da controllare", transient_for=self.finestra,
+                                  action=Gtk.FileChooserAction.OPEN)
+        d.add_buttons("Annulla", Gtk.ResponseType.CANCEL, "Controlla", Gtk.ResponseType.ACCEPT)
+        file = d.get_filename() if d.run() == Gtk.ResponseType.ACCEPT else None
+        d.destroy()
+        if not file:
+            return
+        self.riga_av.imposta_sottotitolo("Controllo in corso…")
+
+        def fatto(r):
+            codice, testo = r or (2, "")
+            if codice == 0:
+                messaggio(self.finestra, "Nessuna minaccia trovata", os.path.basename(file))
+            elif codice == 1:
+                messaggio(self.finestra, "Attenzione: minaccia trovata!",
+                          "Ti consigliamo di eliminare il file.\n\n" + testo[-300:], Gtk.MessageType.WARNING)
+            else:
+                messaggio(self.finestra, "Controllo non riuscito",
+                          "Le firme antivirus potrebbero non essere ancora scaricate. Riprova tra qualche minuto.")
+            self.aggiorna()
+        in_sottofondo(lambda: esegui(["clamscan", "--no-summary", file], timeout=None), fatto)
+
+    def _azzera(self):
+        f = os.path.join(CONF, "exe-fidati")
+        if os.path.exists(f):
+            os.remove(f)
+        messaggio(self.finestra, "Fatto", "Alba ti chiederà di nuovo conferma per ogni programma Windows.")
+
+    def aggiorna(self):
+        acceso = "ENABLED=yes" in leggi_file("/etc/ufw/ufw.conf")
+        self.firewall.imposta(acceso)
+        self.firewall.set_sensitive(os.path.exists("/etc/ufw/ufw.conf"))
+        self.riga_firewall.imposta_sottotitolo("Attivo: blocca le connessioni non richieste da Internet" if acceso
+                                               else "Spento: ti consigliamo di attivarlo")
+        auto = '"1"' in leggi_file("/etc/apt/apt.conf.d/20auto-upgrades")
+        self.riga_agg.imposta_sottotitolo("Attivi: si installano da soli ogni giorno" if auto else "Spenti")
+        if esiste("clamscan"):
+            attivo = uscita(["systemctl", "is-active", "clamav-freshclam"]) == "active"
+            self.riga_av.imposta_sottotitolo("Firme aggiornate in automatico" if attivo else "Disponibile su richiesta")
+        else:
+            self.riga_av.imposta_sottotitolo("Non installato")
+
+
+# ---------------------------------------------------------------------------
+# Aggiornamenti
+# ---------------------------------------------------------------------------
+def versione_alba():
+    v = uscita(["dpkg-query", "-W", "-f=${Version}", "alba-sistema"])
+    return v or leggi_file("/usr/share/alba/versione", "1.0")
+
+
+class PaginaAggiornamenti(Pagina):
+    nome, titolo, icona = "aggiornamenti", "Aggiornamenti", "software-update-available-symbolic"
+    parole = "aggiornamenti aggiorna versione novità sistema"
+
+    def costruisci(self):
+        self.sottotitolo.set_text("Le novità di Alba e dei tuoi programmi arrivano qui, senza reinstallare niente.")
+        r = self.sezione()
+        alto = Gtk.Box(spacing=16)
+        alto.set_border_width(18)
+        self.icona_stato = Gtk.Image.new_from_icon_name("emblem-ok-symbolic", Gtk.IconSize.DIALOG)
+        alto.pack_start(self.icona_stato, False, False, 0)
+        testi = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
+        testi.set_valign(Gtk.Align.CENTER)
+        self.stato = etichetta("Alba", "riga-titolo")
+        self.dettaglio = etichetta("", "riga-sottotitolo", wrap=True)
+        testi.pack_start(self.stato, False, False, 0)
+        testi.pack_start(self.dettaglio, False, False, 0)
+        alto.pack_start(testi, True, True, 0)
+        self.rotella = Gtk.Spinner()
+        alto.pack_start(self.rotella, False, False, 0)
+        self.azione = pulsante("Controlla", self._controlla, principale=True)
+        alto.pack_start(self.azione, False, False, 0)
+        r.aggiungi(alto)
+        self.elenco = Gtk.Expander(label="Mostra cosa verrà aggiornato")
+        self.elenco_testo = etichetta("", "riga-sottotitolo", wrap=True, selezionabile=True)
+        self.elenco.add(self.elenco_testo)
+        self.elenco.set_margin_start(18)
+        self.elenco.set_margin_end(18)
+        self.elenco.set_margin_bottom(14)
+        self.elenco.set_no_show_all(True)
+        self.elenco_testo.show()
+        r.pack_start(self.elenco, False, False, 0)
+
+        r = self.sezione()
+        r.aggiungi(Riga("Aggiornamenti automatici", "Quelli di sicurezza si installano da soli ogni giorno. "
+                        "Per gli altri ricevi una notifica.", icona="emblem-default"))
+        self.riga_driver = r.aggiungi(Riga("Driver della scheda grafica", "", pulsante(
+            "Dettagli", lambda: self.finestra.vai("scheda-grafica")), icona="video-display"))
+        self._da_installare = []
+
+    def aggiorna(self):
+        self.stato.set_text(f"Alba {versione_alba()}")
+        schede = schede_grafiche()
+        nvidia = [n for n, d in schede if d in ("nvidia", "nouveau")]
+        if any(d == "nvidia" for _, d in schede):
+            self.riga_driver.imposta_sottotitolo("Driver NVIDIA ufficiale attivo e aggiornato in automatico ✓")
+        elif nvidia:
+            self.riga_driver.imposta_sottotitolo(f"{nvidia[0]}: il driver ufficiale viene installato in automatico "
+                                                 "con gli aggiornamenti")
+        else:
+            self.riga_driver.imposta_sottotitolo("Già incluso nel sistema e aggiornato in automatico ✓")
+        if not self._da_installare:
+            self.dettaglio.set_text("Premi «Controlla» per cercare aggiornamenti.")
+            in_sottofondo(self._leggi_elenco, self._mostra_elenco)
+
+    @staticmethod
+    def _leggi_elenco():
+        righe = uscita(["apt", "list", "--upgradable"], timeout=30).splitlines()
+        return [l.split("/")[0] for l in righe if "upgradable" in l]
+
+    def _mostra_elenco(self, pacchetti):
+        self.rotella.stop()
+        self._da_installare = pacchetti or []
+        n = len(self._da_installare)
+        if n:
+            self.icona_stato.set_from_icon_name("software-update-available", Gtk.IconSize.DIALOG)
+            self.dettaglio.set_text(f"{n} aggiornament{'o' if n == 1 else 'i'} pront{'o' if n == 1 else 'i'} da installare.")
+            self.azione.set_label("Installa ora")
+            self.elenco_testo.set_text(", ".join(self._da_installare))
+            self.elenco.show()
+        else:
+            self.icona_stato.set_from_icon_name("emblem-ok-symbolic", Gtk.IconSize.DIALOG)
+            self.dettaglio.set_text("Il sistema è aggiornato.")
+            self.azione.set_label("Controlla")
+            self.elenco.hide()
+        self.azione.set_sensitive(True)
+
+    def _controlla(self):
+        if self._da_installare:
+            return self._installa()
+        self.azione.set_sensitive(False)
+        self.rotella.start()
+        self.dettaglio.set_text("Sto cercando aggiornamenti…")
+        in_sottofondo(lambda: (come_amministratore("aggiorna-lista"), self._leggi_elenco())[1], self._mostra_elenco)
+
+    def _installa(self):
+        self.azione.set_sensitive(False)
+        self.rotella.start()
+        self.dettaglio.set_text("Installazione in corso… puoi continuare a usare il computer.")
+        kernel = any(p.startswith("linux-image") for p in self._da_installare)
+        alba = "alba-sistema" in self._da_installare
+
+        def lavoro():
+            r = come_amministratore("aggiorna-installa")
+            esegui(["flatpak", "update", "--user", "-y", "--noninteractive"], timeout=600)
+            if r[0] == 0 and alba:
+                esegui(["/usr/bin/alba-applica-aspetto", "--se-serve"], timeout=60)
+            return r
+
+        def fatto(r):
+            self.rotella.stop()
+            self._da_installare = []
+            if r and r[0] == 0:
+                if kernel and domanda(self.finestra, "Aggiornamento completato",
+                                      "Riavvia il computer per completare l'aggiornamento.", si="Riavvia ora", no="Più tardi"):
+                    esegui(["systemctl", "reboot"])
+            else:
+                messaggio(self.finestra, "Aggiornamento non completato",
+                          "Controlla la connessione a Internet e riprova.", Gtk.MessageType.WARNING)
+            self.aggiorna()
+        in_sottofondo(lavoro, fatto)
+
+
+# ---------------------------------------------------------------------------
+# Informazioni
+# ---------------------------------------------------------------------------
+class PaginaInfo(Pagina):
+    nome, titolo, icona = "info", "Informazioni", "help-about-symbolic"
+    parole = "informazioni computer processore memoria ram disco spazio versione modello"
+
+    def costruisci(self):
+        self.sottotitolo.set_text("Il tuo computer in breve.")
+        r = self.sezione()
+        alto = Gtk.Box(spacing=18)
+        alto.set_border_width(18)
+        if os.path.exists("/usr/share/alba/logo.png"):
+            alto.pack_start(Gtk.Image.new_from_pixbuf(
+                GdkPixbuf.Pixbuf.new_from_file_at_size("/usr/share/alba/logo.png", 72, 72)), False, False, 0)
+        testi = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        testi.set_valign(Gtk.Align.CENTER)
+        testi.pack_start(etichetta("Alba Linux", "numero-medio"), False, False, 0)
+        self.versione = etichetta("", "riga-sottotitolo")
+        testi.pack_start(self.versione, False, False, 0)
+        alto.pack_start(testi, True, True, 0)
+        r.aggiungi(alto)
+        r = self.sezione()
+        self.righe = {}
+        for chiave, titolo in (("nome", "Nome del computer"), ("modello", "Modello"), ("cpu", "Processore"),
+                               ("ram", "Memoria (RAM)"), ("gpu", "Scheda grafica")):
+            self.righe[chiave] = etichetta("", xalign=1, selezionabile=True)
+            self.righe[chiave].set_ellipsize(Pango.EllipsizeMode.END)
+            self.righe[chiave].set_max_width_chars(36)
+            r.aggiungi(Riga(titolo, None, self.righe[chiave]))
+        self.spazio = Gtk.LevelBar()
+        self.spazio.set_size_request(220, -1)
+        self.riga_spazio = r.aggiungi(Riga("Spazio su disco", "", self.spazio))
+        avanzate = pulsante("Impostazioni avanzate…", lambda: avvia(["xfce4-settings-manager"]))
+        avanzate.set_halign(Gtk.Align.START)
+        avanzate.set_margin_top(12)
+        self.colonna.pack_start(avanzate, False, False, 0)
+
+    def aggiorna(self):
+        self.versione.set_text(f"Versione {versione_alba()} · basata su Debian 13")
+        self.righe["nome"].set_text(os.uname().nodename)
+        produttore = leggi_file("/sys/devices/virtual/dmi/id/sys_vendor")
+        modello = leggi_file("/sys/devices/virtual/dmi/id/product_name")
+        produttore = re.sub(r"Micro-Star International Co\., Ltd\.?", "MSI", produttore)
+        self.righe["modello"].set_text(f"{produttore} {modello}".strip() or "—")
+        cpu = re.search(r"model name\s*:\s*(.+)", leggi_file("/proc/cpuinfo"))
+        self.righe["cpu"].set_text(re.sub(r"\((R|TM)\)|CPU|@.*", "", cpu.group(1)).strip() if cpu else "—")
+        mem = re.search(r"MemTotal:\s+(\d+)", leggi_file("/proc/meminfo"))
+        self.righe["ram"].set_text(f"{round(int(mem.group(1)) / 1048576)} GB" if mem else "—")
+        self.righe["gpu"].set_text(" + ".join(n for n, _ in schede_grafiche()) or "—")
+        u = shutil.disk_usage("/")
+        self.spazio.set_value(u.used / u.total)
+        self.riga_spazio.imposta_sottotitolo(f"{u.free / 1e9:.0f} GB liberi su {u.total / 1e9:.0f} GB")
+
+
+# ---------------------------------------------------------------------------
+# Finestra principale
+# ---------------------------------------------------------------------------
+PAGINE = [PaginaWifi, PaginaBluetooth, None, PaginaSchermo, PaginaSuono, PaginaBatteria, None,
+          PaginaAspetto, PaginaDataOra, PaginaGrafica, None, PaginaSicurezza, PaginaAggiornamenti, PaginaInfo]
+
+
+class Impostazioni(Gtk.Window):
+    def __init__(self, pagina_iniziale=None):
+        super().__init__(title="Impostazioni")
+        self.set_default_size(1000, 680)
+        self.set_position(Gtk.WindowPosition.CENTER)
+        self.set_icon_name("preferences-system")
+        stile = Gtk.CssProvider()
+        stile.load_from_data(CSS)
+        Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(), stile,
+                                                 Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        corpo = Gtk.Box()
+        self.add(corpo)
+
+        laterale = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        laterale.get_style_context().add_class("barra-laterale")
+        laterale.set_size_request(250, -1)
+        self.cerca = Gtk.SearchEntry(placeholder_text="Cerca")
+        self.cerca.get_style_context().add_class("cerca")
+        self.cerca.connect("search-changed", lambda *_: self.lista.invalidate_filter())
+        laterale.pack_start(self.cerca, False, False, 0)
+        scorri = Gtk.ScrolledWindow()
+        scorri.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self.lista = Gtk.ListBox()
+        self.lista.set_selection_mode(Gtk.SelectionMode.SINGLE)
+        self.lista.set_filter_func(self._filtro)
+        self.lista.set_header_func(self._intestazione)
+        scorri.add(self.lista)
+        laterale.pack_start(scorri, True, True, 0)
+        corpo.pack_start(laterale, False, False, 0)
+        corpo.pack_start(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL), False, False, 0)
+
+        self.pila = Gtk.Stack()
+        self.pila.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
+        self.pila.set_transition_duration(120)
+        corpo.pack_start(self.pila, True, True, 0)
+
+        self.pagine = {}
+        gruppo = 0
+        for classe in PAGINE:
+            if classe is None:
+                gruppo += 1
+                continue
+            p = classe(self)
+            self.pagine[p.nome] = p
+            self.pila.add_named(p, p.nome)
+            riga = Gtk.ListBoxRow()
+            riga.nome, riga.parole, riga.gruppo = p.nome, f"{p.titolo} {p.parole}".lower(), gruppo
+            box = Gtk.Box(spacing=12)
+            quadrato = Gtk.Box()
+            quadrato.get_style_context().add_class("icona-quadrata")
+            sfondo = Gtk.CssProvider()
+            sfondo.load_from_data(f".icona-quadrata {{ background-color: {COLORI.get(p.nome, '#8e8e93')}; }}".encode())
+            quadrato.get_style_context().add_provider(sfondo, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION + 1)
+            quadrato.pack_start(Gtk.Image.new_from_icon_name(p.icona, Gtk.IconSize.MENU), False, False, 0)
+            box.pack_start(quadrato, False, False, 0)
+            box.pack_start(etichetta(p.titolo, "voce-laterale"), True, True, 0)
+            riga.add(box)
+            self.lista.add(riga)
+        self.lista.connect("row-selected", self._scelta)
+        self.show_all()
+        iniziale = pagina_iniziale if pagina_iniziale in self.pagine else "wifi"
+        for riga in self.lista.get_children():
+            if riga.nome == iniziale:
+                self.lista.select_row(riga)
+
+    def vai(self, nome):
+        for riga in self.lista.get_children():
+            if riga.nome == nome:
+                self.lista.select_row(riga)
+
+    def _filtro(self, riga):
+        testo = self.cerca.get_text().strip().lower()
+        return not testo or all(parola in riga.parole for parola in testo.split())
+
+    @staticmethod
+    def _intestazione(riga, prima):
+        if prima is not None and prima.gruppo != riga.gruppo:
+            s = Gtk.Box()
+            s.set_size_request(-1, 12)
+            riga.set_header(s)
+        else:
+            riga.set_header(None)
+
+    def _scelta(self, lista, riga):
+        if riga is None:
+            return
+        self.pila.set_visible_child_name(riga.nome)
+        try:
+            self.pagine[riga.nome].aggiorna()
+        except Exception as ex:  # noqa: BLE001
+            ERRORI.append(f"{riga.nome}: {ex!r}")
+            if not AUTOTEST:
+                raise
+
+
+AUTOTEST = "--autotest" in sys.argv
+
+
+def main():
+    pagina = None
+    if "--pagina" in sys.argv:
+        i = sys.argv.index("--pagina")
+        pagina = sys.argv[i + 1] if i + 1 < len(sys.argv) else None
+    finestra = Impostazioni(pagina)
+    finestra.connect("destroy", Gtk.main_quit)
+    if AUTOTEST:
+        def prova():
+            for riga in finestra.lista.get_children():
+                finestra.lista.select_row(riga)
+                while Gtk.events_pending():
+                    Gtk.main_iteration()
+            GLib.timeout_add(2500, lambda: (Gtk.main_quit(), False)[1])
+            return False
+        GLib.idle_add(prova)
+    Gtk.main()
+    if AUTOTEST:
+        if ERRORI:
+            print("ERRORI:\n" + "\n".join(ERRORI))
+            sys.exit(1)
+        print("AUTOTEST OK: tutte le pagine si aprono senza errori")
+
+
+if __name__ == "__main__":
+    def gestore(tipo, valore, traccia):
+        import traceback
+        ERRORI.append("".join(traceback.format_exception(tipo, valore, traccia)))
+        sys.__excepthook__(tipo, valore, traccia)
+    sys.excepthook = gestore
+    main()

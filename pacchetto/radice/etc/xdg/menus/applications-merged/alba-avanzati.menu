@@ -1,0 +1,17 @@
+<!DOCTYPE Menu PUBLIC "-//freedesktop//DTD Menu 1.0//EN"
+ "http://www.freedesktop.org/standards/menu-spec/menu-1.0.dtd">
+<Menu>
+  <Name>Xfce</Name>
+  <Menu>
+    <Name>Strumenti avanzati</Name>
+    <Directory>alba-avanzati.directory</Directory>
+    <Include>
+      <Category>X-Alba-Avanzati</Category>
+    </Include>
+  </Menu>
+  <Layout>
+    <Merge type="menus"/>
+    <Merge type="files"/>
+    <Menuname>Strumenti avanzati</Menuname>
+  </Layout>
+</Menu>

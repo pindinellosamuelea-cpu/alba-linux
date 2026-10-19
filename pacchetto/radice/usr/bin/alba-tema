@@ -1,0 +1,39 @@
+#!/bin/bash
+# Alba Linux - passa dal tema chiaro a quello scuro (e viceversa).
+# Uso: alba-tema chiaro|scuro
+set -u
+. /usr/share/alba/tema.conf 2>/dev/null
+CONF="${XDG_CONFIG_HOME:-$HOME/.config}/alba"
+mkdir -p "$CONF"
+
+esiste() { [ -d "/usr/share/themes/$1/gtk-3.0" ] || [ -d "$HOME/.themes/$1/gtk-3.0" ]; }
+
+case "${1:-}" in
+  scuro)  T="${TEMA_SCURO:-}";  RISERVA="Materia-dark Arc-Dark Adwaita-dark"; ICONE="Papirus-Dark"; SCURO=true;  SCHEMA=prefer-dark ;;
+  chiaro) T="${TEMA_CHIARO:-}"; RISERVA="Materia-light Arc Adwaita";          ICONE="Papirus";      SCURO=false; SCHEMA=prefer-light ;;
+  *) echo "Uso: alba-tema chiaro|scuro"; exit 1 ;;
+esac
+if [ -z "$T" ] || ! esiste "$T"; then
+  for r in $RISERVA; do esiste "$r" && { T="$r"; break; }; done
+fi
+
+imposta() { xfconf-query -c "$1" -p "$2" -n -t "$3" -s "$4" 2>/dev/null || xfconf-query -c "$1" -p "$2" -s "$4" 2>/dev/null; }
+
+imposta xsettings /Net/ThemeName string "$T"
+imposta xsettings /Net/IconThemeName string "$ICONE"
+imposta xfce4-panel /panels/dark-mode bool "$SCURO"
+if [ -d "/usr/share/themes/$T/xfwm4" ]; then
+  imposta xfwm4 /general/theme string "$T"
+elif [ "$SCURO" = true ] && [ -d /usr/share/themes/Arc-Dark/xfwm4 ]; then
+  imposta xfwm4 /general/theme string Arc-Dark
+elif [ -d /usr/share/themes/Arc/xfwm4 ]; then
+  imposta xfwm4 /general/theme string Arc
+fi
+
+# App moderne (GTK4, es. Negozio di app)
+if command -v gsettings >/dev/null 2>&1; then
+  gsettings set org.gnome.desktop.interface color-scheme "$SCHEMA" 2>/dev/null
+  gsettings set org.gnome.desktop.interface gtk-theme "$T" 2>/dev/null
+  gsettings set org.gnome.desktop.interface icon-theme "$ICONE" 2>/dev/null
+fi
+echo "$1" > "$CONF/tema"

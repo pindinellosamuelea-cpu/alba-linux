@@ -23,6 +23,8 @@ xserver-xorg-video-all
 xserver-xorg-input-all
 mesa-vulkan-drivers
 vulkan-tools
+mesa-utils
+mokutil
 nvidia-detect
 attr
 

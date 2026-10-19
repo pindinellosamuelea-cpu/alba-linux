@@ -9,7 +9,7 @@ import random
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
-BASE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "config", "includes.chroot")
+BASE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "pacchetto", "radice")
 W, H = 2560, 1440
 random.seed(7)
 
@@ -30,10 +30,27 @@ def gradiente(stops, t):
     return stops[-1][1]
 
 
-def sfondo():
+TEMI = {
+    # alba: il crepuscolo viola e arancio (predefinito)
+    "alba": dict(cielo=["#0b0f29", "#1c1a46", "#4a2c5e", "#b4506a", "#ff9a5a"], stelle=260,
+                 alone=(255, 130, 70), sole=["#ffe08a", "#ffa055", "#ff6a4a"],
+                 colline=["#5a2f58", "#3a2148", "#221636", "#130e24"]),
+    # giorno: cielo chiaro e pastello
+    "giorno": dict(cielo=["#7fb2ff", "#a9c8ff", "#d8d6f5", "#ffd3bd", "#ffc49a"], stelle=0,
+                   alone=(120, 70, 30), sole=["#fff6d6", "#ffe0a3", "#ffc37a"],
+                   colline=["#b9a3d9", "#9a86c7", "#7a67ad", "#5b4a8f"]),
+    # notte: blu profondo, solo una luce all'orizzonte
+    "notte": dict(cielo=["#03040c", "#070a1e", "#0e1433", "#1b2150", "#2b2c6b"], stelle=520,
+                  alone=(60, 70, 160), sole=["#d9e2ff", "#a7b6ff", "#7f8fff"],
+                  colline=["#1a1d45", "#121534", "#0b0d24", "#05060f"]),
+}
+
+
+def sfondo(nome="alba"):
+    tema = TEMI[nome]
     orizzonte = int(H * 0.66)
-    cielo = [(0.0, hexrgb("#0b0f29")), (0.35, hexrgb("#1c1a46")), (0.62, hexrgb("#4a2c5e")),
-             (0.85, hexrgb("#b4506a")), (1.0, hexrgb("#ff9a5a"))]
+    passi = [0.0, 0.35, 0.62, 0.85, 1.0]
+    cielo = [(p, hexrgb(c)) for p, c in zip(passi, tema["cielo"])]
     img = Image.new("RGB", (W, H))
     px = img.load()
     for y in range(H):
@@ -46,7 +63,7 @@ def sfondo():
 
     # stelle
     d = ImageDraw.Draw(img)
-    for _ in range(260):
+    for _ in range(tema["stelle"]):
         x, y = random.randrange(W), random.randrange(int(H * 0.45))
         a = random.uniform(0.25, 1.0) * (1 - y / (H * 0.45))
         r = random.choice([1, 1, 1, 2])
@@ -61,7 +78,7 @@ def sfondo():
         r = int(18 * i)
         k = (1 - i / 60) ** 2.2
         da.ellipse([cx - r * 1.6, cy - r, cx + r * 1.6, cy + r],
-                   fill=tuple(int(v * k) for v in (255, 130, 70)))
+                   fill=tuple(int(v * k) for v in tema["alone"]))
     alone = alone.filter(ImageFilter.GaussianBlur(60))
     img = add(img, alone)
 
@@ -71,17 +88,17 @@ def sfondo():
     R = 170
     for y in range(cy - R, cy + 1):
         t = (y - (cy - R)) / R
-        c = gradiente([(0, hexrgb("#ffe08a")), (0.6, hexrgb("#ffa055")), (1, hexrgb("#ff6a4a"))], t)
+        c = gradiente([(0, hexrgb(tema["sole"][0])), (0.6, hexrgb(tema["sole"][1])), (1, hexrgb(tema["sole"][2]))], t)
         half = math.sqrt(max(R * R - (cy - y) ** 2, 0))
         ds.line([(cx - half, y), (cx + half, y)], fill=tuple(int(v) for v in c) + (255,))
     img = Image.alpha_composite(img.convert("RGBA"), sole)
 
     # colline a strati
     strati = [
-        (orizzonte - 10, 70, 0.0021, 1.3, "#5a2f58"),
-        (orizzonte + 40, 90, 0.0016, 4.1, "#3a2148"),
-        (orizzonte + 120, 110, 0.0012, 2.2, "#221636"),
-        (orizzonte + 230, 90, 0.0019, 5.5, "#130e24"),
+        (orizzonte - 10, 70, 0.0021, 1.3, tema["colline"][0]),
+        (orizzonte + 40, 90, 0.0016, 4.1, tema["colline"][1]),
+        (orizzonte + 120, 110, 0.0012, 2.2, tema["colline"][2]),
+        (orizzonte + 230, 90, 0.0019, 5.5, tema["colline"][3]),
     ]
     for base_y, amp, freq, fase, col in strati:
         strato = Image.new("RGBA", (W, H), (0, 0, 0, 0))
@@ -95,11 +112,6 @@ def sfondo():
         strato = strato.filter(ImageFilter.GaussianBlur(1.2))
         img = Image.alpha_composite(img, strato)
 
-    # riflesso del sole sul primo strato (linee come nel logo)
-    dr = ImageDraw.Draw(img)
-    for i, (w, a) in enumerate([(300, 120), (190, 90), (100, 60)]):
-        y = orizzonte + 26 + i * 26
-        dr.rounded_rectangle([cx - w, y, cx + w, y + 7], radius=4, fill=(255, 150, 90, a))
     return img.convert("RGB")
 
 
@@ -161,7 +173,16 @@ def logo_avvio():
 if __name__ == "__main__":
     os.makedirs(os.path.join(BASE, "usr/share/backgrounds/alba"), exist_ok=True)
     os.makedirs(os.path.join(BASE, "usr/share/alba"), exist_ok=True)
-    sfondo().save(os.path.join(BASE, "usr/share/backgrounds/alba/alba.png"), optimize=True)
+    for nome in TEMI:
+        sfondo(nome).save(os.path.join(BASE, f"usr/share/backgrounds/alba/{nome}.png"), optimize=True)
     logo(256).save(os.path.join(BASE, "usr/share/alba/logo.png"))
     logo_avvio().save(os.path.join(BASE, "usr/share/alba/logo-avvio.png"))
+    # Schermata di avvio
+    temi_avvio = os.path.join(BASE, "usr/share/plymouth/themes/alba")
+    os.makedirs(temi_avvio, exist_ok=True)
+    logo_avvio().save(os.path.join(temi_avvio, "logo.png"))
+    n = 14 * 4
+    p = Image.new("RGBA", (n, n), (0, 0, 0, 0))
+    ImageDraw.Draw(p).ellipse([0, 0, n - 1, n - 1], fill=hexrgb("#ff8a4c") + (255,))
+    p.resize((14, 14), Image.LANCZOS).save(os.path.join(temi_avvio, "punto.png"))
     print("Grafica generata.")

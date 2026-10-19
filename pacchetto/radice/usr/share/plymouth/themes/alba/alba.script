@@ -1,0 +1,64 @@
+# Alba Linux - schermata di avvio
+# Sfondo notturno, logo al centro e cinque punti che "respirano" sotto.
+
+Window.SetBackgroundTopColor(0.043, 0.059, 0.161);
+Window.SetBackgroundBottomColor(0.114, 0.090, 0.231);
+
+cx = Window.GetX() + Window.GetWidth() / 2;
+cy = Window.GetY() + Window.GetHeight() / 2;
+
+logo.image = Image("logo.png");
+logo.sprite = Sprite(logo.image);
+logo.sprite.SetX(cx - logo.image.GetWidth() / 2);
+logo.sprite.SetY(cy - logo.image.GetHeight() / 2 - 30);
+logo.sprite.SetZ(10);
+
+punto.image = Image("punto.png");
+spazio = 26;
+base_y = cy + logo.image.GetHeight() / 2 + 20;
+for (i = 0; i < 5; i++) {
+  punti[i] = Sprite(punto.image);
+  punti[i].SetX(cx + (i - 2) * spazio - punto.image.GetWidth() / 2);
+  punti[i].SetY(base_y);
+  punti[i].SetZ(10);
+  punti[i].SetOpacity(0.25);
+}
+
+tempo = 0;
+fun aggiorna() {
+  tempo++;
+  for (i = 0; i < 5; i++) {
+    o = 0.5 + 0.5 * Math.Sin(tempo * 0.09 - i * 0.8);
+    punti[i].SetOpacity(0.2 + 0.8 * o * o);
+  }
+}
+Plymouth.SetRefreshFunction(aggiorna);
+
+# --- Richiesta password (es. disco cifrato) -------------------------------
+messaggio.sprite = Sprite();
+messaggio.sprite.SetZ(20);
+
+fun mostra_password(prompt, simboli) {
+  testo = prompt + "  ";
+  for (i = 0; i < simboli; i++) testo = testo + "•";
+  img = Image.Text(testo, 1, 0.94, 0.9);
+  messaggio.sprite.SetImage(img);
+  messaggio.sprite.SetX(cx - img.GetWidth() / 2);
+  messaggio.sprite.SetY(base_y + 50);
+  messaggio.sprite.SetOpacity(1);
+}
+Plymouth.SetDisplayPasswordFunction(mostra_password);
+
+fun nascondi_messaggio() {
+  messaggio.sprite.SetOpacity(0);
+}
+Plymouth.SetDisplayNormalFunction(nascondi_messaggio);
+
+fun mostra_messaggio(testo) {
+  img = Image.Text(testo, 1, 0.94, 0.9);
+  messaggio.sprite.SetImage(img);
+  messaggio.sprite.SetX(cx - img.GetWidth() / 2);
+  messaggio.sprite.SetY(base_y + 50);
+  messaggio.sprite.SetOpacity(1);
+}
+Plymouth.SetMessageFunction(mostra_messaggio);

@@ -1,0 +1,2 @@
+# Canale aggiornamenti di Alba Linux
+deb [trusted=yes] https://raw.githubusercontent.com/pindinellosamuelea-cpu/alba-linux/apt ./

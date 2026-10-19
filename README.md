@@ -20,6 +20,26 @@ Basata su **Debian 13 "trixie"** (la base più stabile e compatibile), con deskt
 | **Grafica** | AMD, Intel e NVIDIA (anche modelli vecchi) funzionano subito con i driver liberi. Per NVIDIA, *Driver grafici* sceglie e installa il driver ufficiale adatto al modello. Voce di avvio "grafica sicura" per i casi difficili. |
 | **Rete e Bluetooth** | Firmware per Wi‑Fi interno e chiavette USB (Intel, Realtek, Broadcom, Atheros/Qualcomm, MediaTek, Marvell…), Ethernet, modem USB, Bluetooth. |
 
+## Novità della versione 1.1
+
+- **Impostazioni**: una sola finestra semplice, in stile macOS: Wi‑Fi, Bluetooth, Schermo, Suono, Batteria, Aspetto, Data e ora, Scheda grafica, Sicurezza, Aggiornamenti, Informazioni. Gli strumenti tecnici sono nella cartella *Strumenti avanzati* del menu.
+- **Batteria come su iPhone**: percentuale grande, grafico delle ultime 24 ore, *Capacità massima* e condizione della batteria, modalità energia (Risparmio, Bilanciata, Prestazioni).
+- **Canale aggiornamenti**: le novità di Alba arrivano in *Impostazioni → Aggiornamenti*, senza reinstallare.
+- **Driver automatici**: Alba riconosce la scheda grafica e, per le NVIDIA supportate, installa da sola il driver ufficiale più adatto con Vulkan a 32 e 64 bit (serve a Steam/Proton per gli shader).
+- **Gestione attività** (Ctrl+Shift+Esc) con processore, memoria, disco e **scheda grafica**, come su Windows.
+- **Avvio diretto** con il logo Alba: niente menu e niente scritte. Per scegliere un altro sistema (es. Windows) tieni premuto **Esc** all'accensione.
+- **Meno password**: le operazioni comuni (aggiornamenti, ora, Wi‑Fi, app, driver) non la chiedono più agli amministratori; resta per spegnere il firewall e per `sudo`.
+- **Benvenuto in Alba** compare solo nella versione di prova da chiavetta.
+- Nuovo aspetto pulito, chiaro o scuro, con tre sfondi (Alba, Giorno, Notte).
+
+## Aggiornare un computer con Alba già installata
+
+Apri il **Terminale** e incolla (Ctrl+Shift+V):
+```bash
+curl -fsSL https://raw.githubusercontent.com/pindinellosamuelea-cpu/alba-linux/main/aggiorna-alba.sh | sudo bash
+```
+Poi riavvia. Da quel momento gli aggiornamenti arrivano da soli in *Impostazioni → Aggiornamenti*.
+
 ## Sicurezza
 
 - **Firewall attivo** di serie: blocca tutte le connessioni in entrata.
@@ -34,7 +54,7 @@ Basata su **Debian 13 "trixie"** (la base più stabile e compatibile), con deskt
 
 ### Opzione A — Senza PC Linux (GitHub, consigliata)
 1. Carica questa cartella in un repository GitHub **pubblico**.
-2. Vai su **Actions → Costruisci ISO Alba → Run workflow**.
+2. A ogni modifica parte da sola la costruzione (**Actions → Costruisci Alba**): prima il pacchetto degli aggiornamenti, provato su uno schermo virtuale, poi l'ISO.
 3. Dopo circa un'ora scarica l'ISO da **Artifacts** (`alba-linux-iso`).
 
 ### Opzione B — Sul tuo computer
@@ -56,11 +76,12 @@ Puoi provarla anche in una macchina virtuale (VirtualBox, VMware, GNOME Boxes) c
 - **Programmi .exe:** la grande maggioranza funziona, ma non il 100%. Non funzionano driver Windows, alcuni antivirus/anti‑cheat a livello di kernel e qualche software molto recente (es. alcune versioni di Adobe). Per i giochi usa Steam con Proton.
 - **Editing Windows:** le app di editing Windows più leggere funzionano, ma Adobe Premiere, After Effects e Photoshop recenti funzionano male o per niente, e le accelerazioni come CUDA nei programmi Windows sono limitate. Per questo Alba include editor nativi equivalenti. Per l'editing video professionale c'è anche **DaVinci Resolve**, che ha una versione nativa Linux gratuita (si scarica dal sito di Blackmagic Design, la licenza non permette di includerlo nell'ISO).
 - **NVIDIA recenti:** il driver ufficiale si installa con un clic dopo l'installazione (serve Internet). Con Secure Boot attivo ti verrà chiesto di confermare una chiave al riavvio.
+- **Canale aggiornamenti**: i pacchetti di Alba arrivano via HTTPS dal repository GitHub del progetto (solo il proprietario può pubblicarli), ma non sono ancora firmati con una chiave GPG come quelli di Debian. Chi controlla l'account GitHub controlla gli aggiornamenti: proteggilo con l'autenticazione a due fattori.
 - **Zero bug garantiti non esistono** in nessun sistema operativo: Alba usa la versione stabile di Debian, la più collaudata, proprio per ridurli al minimo.
 
 ## Personalizzare
-- Pacchetti: `config/package-lists/*.list.chroot`
-- Script eseguiti durante la costruzione: `config/hooks/normal/`
-- File copiati nel sistema (tema, scorciatoie, app Alba): `config/includes.chroot/`
+- Pacchetti dell'ISO: `config/package-lists/*.list.chroot`
+- Script eseguiti durante la costruzione dell'ISO: `config/hooks/normal/`
+- Aspetto, app e impostazioni di Alba (arrivano anche con gli aggiornamenti): `pacchetto/radice/`, configurazione in `pacchetto/DEBIAN/postinst`
 - Sfondo e logo: `python3 strumenti/genera-grafica.py`
 - Lingua, tastiera e fuso orario: riga `--bootappend-live` in `auto/config` (predefiniti: italiano, tastiera svizzera + italiana con Alt+Shift, Europe/Zurich).

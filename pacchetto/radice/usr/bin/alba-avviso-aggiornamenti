@@ -1,0 +1,39 @@
+#!/bin/bash
+# Alba Linux - notifica discreta quando ci sono aggiornamenti da installare.
+# Gli elenchi vengono aggiornati ogni giorno dal sistema; gli aggiornamenti
+# di sicurezza si installano già da soli.
+set -u
+CONF="${XDG_CONFIG_HOME:-$HOME/.config}/alba"
+mkdir -p "$CONF"
+
+# Driver NVIDIA installato in automatico: serve un riavvio
+if [ -f /var/lib/alba/driver-riavvio ] && [ ! -e /proc/driver/nvidia/version ] && \
+   [ "$(cat "$CONF/avviso-driver" 2>/dev/null)" != "$(date +%F)" ]; then
+  date +%F > "$CONF/avviso-driver"
+  TESTO="Riavvia il computer per attivarlo: giochi e app useranno la scheda al massimo."
+  [ -f /var/lib/alba/driver-mok ] && TESTO="$TESTO Al riavvio, nella schermata blu scegli Enroll MOK → Continue → Yes, password: albalinux."
+  R="$(notify-send -a "Alba" -i video-display -A riavvia="Riavvia ora" "Driver NVIDIA installato" "$TESTO" 2>/dev/null)"
+  [ "$R" = "riavvia" ] && systemctl reboot
+elif [ -f /var/lib/alba/driver-secure-boot ] && [ ! -e /proc/driver/nvidia/version ] && \
+   [ "$(cat "$CONF/avviso-driver" 2>/dev/null)" != "$(date +%F)" ]; then
+  date +%F > "$CONF/avviso-driver"
+  R="$(notify-send -a "Alba" -i video-display -A installa="Installa" "Driver NVIDIA consigliato" \
+        "Per la tua scheda c'è il driver ufficiale, molto più veloce nei giochi." 2>/dev/null)"
+  [ "$R" = "installa" ] && setsid -f /usr/bin/alba-driver-grafici >/dev/null 2>&1
+fi
+
+N="$(apt list --upgradable 2>/dev/null | grep -c 'upgradable')"
+[ "${N:-0}" -gt 0 ] || exit 0
+
+# Al massimo un avviso al giorno
+OGGI="$(date +%F)"
+[ "$(cat "$CONF/ultimo-avviso" 2>/dev/null)" = "$OGGI" ] && exit 0
+echo "$OGGI" > "$CONF/ultimo-avviso"
+
+if [ "$N" -eq 1 ]; then TESTO="C'è 1 aggiornamento pronto da installare."
+else TESTO="Ci sono $N aggiornamenti pronti da installare."; fi
+
+R="$(notify-send -a "Alba" -i system-software-update -A apri="Aggiorna ora" \
+      "Aggiornamenti disponibili" "$TESTO" 2>/dev/null)"
+[ "$R" = "apri" ] && setsid -f /usr/bin/alba-impostazioni --pagina aggiornamenti >/dev/null 2>&1
+exit 0

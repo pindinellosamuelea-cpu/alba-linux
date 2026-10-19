@@ -1,0 +1,16 @@
+[Unit]
+Description=Alba - installazione automatica del driver grafico
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=!/var/lib/alba/driver-auto.fatto
+ConditionPathExists=!/run/live/medium
+
+[Service]
+# "simple": non rallenta l'accensione, lavora in sottofondo
+Type=simple
+ExecStart=/usr/libexec/alba/alba-driver-auto
+Nice=10
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target

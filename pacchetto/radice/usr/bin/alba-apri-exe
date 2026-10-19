@@ -1,0 +1,83 @@
+#!/bin/bash
+# Alba Linux - apre programmi Windows (.exe, .msi, .bat, .lnk) con doppio clic.
+# Usa Wine, già integrato nel sistema: nessuna app esterna da installare.
+#
+# Sicurezza: la prima volta che apri un file mai visto, Alba ti dice da dove
+# arriva (es. scaricato da Internet) e ti propone una scansione antivirus.
+set -u
+
+FILE="${1:-}"
+TITOLO="Alba · Programmi Windows"
+CONF="${XDG_CONFIG_HOME:-$HOME/.config}/alba"
+FIDATI="$CONF/exe-fidati"
+LOG="${XDG_CACHE_HOME:-$HOME/.cache}/alba/wine.log"
+export WINEPREFIX="${WINEPREFIX:-$HOME/.wine}"
+mkdir -p "$CONF" "$(dirname "$LOG")"
+touch "$FIDATI"
+
+if [ -z "$FILE" ] || [ ! -f "$FILE" ]; then
+  zenity --error --title="$TITOLO" --text="File non trovato:\n$FILE" 2>/dev/null
+  exit 1
+fi
+FILE="$(realpath "$FILE")"
+NOME="$(basename "$FILE")"
+# nome sicuro da mostrare nelle finestre (caratteri speciali come & e <)
+NOME_M="$(printf '%s' "$NOME" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')"
+
+# --- 1. Controllo di sicurezza (simile a SmartScreen di Windows) ----------
+HASH="$(sha256sum "$FILE" | cut -d' ' -f1)"
+if ! grep -qx "$HASH" "$FIDATI"; then
+  # Firefox e Chromium segnano i file scaricati con l'indirizzo di origine
+  ORIGINE="$(getfattr --only-values -n user.xdg.origin.url "$FILE" 2>/dev/null || true)"
+  if [ -n "$ORIGINE" ]; then
+    SITO="$(printf '%s' "$ORIGINE" | sed -E 's#^[a-z]+://([^/]+).*#\1#')"
+    TESTO="<b>$NOME_M</b> è stato scaricato da Internet:\n<tt>$SITO</tt>\n\nAprilo solo se ti fidi del sito da cui proviene."
+  else
+    TESTO="Stai per aprire <b>$NOME_M</b> per la prima volta.\n\nAprilo solo se ti fidi della sua provenienza."
+  fi
+
+  SCELTA="$(zenity --question --title="$TITOLO" \
+    --width=420 --text="$TESTO" \
+    --ok-label="Apri" --cancel-label="Annulla" \
+    --extra-button="Controlla con l'antivirus" 2>/dev/null)"
+  RISPOSTA=$?
+
+  if [ "$SCELTA" = "Controlla con l'antivirus" ]; then
+    RISULTATO="$( (clamscan --no-summary "$FILE" 2>&1; echo "CODICE:$?") | \
+      tee >(zenity --progress --pulsate --auto-close --no-cancel \
+            --title="$TITOLO" --text="Controllo di $NOME_M in corso…" 2>/dev/null) )"
+    CODICE="$(printf '%s' "$RISULTATO" | sed -n 's/^CODICE://p')"
+    if [ "$CODICE" = "1" ]; then
+      zenity --error --title="$TITOLO" --width=420 \
+        --text="<b>Minaccia trovata in $NOME_M</b>\n\nIl file non è stato aperto. Ti consigliamo di eliminarlo.\n\n<small>$(printf '%s' "$RISULTATO" | grep FOUND | head -3)</small>" 2>/dev/null
+      exit 1
+    elif [ "$CODICE" = "0" ]; then
+      zenity --question --title="$TITOLO" --width=420 \
+        --text="Nessuna minaccia trovata in <b>$NOME_M</b>.\n\nVuoi aprirlo?" \
+        --ok-label="Apri" --cancel-label="Annulla" 2>/dev/null || exit 0
+    else
+      zenity --question --title="$TITOLO" --width=420 \
+        --text="Non è stato possibile completare il controllo (forse le firme antivirus non sono ancora scaricate).\n\nVuoi aprire comunque <b>$NOME_M</b>?" \
+        --ok-label="Apri comunque" --cancel-label="Annulla" 2>/dev/null || exit 0
+    fi
+  elif [ $RISPOSTA -ne 0 ]; then
+    exit 0
+  fi
+  echo "$HASH" >> "$FIDATI"
+fi
+
+# --- 2. Primo utilizzo: prepara l'ambiente Windows ------------------------
+# Di norma è già pronto (viene preparato in background al primo accesso);
+# se non lo è ancora, aspettiamo mostrando un messaggio.
+if [ ! -f "$CONF/windows-pronto" ]; then
+  /usr/bin/alba-prepara-windows | zenity --progress --pulsate --auto-close --no-cancel \
+      --title="$TITOLO" --width=420 \
+      --text="Sto finendo di preparare la compatibilità con Windows…\nSuccede solo la prima volta." 2>/dev/null
+fi
+
+# --- 3. Avvio del programma ----------------------------------------------
+cd "$(dirname "$FILE")" || exit 1
+case "${NOME,,}" in
+  *.bat|*.cmd) exec /usr/bin/alba-gpu-dedicata wine cmd /c "$FILE" >>"$LOG" 2>&1 ;;
+  *)           exec /usr/bin/alba-gpu-dedicata wine start /unix "$FILE" >>"$LOG" 2>&1 ;;
+esac

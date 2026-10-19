@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Alba - avvio della sessione
+Exec=/usr/bin/alba-sessione
+NoDisplay=true
+OnlyShowIn=XFCE;
+X-XFCE-Autostart-Override=true

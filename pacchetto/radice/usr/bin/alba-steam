@@ -21,8 +21,26 @@ for base in (os.path.expanduser("~/.steam/steam"), os.path.expanduser("~/.local/
     if subprocess.run(["pgrep", "-u", str(os.getuid()), "-x", "steam"], capture_output=True).returncode == 0:
         continue  # Steam aperto: riproveremo al prossimo accesso
     testo = open(conf, encoding="utf-8", errors="replace").read()
+    originale = testo
+    # Shader Vulkan elaborati in sottofondo (mentre il PC è libero), così
+    # all'avvio di un gioco non c'è da aspettare "Elaborazione shader Vulkan".
+    if re.search(r'"EnableShaderBackgroundProcessing"\s*"0"', testo):
+        testo = re.sub(r'("EnableShaderBackgroundProcessing"\s*)"0"', r'\1"1"', testo)
+    elif '"EnableShaderBackgroundProcessing"' not in testo:
+        if re.search(r'"ShaderCacheManager"\s*\{', testo):
+            testo = re.sub(r'("ShaderCacheManager"\s*\{)', r'\1\n\t\t\t\t\t"EnableShaderBackgroundProcessing"\t\t"1"',
+                           testo, count=1)
+        else:
+            m = re.search(r'"Steam"\s*\{', testo)
+            if m:
+                testo = (testo[:m.end()] + '\n\t\t\t\t"ShaderCacheManager"\n\t\t\t\t{\n'
+                         '\t\t\t\t\t"EnableShaderBackgroundProcessing"\t\t"1"\n\t\t\t\t}\n' + testo[m.end():])
     if re.search(r'"CompatToolMapping"\s*\{\s*"0"', testo):
-        continue  # l'utente ha già scelto
+        if testo != originale:   # solo gli shader da sistemare
+            os.replace(conf, conf + ".prima-di-alba")
+            with open(conf, "w", encoding="utf-8") as f:
+                f.write(testo)
+        continue  # Proton: l'utente ha già scelto
     voce = ('\t\t\t\t"CompatToolMapping"\n\t\t\t\t{\n\t\t\t\t\t"0"\n\t\t\t\t\t{\n'
             '\t\t\t\t\t\t"name"\t\t"proton_experimental"\n\t\t\t\t\t\t"config"\t\t""\n'
             '\t\t\t\t\t\t"priority"\t\t"75"\n\t\t\t\t\t}\n\t\t\t\t}\n')

@@ -96,7 +96,7 @@ jobs:
           # Aggiornamento al riavvio: preparazione e annullamento funzionano
           { echo "== alba-aggiornamento"; /usr/libexec/alba/alba-aggiornamento prepara; echo "esito $?";
             /usr/libexec/alba/alba-aggiornamento stato; /usr/libexec/alba/alba-aggiornamento annulla;
-            ls -la /system-update 2>&1; } >> registro/controlli.log 2>&1
+            ls -la /system-update 2>&1 || true; } >> registro/controlli.log 2>&1 || true
           if bash -n /usr/libexec/alba/alba-aggiornamento && [ ! -e /system-update ]; then
             echo "OK  aggiornamento al riavvio (prepara/annulla)" >> $R
           else echo "ERR aggiornamento al riavvio (vedi controlli.log)" >> $R; OK=false; fi

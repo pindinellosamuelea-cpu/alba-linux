@@ -1,0 +1,43 @@
+#!/usr/bin/python3
+"""Alba Linux - toglie dalla configurazione della barra i componenti che
+non sono installati, così xfce4-panel non mostra messaggi di errore.
+Uso: alba-pulisci-barra FILE_XML"""
+import glob
+import re
+import sys
+
+PERCORSI = glob.glob("/usr/lib/*/xfce4/panel/plugins") + glob.glob("/usr/lib/xfce4/panel/plugins") + \
+    glob.glob("/usr/lib/*/xfce4/panel-plugins") + glob.glob("/usr/lib/xfce4/panel-plugins")
+INTERNI = {"separator", "systray", "clock", "launcher", "showdesktop", "tasklist", "pager",
+           "actions", "applicationsmenu", "directorymenu", "windowmenu"}
+NOMI_FILE = {"power-manager-plugin": "xfce4-power-manager-plugin", "notification-plugin": "notification-plugin"}
+
+
+def installato(nome):
+    if nome in INTERNI:
+        return True
+    librerie = [f"lib{nome}.so", f"lib{NOMI_FILE.get(nome, nome)}.so"]
+    desktop = [f"{nome}.desktop", f"{NOMI_FILE.get(nome, nome)}.desktop"]
+    for p in PERCORSI:
+        for l in librerie:
+            if glob.glob(f"{p}/{l}"):
+                return True
+    for d in desktop:
+        if glob.glob(f"/usr/share/xfce4/panel/plugins/{d}"):
+            return True
+    return False
+
+
+percorso = sys.argv[1]
+testo = open(percorso, encoding="utf-8").read()
+mancanti = []
+for m in re.finditer(r'<property name="plugin-(\d+)" type="string" value="([^"]+)"', testo):
+    if not installato(m.group(2)):
+        mancanti.append(m.group(1))
+for n in mancanti:
+    testo = re.sub(rf'\s*<value type="int" value="{n}"/>', "", testo)
+    testo = re.sub(rf'\s*<property name="plugin-{n}" type="string" value="[^"]+"(/>|>.*?\n    </property>)', "",
+                   testo, flags=re.S)
+open(percorso, "w", encoding="utf-8").write(testo)
+if mancanti:
+    print("Tolti dalla barra (non installati):", ", ".join(mancanti))

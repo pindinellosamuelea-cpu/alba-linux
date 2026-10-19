@@ -34,7 +34,7 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends git ca-certificates dpkg-dev apt-utils sassc \
-            python3 python3-pil gzip gnupg libglib2.0-dev-bin libxml2-utils optipng sudo
+            python3 python3-pil gzip gnupg libglib2.0-dev-bin libxml2-utils optipng sudo libgtk-3-bin
 
       - name: Scarica il progetto
         uses: actions/checkout@v4
@@ -46,12 +46,13 @@ jobs:
       - name: Costruisci il pacchetto
         run: |
           [ -n "$ALBA_GPG_KEY" ] && export ALBA_FIRMATO=1
-          TEMA_FLUENT=1 bash strumenti/costruisci-pacchetto.sh "${{ steps.versione.outputs.versione }}" dist
+          mkdir -p registro
+          TEMA_FLUENT=1 bash strumenti/costruisci-pacchetto.sh "${{ steps.versione.outputs.versione }}" dist 2>&1 | tee registro/costruzione.log
+          test -f dist/alba-sistema_*.deb
 
       - name: Installa e prova il pacchetto
         id: prova
         run: |
-          mkdir -p registro
           R=registro/riepilogo.txt
           echo "Versione ${{ steps.versione.outputs.versione }} - $(date -u)" > $R
           OK=true
@@ -70,7 +71,7 @@ jobs:
           fi
           apt-get install -y xvfb xauth dbus-x11 x11-utils x11-xserver-utils imagemagick xdotool \
             xfwm4 xfce4-panel xfdesktop4 xfce4-settings xfce4-whiskermenu-plugin xfce4-docklike-plugin \
-            xfce4-pulseaudio-plugin xfce4-power-manager papirus-icon-theme fonts-inter fonts-noto-core \
+            xfce4-pulseaudio-plugin xfce4-power-manager xfce4-genmon-plugin papirus-icon-theme fonts-inter fonts-noto-core \
             adwaita-icon-theme librsvg2-common locales-all shellcheck slick-greeter >> registro/installazione.log 2>&1 || true
 
           {

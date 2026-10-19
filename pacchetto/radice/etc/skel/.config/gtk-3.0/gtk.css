@@ -18,7 +18,10 @@
 }
 #XfcePanelWindow .xfce4-panel,
 #XfcePanelWindow separator,
-#XfcePanelWindow widget {
+#XfcePanelWindow widget,
+#XfcePanelWindow box,
+#XfcePanelWindow grid,
+#XfcePanelWindow eventbox {
   background-color: transparent;
   border: none;
 }

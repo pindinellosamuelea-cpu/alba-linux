@@ -43,6 +43,8 @@ sleep 0.5
 for f in xfce4-panel.xml xsettings.xml xfwm4.xml xfce4-power-manager.xml thunar.xml xfce4-notifyd.xml; do
   [ -f "$SKEL/xfce4/xfconf/xfce-perchannel-xml/$f" ] && cp "$SKEL/xfce4/xfconf/xfce-perchannel-xml/$f" "$X/$f"
 done
+# niente messaggi d'errore se manca qualche componente della barra
+/usr/libexec/alba/alba-pulisci-barra "$X/xfce4-panel.xml" >/dev/null 2>&1
 rm -f "$HOME"/.config/xfce4/panel/whiskermenu-*.rc "$HOME"/.config/xfce4/panel/docklike-*.rc "$HOME"/.config/xfce4/panel/genmon-*.rc
 cp "$SKEL"/xfce4/panel/*.rc "$HOME/.config/xfce4/panel/"
 cp "$SKEL"/autostart/*.desktop "$HOME/.config/autostart/" 2>/dev/null

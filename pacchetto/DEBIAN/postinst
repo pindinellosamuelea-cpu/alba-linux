@@ -185,6 +185,13 @@ if [ "$(cat "$STATO/leggero-versione" 2>/dev/null)" != "1" ]; then
   fi
   echo 1 > "$STATO/leggero-versione"
 fi
+if [ "$(cat "$STATO/leggero-versione" 2>/dev/null)" = "1" ]; then
+  # winbind serve solo nelle reti aziendali Windows (dominio): spento
+  if ! grep -qiE "^[[:space:]]*security[[:space:]]*=[[:space:]]*(ads|domain)" /etc/samba/smb.conf 2>/dev/null; then
+    systemctl disable --now winbind.service >/dev/null 2>&1 || true
+  fi
+  echo 2 > "$STATO/leggero-versione"
+fi
 
 # --- Pulizia dei residui delle versioni vecchie --------------------------------
 # Ogni aggiornamento riparte pulito: errori vecchi, cache e pacchetti inutili via.

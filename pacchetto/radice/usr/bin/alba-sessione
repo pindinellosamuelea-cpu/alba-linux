@@ -52,6 +52,12 @@ for f in org.gnome.Evolution-alarm-notify.desktop tracker-miner-fs-3.desktop geo
     printf '[Desktop Entry]\nType=Application\nName=%s\nHidden=true\n' "$f" > "$HOME/.config/autostart/$f"
   fi
 done
+# sintetizzatore MIDI sempre acceso (~170 MB) che non serve a nessuno
+if [ ! -f "$CONF/leggero-v2" ]; then
+  systemctl --user mask --now fluidsynth.service >/dev/null 2>&1
+  pkill -u "$(id -u)" -x fluidsynth 2>/dev/null
+  touch "$CONF/leggero-v2"
+fi
 if [ ! -f "$CONF/leggero-v1" ]; then
   systemctl --user mask --now tracker-miner-fs-3.service tracker-extract-3.service \
     evolution-calendar-factory.service evolution-addressbook-factory.service evolution-source-registry.service >/dev/null 2>&1

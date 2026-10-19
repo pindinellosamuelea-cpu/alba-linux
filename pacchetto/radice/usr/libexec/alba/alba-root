@@ -54,10 +54,20 @@ case "${1:-}" in
   driver)
     exec /usr/libexec/alba/alba-driver-auto --forza
     ;;
+  installa-cie)
+    URL=https://github.com/italia/cie-middleware-linux/releases/download/1.4.3.1/CIE-Middleware-1.4.3-2.amd64.deb
+    T="$(mktemp -d)"
+    curl -fsSL -o "$T/cie.deb" "$URL" || { rm -rf "$T"; exit 4; }
+    apt-get update -q || true
+    apt-get install -y -q pcscd libccid opensc "$T/cie.deb"
+    esito=$?
+    rm -rf "$T"
+    exit $esito
+    ;;
   installa)
     # Solo pacchetti della lista consentita
     case "$ARG" in
-      systemd-timesyncd|corectrl|power-profiles-daemon|brightnessctl|mangohud) ;;
+      systemd-timesyncd|corectrl|power-profiles-daemon|brightnessctl|mangohud|pcscd|opensc|pcsc-tools|game-devices-udev|steam-devices) ;;
       *) exit 2 ;;
     esac
     apt-get update -q || true

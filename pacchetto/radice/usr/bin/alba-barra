@@ -1,0 +1,24 @@
+#!/bin/bash
+# Alba Linux - barra delle applicazioni fluttuante o attaccata al bordo.
+# Uso: alba-barra fluttuante|bordo
+set -u
+CSS="${XDG_CONFIG_HOME:-$HOME/.config}/gtk-3.0/gtk.css"
+CONF="${XDG_CONFIG_HOME:-$HOME/.config}/alba"
+mkdir -p "$(dirname "$CSS")" "$CONF"
+touch "$CSS"
+
+# Togli la versione precedente del blocco Alba (lascia intatto il resto)
+sed -i '/ALBA-BARRA-INIZIO/,/ALBA-BARRA-FINE \*\//d' "$CSS"
+
+case "${1:-}" in
+  fluttuante)
+    cat /usr/share/alba/css/barra-fluttuante.css >> "$CSS"
+    DIM=62 ;;
+  bordo)
+    DIM=48 ;;
+  *) echo "Uso: alba-barra fluttuante|bordo"; exit 1 ;;
+esac
+xfconf-query -c xfce4-panel -p /panels/panel-1/size -s "$DIM" 2>/dev/null
+echo "$1" > "$CONF/barra"
+[ -z "${XFCE_PANEL_NO_RESTART:-}" ] && pgrep -u "$(id -u)" -x xfce4-panel >/dev/null && { xfce4-panel -r >/dev/null 2>&1 & }
+exit 0

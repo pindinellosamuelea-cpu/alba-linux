@@ -63,7 +63,7 @@ levelbar block.filled { background-color: #ff8a4c; }
 COLORI = {
     "wifi": "#0a84ff", "bluetooth": "#0a84ff", "schermo": "#5e5ce6", "suono": "#ff375f",
     "batteria": "#30b158", "aspetto": "#bf5af2", "data-ora": "#8e8e93",
-    "scheda-grafica": "#ff9f0a", "sicurezza": "#64748b", "aggiornamenti": "#8e8e93",
+    "scheda-grafica": "#ff9f0a", "dispositivi": "#34aadc", "sicurezza": "#64748b", "aggiornamenti": "#8e8e93",
     "info": "#8e8e93",
 }
 
@@ -1159,6 +1159,8 @@ class PaginaAspetto(Pagina):
         r = self.sezione("Barra delle applicazioni")
         self.posizione = Segmentato([("centro", "Al centro"), ("sinistra", "A sinistra")], self._posizione)
         r.aggiungi(Riga("Icone della barra", None, self.posizione))
+        self.fluttuante = Interruttore(lambda v: esegui(["/usr/bin/alba-barra", "fluttuante" if v else "bordo"]))
+        r.aggiungi(Riga("Barra fluttuante", "Staccata dal bordo, con gli angoli arrotondati", self.fluttuante))
         self.nascondi = Interruttore(lambda v: xfconf_scrivi("xfce4-panel", "/panels/panel-1/autohide-behavior", "uint", 2 if v else 0))
         r.aggiungi(Riga("Nascondi automaticamente la barra", "Compare quando porti il mouse in basso", self.nascondi))
         self._muto = False
@@ -1167,7 +1169,7 @@ class PaginaAspetto(Pagina):
     def _carica_sfondi(self):
         cartella = "/usr/share/backgrounds/alba"
         immagini = sorted(os.path.join(cartella, f) for f in os.listdir(cartella)
-                          if f.lower().endswith((".png", ".jpg", ".jpeg"))) if os.path.isdir(cartella) else []
+                          if f.lower().endswith((".png", ".jpg", ".jpeg")) and not f.startswith("accesso")) if os.path.isdir(cartella) else []
         for percorso in immagini:
             try:
                 pix = GdkPixbuf.Pixbuf.new_from_file_at_scale(percorso, 160, 90, False)
@@ -1221,6 +1223,7 @@ class PaginaAspetto(Pagina):
         self._muto = False
         self.posizione.imposta("centro" if xfconf_leggi("xfce4-panel", "/plugins/plugin-1/expand") != "false" else "sinistra")
         self.nascondi.imposta(xfconf_leggi("xfce4-panel", "/panels/panel-1/autohide-behavior") not in ("", "0"))
+        self.fluttuante.imposta(leggi_file(os.path.join(CONF, "barra"), "fluttuante") != "bordo")
 
 
 def imposta_sfondo(percorso):
@@ -1601,6 +1604,108 @@ class PaginaGrafica(Pagina):
 
 
 # ---------------------------------------------------------------------------
+# Dispositivi: controller, smart card, CIE, stampanti
+# ---------------------------------------------------------------------------
+def controller_collegati():
+    if DEMO:
+        return ["Xbox Wireless Controller"]
+    nomi, blocco = [], {}
+    for l in leggi_file("/proc/bus/input/devices").splitlines() + [""]:
+        if not l.strip():
+            if re.search(r"\bjs\d+", blocco.get("H", "")):
+                nomi.append(blocco.get("N", "Controller").split("=", 1)[-1].strip('"'))
+            blocco = {}
+        elif l[1:3] == ": ":
+            blocco[l[0]] = blocco.get(l[0], "") + " " + l[3:]
+    return nomi
+
+
+def lettori_smartcard():
+    if DEMO:
+        return ["ACS ACR39U lettore di smart card"]
+    if not esiste("opensc-tool"):
+        return None
+    lettori = []
+    for l in uscita(["opensc-tool", "-l"], timeout=6).splitlines():
+        m = re.match(r"\s*\d+\s+\S+\s+\S*\s*(.+)", l)
+        if m and not l.lower().startswith(("nr.", "#")) and "Detected" not in l:
+            lettori.append(m.group(1).strip())
+    return lettori
+
+
+def app_cie():
+    for cartella in ("/usr/share/applications", "/usr/local/share/applications"):
+        if not os.path.isdir(cartella):
+            continue
+        for f in os.listdir(cartella):
+            if f.endswith(".desktop") and "cie" in f.lower():
+                testo = leggi_file(os.path.join(cartella, f))
+                if re.search(r"^Name=.*CIE", testo, re.M):
+                    return f[:-8]
+    return None
+
+
+class PaginaDispositivi(Pagina):
+    nome, titolo, icona = "dispositivi", "Dispositivi", "input-gaming-symbolic"
+    parole = "dispositivi controller joystick gamepad xbox playstation smart card lettore cie carta identità firma stampante scanner"
+
+    def costruisci(self):
+        self.sottotitolo.set_text("Collega e via: Alba riconosce da sola controller, lettori e stampanti.")
+        r = self.sezione("Controller per giochi")
+        self.riga_controller = r.aggiungi(Riga("Controller", "", pulsante("Bluetooth…", lambda: self.finestra.vai("bluetooth")),
+                                               icona="input-gaming"))
+        r = self.sezione("Smart card e Carta d'Identità")
+        self.riga_lettori = r.aggiungi(Riga("Lettore di smart card", "", None, icona="media-flash"))
+        self.pulsante_cie = pulsante("Installa", self._cie)
+        self.riga_cie = r.aggiungi(Riga("CIE ID", "Il programma ufficiale per usare la Carta d'Identità Elettronica",
+                                        self.pulsante_cie, icona="contact-new"))
+        r = self.sezione("Stampanti e scanner")
+        r.aggiungi(Riga("Stampanti", "Le stampanti di rete e USB si aggiungono da sole",
+                        pulsante("Gestisci", lambda: avvia(["system-config-printer"])), icona="printer"))
+        r.aggiungi(Riga("Scanner", "Acquisisci documenti e foto",
+                        pulsante("Apri", lambda: avvia(["simple-scan"])), icona="scanner"))
+        GLib.timeout_add_seconds(3, self._periodico)
+
+    def _periodico(self):
+        if self.get_mapped():
+            self.aggiorna()
+        return True
+
+    def _cie(self):
+        app = app_cie()
+        if app:
+            avvia(["gtk-launch", app])
+            return
+        self.pulsante_cie.set_sensitive(False)
+        self.riga_cie.imposta_sottotitolo("Installazione in corso…")
+
+        def fatto(r):
+            self.pulsante_cie.set_sensitive(True)
+            if not r or r[0] != 0:
+                messaggio(self.finestra, "Installazione non riuscita",
+                          "Controlla la connessione a Internet e riprova.", Gtk.MessageType.WARNING)
+            self.aggiorna()
+        in_sottofondo(lambda: come_amministratore("installa-cie"), fatto)
+
+    def aggiorna(self):
+        nomi = controller_collegati()
+        self.riga_controller.imposta_sottotitolo("Collegato: " + ", ".join(nomi) if nomi else
+                                                 "Nessuno collegato. Funzionano Xbox, PlayStation, Switch e generici, via USB o Bluetooth.")
+        lettori = lettori_smartcard()
+        if lettori is None:
+            self.riga_lettori.imposta_sottotitolo("Supporto non installato: arriva con il prossimo aggiornamento")
+        elif lettori:
+            self.riga_lettori.imposta_sottotitolo("Collegato: " + ", ".join(lettori) + " ✓")
+        else:
+            self.riga_lettori.imposta_sottotitolo("Nessun lettore collegato. Funzionano i lettori USB di tutte le marche principali.")
+        if app_cie():
+            self.pulsante_cie.set_label("Apri")
+            self.riga_cie.imposta_sottotitolo("Installato ✓  Inserisci la carta nel lettore e apri CIE ID")
+        else:
+            self.pulsante_cie.set_label("Installa")
+
+
+# ---------------------------------------------------------------------------
 # Sicurezza
 # ---------------------------------------------------------------------------
 class PaginaSicurezza(Pagina):
@@ -1845,7 +1950,7 @@ class PaginaInfo(Pagina):
 # Finestra principale
 # ---------------------------------------------------------------------------
 PAGINE = [PaginaWifi, PaginaBluetooth, None, PaginaSchermo, PaginaSuono, PaginaBatteria, None,
-          PaginaAspetto, PaginaDataOra, PaginaGrafica, None, PaginaSicurezza, PaginaAggiornamenti, PaginaInfo]
+          PaginaAspetto, PaginaDataOra, PaginaGrafica, PaginaDispositivi, None, PaginaSicurezza, PaginaAggiornamenti, PaginaInfo]
 
 
 class Impostazioni(Gtk.Window):

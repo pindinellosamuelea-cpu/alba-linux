@@ -50,6 +50,16 @@ PID=$!
 foto 20-impostazioni-chiaro 5
 kill $PID 2>/dev/null
 
+# Schermata di accesso
+pkill -x xfce4-panel; pkill -x xfdesktop; pkill -x xfwm4
+if command -v slick-greeter >/dev/null; then
+  mkdir -p /etc/lightdm
+  slick-greeter --test-mode >/dev/null 2>&1 &
+  PID=$!
+  foto 30-schermata-accesso 6
+  kill $PID 2>/dev/null
+fi
+
 kill %1 2>/dev/null
 pkill -P $$ 2>/dev/null
 exit 0

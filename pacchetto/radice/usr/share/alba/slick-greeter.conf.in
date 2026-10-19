@@ -1,0 +1,22 @@
+[Greeter]
+# Alba Linux: schermata di accesso moderna (sfondo sfocato, orologio
+# grande, la tua foto e il nome al centro, un solo campo password)
+background=/usr/share/backgrounds/alba/accesso.png
+background-color=#0b0f29
+draw-user-backgrounds=false
+draw-grid=false
+show-hostname=false
+show-clock=true
+clock-format=%H:%M
+show-power=true
+show-a11y=true
+show-keyboard=true
+show-quit=true
+logo=/usr/share/alba/logo-accesso.png
+theme-name=@TEMA_SCURO@
+icon-theme-name=Papirus-Dark
+font-name=Inter 11
+xft-antialias=true
+xft-hintstyle=hintslight
+xft-rgba=rgb
+enable-hidpi=auto

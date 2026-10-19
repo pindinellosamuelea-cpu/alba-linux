@@ -170,6 +170,29 @@ def logo_avvio():
     return img
 
 
+def grafica_accesso():
+    """Sfondo sfocato e logo per la schermata di accesso."""
+    sfondo_alba = os.path.join(BASE, "usr/share/backgrounds/alba/alba.png")
+    img = Image.open(sfondo_alba).convert("RGB").resize((1920, 1080), Image.LANCZOS)
+    img = img.filter(ImageFilter.GaussianBlur(28))
+    scuro = Image.new("RGB", img.size, (8, 10, 30))
+    img = Image.blend(img, scuro, 0.25)
+    img.save(os.path.join(BASE, "usr/share/backgrounds/alba/accesso.png"), optimize=True)
+    # logo piccolo con scritta, per l'angolo in basso
+    l = Image.new("RGBA", (260, 64), (0, 0, 0, 0))
+    l.alpha_composite(logo(56), (4, 4))
+    try:
+        font = ImageFont.truetype("/usr/share/fonts/opentype/inter/Inter-SemiBold.otf", 30)
+    except OSError:
+        font = ImageFont.truetype("DejaVuSans-Bold.ttf", 30)
+    ImageDraw.Draw(l).text((74, 13), "Alba", font=font, fill=(255, 240, 232, 235))
+    l.save(os.path.join(BASE, "usr/share/alba/logo-accesso.png"))
+
+
+if __name__ == "__main__" and "--solo-accesso" in __import__("sys").argv:
+    grafica_accesso()
+    raise SystemExit(0)
+
 if __name__ == "__main__":
     os.makedirs(os.path.join(BASE, "usr/share/backgrounds/alba"), exist_ok=True)
     os.makedirs(os.path.join(BASE, "usr/share/alba"), exist_ok=True)
@@ -185,4 +208,5 @@ if __name__ == "__main__":
     p = Image.new("RGBA", (n, n), (0, 0, 0, 0))
     ImageDraw.Draw(p).ellipse([0, 0, n - 1, n - 1], fill=hexrgb("#ff8a4c") + (255,))
     p.resize((14, 14), Image.LANCZOS).save(os.path.join(temi_avvio, "punto.png"))
+    grafica_accesso()
     print("Grafica generata.")

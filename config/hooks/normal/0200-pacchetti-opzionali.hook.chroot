@@ -35,6 +35,23 @@ prova firmware-mediatek firmware-qcom-soc firmware-intel-misc \
 prova intel-opencl-icd winbind gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
       gstreamer1.0-libav libvkd3d1 libvkd3d-shader1 shotcut
 
+# Schermata di accesso moderna, portachiavi sbloccato all'accesso
+# (niente richieste di password all'apertura delle app)
+prova slick-greeter gnome-keyring libpam-gnome-keyring
+
+# Controller (Xbox, PlayStation, Switch, Steam) e lettori di smart card
+prova game-devices-udev steam-devices joystick pcscd libccid libacsccid1 \
+      opensc opensc-pkcs11 pcsc-tools
+
+# CIE ID: programma ufficiale per la Carta d'Identità Elettronica
+CIE=https://github.com/italia/cie-middleware-linux/releases/download/1.4.3.1/CIE-Middleware-1.4.3-2.amd64.deb
+if curl -fsSL -o /tmp/cie.deb "$CIE" && apt-get install -y /tmp/cie.deb; then
+  echo "OK: CIE ID"
+else
+  echo "ATTENZIONE: CIE ID non installato"
+fi
+rm -f /tmp/cie.deb
+
 # Miniature con l'icona vera dei file .exe, info di sistema, giochi
 prova gnome-exe-thumbnailer fastfetch lutris lightdm-gtk-greeter-settings \
       mugshot menulibre catfish

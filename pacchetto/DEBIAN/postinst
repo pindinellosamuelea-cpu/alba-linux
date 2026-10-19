@@ -19,9 +19,45 @@ una_volta() {  # nome
   return 0
 }
 
+# Schermata di accesso moderna (se slick-greeter è installato)
+configura_accesso() {
+  if [ -x /usr/sbin/slick-greeter ] && [ -f /usr/share/xgreeters/slick-greeter.desktop ]; then
+    . /usr/share/alba/tema.conf 2>/dev/null || true
+    T="${TEMA_SCURO:-Arc-Dark}"
+    [ -d "/usr/share/themes/$T" ] || T=Arc-Dark
+    sed "s/@TEMA_SCURO@/$T/" /usr/share/alba/slick-greeter.conf.in > /etc/lightdm/slick-greeter.conf
+    mkdir -p /etc/lightdm/lightdm.conf.d
+    cat > /etc/lightdm/lightdm.conf.d/50-alba.conf <<'EOF2'
+# Alba Linux: schermata di accesso moderna
+[Seat:*]
+greeter-session=slick-greeter
+greeter-hide-users=false
+EOF2
+  else
+    rm -f /etc/lightdm/lightdm.conf.d/50-alba.conf
+  fi
+}
+
+# Firefox: lettori di smart card e CIE riconosciuti nei siti (es. SPID/CIE)
+configura_smartcard() {
+  MOD=/usr/lib/x86_64-linux-gnu/opensc-pkcs11.so
+  POL=/etc/firefox/policies/policies.json
+  if [ -f "$MOD" ] && [ ! -e "$POL" ]; then
+    mkdir -p /etc/firefox/policies
+    cat > "$POL" <<EOF2
+{
+  "policies": {
+    "SecurityDevices": { "Lettore smart card (OpenSC)": "$MOD" }
+  }
+}
+EOF2
+  fi
+}
+
 case "$1" in
   triggered)
     "$LIB/alba-aggiorna-menu" || true
+    configura_accesso
     exit 0 ;;
   configure) ;;
   *) exit 0 ;;
@@ -116,6 +152,10 @@ fi
 if [ -e /boot/grub/grub.cfg ] && command -v update-grub >/dev/null 2>&1; then
   update-grub >/dev/null 2>&1 || echo "Alba: update-grub non riuscito"
 fi
+
+configura_accesso
+configura_smartcard
+systemctl enable pcscd.socket >/dev/null 2>&1 || true
 
 # --- Driver grafico automatico (NVIDIA) --------------------------------------
 systemctl enable alba-driver-auto.service >/dev/null 2>&1 || true

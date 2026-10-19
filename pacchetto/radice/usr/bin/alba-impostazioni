@@ -2258,6 +2258,13 @@ class PaginaAggiornamenti(Pagina):
             self.azione.set_label("Installa ora")
             self.elenco_testo.set_text(", ".join(self._da_installare))
             self.elenco.show()
+        elif riavvio_in_sospeso():
+            # aggiornamento già installato (anche da solo): manca solo il riavvio
+            self.icona_stato.set_from_icon_name("system-reboot", Gtk.IconSize.DIALOG)
+            self.dettaglio.set_text(f"Alba {versione_alba()} è installata. Riavvia il computer per usare "
+                                    "tutte le novità e ripartire pulito.")
+            self.azione.set_label("Riavvia ora")
+            self.elenco.hide()
         else:
             self.icona_stato.set_from_icon_name("emblem-ok-symbolic", Gtk.IconSize.DIALOG)
             self.dettaglio.set_text("Il sistema è aggiornato.")
@@ -2268,6 +2275,8 @@ class PaginaAggiornamenti(Pagina):
     def _controlla(self):
         if self._da_installare:
             return self._installa()
+        if self.azione.get_label() == "Riavvia ora":
+            return riavvio_con_conto(self.finestra, 10)
         self.azione.set_sensitive(False)
         self.rotella.start()
         self.dettaglio.set_text("Sto cercando aggiornamenti…")
@@ -2299,6 +2308,16 @@ class PaginaAggiornamenti(Pagina):
                           "Controlla la connessione a Internet e riprova.", Gtk.MessageType.WARNING)
             self.aggiorna()
         in_sottofondo(lavoro, fatto)
+
+
+def riavvio_in_sospeso():
+    """True se Alba si è aggiornata e il computer non è ancora stato riavviato."""
+    m = "/var/lib/alba/riavvio-aggiornamento"
+    try:
+        avvio = time.time() - float(leggi_file("/proc/uptime", "0").split()[0])
+        return os.path.getmtime(m) > avvio
+    except (OSError, ValueError, IndexError):
+        return False
 
 
 def codificatori_video():

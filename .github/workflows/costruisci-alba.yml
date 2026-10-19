@@ -61,7 +61,7 @@ jobs:
           else
             echo "ERR installazione del pacchetto" >> $R; OK=false
           fi
-          apt-get update > registro/apt-update.log 2>&1
+          apt-get update > registro/apt-update.log 2>&1 || true
           # il canale Alba può non esistere ancora alla prima pubblicazione: contano gli errori di Debian
           if ! grep "^E:" registro/apt-update.log | grep -v "alba-linux/apt" | grep -qv "Some index files failed"; then
             echo "OK  apt funziona dopo l'installazione" >> $R

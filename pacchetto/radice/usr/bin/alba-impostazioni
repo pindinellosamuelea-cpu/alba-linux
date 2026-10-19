@@ -2402,13 +2402,9 @@ def aggiornamento_pronto():
 
 
 def riavvio_in_sospeso():
-    """True se Alba si è aggiornata e il computer non è ancora stato riavviato."""
-    m = "/var/lib/alba/riavvio-aggiornamento"
-    try:
-        avvio = time.time() - float(leggi_file("/proc/uptime", "0").split()[0])
-        return os.path.getmtime(m) > avvio
-    except (OSError, ValueError, IndexError):
-        return False
+    """True se Alba si è aggiornata in QUESTO avvio e non è ancora stato riavviato."""
+    parti = leggi_file("/var/lib/alba/riavvio-aggiornamento").split()
+    return len(parti) == 2 and parti[1] == leggi_file("/proc/sys/kernel/random/boot_id")
 
 
 def codificatori_video():

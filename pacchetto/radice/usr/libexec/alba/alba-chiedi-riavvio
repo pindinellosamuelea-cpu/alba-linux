@@ -6,9 +6,10 @@ CONF="${XDG_CONFIG_HOME:-$HOME/.config}/alba"
 M=/var/lib/alba/riavvio-aggiornamento
 [ -f "$M" ] || exit 0
 [ "$(cat "$M")" = "$(cat "$CONF/riavvio-visto" 2>/dev/null)" ] && exit 0
-AVVIO=$(( $(date +%s) - $(cut -d. -f1 /proc/uptime) ))
-if [ "$(stat -c %Y "$M")" -lt "$AVVIO" ]; then
-  mkdir -p "$CONF"; cat "$M" > "$CONF/riavvio-visto"   # già riavviato dopo l'aggiornamento
+# già riavviato dopo l'aggiornamento? (l'identificativo dell'avvio è cambiato)
+read -r _ AVVIO_AGG < "$M"
+if [ "${AVVIO_AGG:-}" != "$(cat /proc/sys/kernel/random/boot_id)" ]; then
+  mkdir -p "$CONF"; cat "$M" > "$CONF/riavvio-visto"
   exit 0
 fi
 fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 && exit 0     # sta ancora installando

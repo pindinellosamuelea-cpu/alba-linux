@@ -198,8 +198,17 @@ fi
 # --- Dopo un aggiornamento: alla sessione aperta viene chiesto di riavviare ---
 # (anche quando l'aggiornamento si è installato da solo in automatico)
 if [ -n "${2:-}" ]; then
-  cat /usr/share/alba/versione > "$STATO/riavvio-aggiornamento" 2>/dev/null || true
+  # versione + identificativo di QUESTO avvio: dopo un riavvio l'identificativo
+  # cambia e la richiesta sparisce da sola (anche se l'orologio è sbagliato)
+  if [ "${ALBA_OFFLINE:-0}" = 1 ]; then
+    rm -f "$STATO/riavvio-aggiornamento"   # installato al riavvio: il riavvio c'è già
+  else
+    echo "$(cat /usr/share/alba/versione 2>/dev/null) $(cat /proc/sys/kernel/random/boot_id)" > "$STATO/riavvio-aggiornamento"
+  fi
 fi
+
+# transizione accesso -> desktop tolta (non piaceva)
+rm -f /etc/X11/Xsession.d/95alba-transizione /usr/bin/alba-transizione
 
 # --- Nome e versione ---------------------------------------------------------------
 VERSIONE="$(cat /usr/share/alba/versione 2>/dev/null || echo 1)"

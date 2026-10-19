@@ -2,12 +2,18 @@
   "nota": "Novità di Alba mostrate in Impostazioni → Aggiornamenti. 'data' = quando la novità è entrata in Alba (UTC). Le più recenti in alto.",
   "versioni": [
     {
+      "data": "2026-10-19T23:30",
+      "titolo": "Correzioni agli aggiornamenti",
+      "novita": [
+        "Dopo un aggiornamento installato al riavvio non viene più chiesto di riavviare di nuovo",
+        "Tolta la dissolvenza tra schermata di accesso e desktop"
+      ]
+    },
+    {
       "data": "2026-10-19T23:20",
       "titolo": "Avvio e accesso più fluidi",
       "novita": [
-        "All'accensione non compare più l'immagine blu di Debian: si passa direttamente al logo di Alba, che compare in dissolvenza",
-        "Dopo la password il desktop compare con una dissolvenza morbida, già pronto, invece di pezzi che arrivano uno alla volta",
-        "Stessa transizione anche dopo il riavvio per un aggiornamento"
+        "All'accensione non compare più l'immagine blu di Debian: si passa direttamente al logo di Alba, che compare in dissolvenza"
       ]
     },
     {

@@ -44,14 +44,34 @@ if [ "${TEMA_FLUENT:-0}" = 1 ]; then
     find "$P/usr/share/themes" -mindepth 1 -maxdepth 1 ! -name Alba -exec rm -rf {} +
   fi
 fi
+# --- Icone in stile macOS (WhiteSur, GPL) -------------------------------------
+ICONE_CHIARO="Papirus"
+ICONE_SCURO="Papirus-Dark"
+if [ "${TEMA_FLUENT:-0}" = 1 ]; then
+  echo ">> Integro le icone WhiteSur (stile macOS)"
+  if git clone --depth 1 https://github.com/vinceliuice/WhiteSur-icon-theme.git "$LAVORO/whitesur"; then
+    mkdir -p "$P/usr/share/icons"
+    ( cd "$LAVORO/whitesur" && ./install.sh -d "$P/usr/share/icons" -t default ) || echo "ATTENZIONE: icone WhiteSur non installate"
+    mkdir -p "$P/usr/share/doc/alba-sistema"
+    cp "$LAVORO/whitesur/COPYING" "$P/usr/share/doc/alba-sistema/LICENZA-icone-WhiteSur" 2>/dev/null || true
+    if [ -d "$P/usr/share/icons/WhiteSur-dark" ] && [ -d "$P/usr/share/icons/WhiteSur" ]; then
+      ICONE_CHIARO="WhiteSur"; ICONE_SCURO="WhiteSur-dark"
+      rm -rf "$P/usr/share/icons/WhiteSur-light"   # variante non usata
+    fi
+  fi
+fi
+echo ">> Icone: chiaro=$ICONE_CHIARO scuro=$ICONE_SCURO"
 echo ">> Temi: chiaro=$TEMA_CHIARO scuro=$TEMA_SCURO"
 cat > "$P/usr/share/alba/tema.conf" <<EOF
 TEMA_CHIARO="$TEMA_CHIARO"
 TEMA_SCURO="$TEMA_SCURO"
+ICONE_CHIARO="$ICONE_CHIARO"
+ICONE_SCURO="$ICONE_SCURO"
 EOF
 XFWM_SCURO="$TEMA_SCURO"
 [ -d "$P/usr/share/themes/$TEMA_SCURO/xfwm4" ] || XFWM_SCURO="Arc-Dark"
-sed -i "s/@TEMA_SCURO@/$TEMA_SCURO/" "$P/etc/skel/.config/xfce4/xfconf/xfce-perchannel-xml/xsettings.xml"
+sed -i "s/@TEMA_SCURO@/$TEMA_SCURO/; s/@ICONE_SCURO@/$ICONE_SCURO/" "$P/etc/skel/.config/xfce4/xfconf/xfce-perchannel-xml/xsettings.xml"
+sed -i "s/@ICONE_SCURO@/$ICONE_SCURO/" "$P/usr/share/alba/slick-greeter.conf.in"
 sed -i "s/@TEMA_SCURO_XFWM@/$XFWM_SCURO/" "$P/etc/skel/.config/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml"
 
 # --- Canale aggiornamenti: firmato (se c'è la chiave) o solo HTTPS ----------------

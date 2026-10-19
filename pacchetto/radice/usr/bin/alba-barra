@@ -13,9 +13,9 @@ sed -i '/ALBA-BARRA-INIZIO/,/ALBA-BARRA-FINE \*\//d' "$CSS"
 case "${1:-}" in
   fluttuante)
     cat /usr/share/alba/css/barra-fluttuante.css >> "$CSS"
-    DIM=62 ;;
+    DIM=66 ;;
   bordo)
-    DIM=48 ;;
+    DIM=54 ;;
   *) echo "Uso: alba-barra fluttuante|bordo"; exit 1 ;;
 esac
 xfconf-query -c xfce4-panel -p /panels/panel-1/size -s "$DIM" 2>/dev/null

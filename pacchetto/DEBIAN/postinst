@@ -125,7 +125,9 @@ done
 cp /etc/xdg/mimeapps.list /etc/xdg/xfce-mimeapps.list
 "$LIB/alba-aggiorna-menu" || true
 update-desktop-database -q /usr/share/applications 2>/dev/null || true
-gtk-update-icon-cache -qf /usr/share/icons/hicolor 2>/dev/null || true
+for d in /usr/share/icons/hicolor /usr/share/icons/WhiteSur /usr/share/icons/WhiteSur-dark; do
+  [ -d "$d" ] && gtk-update-icon-cache -qf "$d" 2>/dev/null || true
+done
 
 # --- Avvio: logo Alba e niente menu di GRUB ------------------------------------
 if command -v plymouth-set-default-theme >/dev/null 2>&1; then

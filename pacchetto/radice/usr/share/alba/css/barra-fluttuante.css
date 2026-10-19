@@ -8,7 +8,7 @@
   border-bottom-width: 8px;
   border-radius: 20px;
   background-clip: padding-box;
-  background-color: alpha(@theme_bg_color, 0.92);
+  background-color: alpha(@theme_bg_color, 0.78);
   background-image: none;
   box-shadow: none;
 }

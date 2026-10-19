@@ -1,15 +1,4 @@
 /* ALBA-BARRA-INIZIO
-   Alba Linux: barra delle applicazioni fluttuante e arrotondata.
-   Il bordo trasparente crea lo stacco dal bordo dello schermo;
-   la barra resta "agganciata", quindi le finestre ingrandite non ci
-   finiscono sotto. Per toglierla: Impostazioni > Aspetto. */
-#XfcePanelWindow {
-  border: 6px solid transparent;
-  border-bottom-width: 8px;
-  border-radius: 20px;
-  background-clip: padding-box;
-  background-image: none;
-  box-shadow: none;
-}
+   Alba Linux: pulsanti della barra con angoli arrotondati. */
 #XfcePanelWindow button { border-radius: 10px; }
 /* ALBA-BARRA-FINE */

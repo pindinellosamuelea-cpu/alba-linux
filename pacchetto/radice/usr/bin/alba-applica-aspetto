@@ -3,7 +3,7 @@
 # Con --se-serve lo fa solo se l'aspetto è cambiato dall'ultima volta
 # (per non cancellare le personalizzazioni a ogni aggiornamento).
 set -u
-VERSIONE_ASPETTO=7
+VERSIONE_ASPETTO=8
 CONF="${XDG_CONFIG_HOME:-$HOME/.config}/alba"
 MARCA="$CONF/aspetto-versione"
 mkdir -p "$CONF"
@@ -53,7 +53,7 @@ cp "$SKEL/Thunar/uca.xml" "$HOME/.config/Thunar/uca.xml" 2>/dev/null
 setsid -f xfsettingsd --replace >/dev/null 2>&1
 sleep 1
 /usr/bin/alba-tema "$TEMA"
-BARRA="$(cat "$CONF/barra" 2>/dev/null || echo fluttuante)"
+BARRA=bordo
 XFCE_PANEL_NO_RESTART=1 /usr/bin/alba-barra "$BARRA" >/dev/null 2>&1
 setsid -f xfwm4 --replace >/dev/null 2>&1
 setsid -f xfce4-panel >/dev/null 2>&1

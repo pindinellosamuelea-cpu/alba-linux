@@ -1160,8 +1160,6 @@ class PaginaAspetto(Pagina):
         r = self.sezione("Barra delle applicazioni")
         self.posizione = Segmentato([("centro", "Al centro"), ("sinistra", "A sinistra")], self._posizione)
         r.aggiungi(Riga("Icone della barra", None, self.posizione))
-        self.fluttuante = Interruttore(lambda v: esegui(["/usr/bin/alba-barra", "fluttuante" if v else "bordo"]))
-        r.aggiungi(Riga("Barra fluttuante", "Staccata dal bordo, con gli angoli arrotondati", self.fluttuante))
         self.nascondi = Interruttore(lambda v: xfconf_scrivi("xfce4-panel", "/panels/panel-1/autohide-behavior", "uint", 2 if v else 0))
         r.aggiungi(Riga("Nascondi automaticamente la barra", "Compare quando porti il mouse in basso", self.nascondi))
         self._muto = False
@@ -1224,7 +1222,6 @@ class PaginaAspetto(Pagina):
         self._muto = False
         self.posizione.imposta("centro" if xfconf_leggi("xfce4-panel", "/plugins/plugin-1/expand") != "false" else "sinistra")
         self.nascondi.imposta(xfconf_leggi("xfce4-panel", "/panels/panel-1/autohide-behavior") not in ("", "0"))
-        self.fluttuante.imposta(leggi_file(os.path.join(CONF, "barra"), "fluttuante") != "bordo")
 
 
 def imposta_sfondo(percorso):

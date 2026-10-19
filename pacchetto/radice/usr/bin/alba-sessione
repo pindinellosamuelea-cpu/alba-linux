@@ -26,10 +26,7 @@ gsettings set org.blueman.general plugin-list "['!StatusIcon', '!ShowConnected']
 
 # 2c. Grafica senza difetti
 #  - senza compositore la barra fluttuante avrebbe i bordi neri: la attacchiamo al bordo
-if [ "$(xfconf-query -c xfwm4 -p /general/use_compositing 2>/dev/null)" = "false" ] && \
-   [ "$(cat "$CONF/barra" 2>/dev/null || echo fluttuante)" = "fluttuante" ]; then
-  /usr/bin/alba-barra bordo >/dev/null 2>&1
-fi
+true
 #  - NVIDIA che pilota direttamente lo schermo (PC fissi): niente strappi
 if [ -e /proc/driver/nvidia/version ] && command -v nvidia-settings >/dev/null && \
    xrandr --listproviders 2>/dev/null | grep -m1 "Provider 0" | grep -qi nvidia; then

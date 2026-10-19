@@ -13,7 +13,7 @@ sed -i '/ALBA-BARRA-INIZIO/,/ALBA-BARRA-FINE \*\//d' "$CSS"
 case "${1:-}" in
   fluttuante)
     cat /usr/share/alba/css/barra-fluttuante.css >> "$CSS"
-    DIM=66 ;;
+    DIM=54 ;;
   bordo)
     DIM=54 ;;
   *) echo "Uso: alba-barra fluttuante|bordo"; exit 1 ;;

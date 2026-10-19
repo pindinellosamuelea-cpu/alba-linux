@@ -22,9 +22,10 @@ imposta() { xfconf-query -c "$1" -p "$2" -n -t "$3" -s "$4" 2>/dev/null || xfcon
 
 imposta xsettings /Net/ThemeName string "$T"
 imposta xsettings /Net/IconThemeName string "$ICONE"
-imposta xfce4-panel /panels/dark-mode bool "$SCURO"
+# La barra resta sempre scura (come il Dock del Mac): leggibile con entrambi i temi
+imposta xfce4-panel /panels/dark-mode bool true
 # Colore della barra (lo usa anche per le icone di sistema, così è uniforme)
-if [ "$SCURO" = true ]; then RGBA="0.118 0.122 0.169 1"; else RGBA="0.953 0.953 0.969 1"; fi
+RGBA="0.118 0.122 0.169 1"
 xfconf-query -c xfce4-panel -p /panels/panel-1/background-style -n -t uint -s 1 2>/dev/null || \
   xfconf-query -c xfce4-panel -p /panels/panel-1/background-style -s 1 2>/dev/null
 set -- $RGBA

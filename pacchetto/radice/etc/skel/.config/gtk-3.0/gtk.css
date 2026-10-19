@@ -12,18 +12,13 @@
   background-image: none;
   box-shadow: none;
 }
+/* Tutto ciò che sta dentro la barra è trasparente: si vede un unico
+   sfondo arrotondato, uniforme, senza riquadri. */
 #XfcePanelWindow * {
+  background-color: transparent;
   background-image: none;
   box-shadow: none;
-}
-#XfcePanelWindow .xfce4-panel,
-#XfcePanelWindow separator,
-#XfcePanelWindow widget,
-#XfcePanelWindow box,
-#XfcePanelWindow grid,
-#XfcePanelWindow eventbox {
-  background-color: transparent;
-  border: none;
+  border-color: transparent;
 }
 #XfcePanelWindow button { border-radius: 10px; border: none; background-color: transparent; }
 #XfcePanelWindow button:hover { background-color: alpha(@theme_fg_color, 0.08); }

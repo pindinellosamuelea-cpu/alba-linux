@@ -65,6 +65,7 @@
       <property name="digital-date-format" type="string" value="%d/%m/%Y"/>
       <property name="digital-format" type="string" value="%H:%M"/>
       <property name="tooltip-format" type="string" value="%A %d %B %Y"/>
+      <property name="command" type="string" value="/usr/local/bin/alba-data-ora"/>
     </property>
     <property name="plugin-10" type="string" value="showdesktop"/>
   </property>

@@ -52,3 +52,6 @@ chmod 755 /usr/local/bin/alba-* 2>/dev/null || true
 update-desktop-database /usr/share/applications || true
 update-mime-database /usr/share/mime || true
 gtk-update-icon-cache -f /usr/share/icons/hicolor || true
+
+# Ora automatica da Internet sempre attiva
+systemctl enable systemd-timesyncd.service 2>/dev/null || true

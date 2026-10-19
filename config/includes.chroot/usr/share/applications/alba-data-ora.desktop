@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Data e ora
+Comment=Ora automatica, fuso orario, data e ora a mano
+Exec=/usr/local/bin/alba-data-ora
+Icon=preferences-system-time
+Terminal=false
+Categories=Settings;DesktopSettings;X-XFCE-SettingsDialog;

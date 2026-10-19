@@ -48,6 +48,8 @@ modemmanager
 
 # Rete, audio, bluetooth, stampanti
 network-manager
+# Ora automatica da Internet
+systemd-timesyncd
 pipewire-audio
 pavucontrol
 blueman

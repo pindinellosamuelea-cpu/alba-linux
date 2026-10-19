@@ -1,0 +1,45 @@
+#!/bin/bash
+# Alba Linux - impostazione semplice di data, ora e fuso orario.
+set -u
+TITOLO="Alba · Data e ora"
+
+STATO="$(timedatectl show -p Timezone -p NTP -p LocalRTC --value 2>/dev/null | paste -sd'|')"
+FUSO="$(echo "$STATO" | cut -d'|' -f1)"
+AUTO="$(echo "$STATO" | cut -d'|' -f2)"
+[ "$AUTO" = "yes" ] && AUTO_T="attiva" || AUTO_T="disattivata"
+
+SCELTA="$(zenity --list --title="$TITOLO" --width=480 --height=330 \
+  --text="Ora attuale: <b>$(date '+%H:%M  %A %d %B %Y')</b>\nFuso orario: <b>$FUSO</b> · Ora automatica: <b>$AUTO_T</b>" \
+  --column="Cosa vuoi fare?" \
+  "Ora automatica da Internet (consigliato)" \
+  "Cambia fuso orario" \
+  "Imposta data e ora a mano" \
+  "Correggi l'ora sbagliata dopo aver usato Windows" 2>/dev/null)" || exit 0
+
+case "$SCELTA" in
+  "Ora automatica"*)
+    pkexec timedatectl set-ntp true && \
+      zenity --info --title="$TITOLO" --text="Ora automatica attivata. Si sincronizza entro pochi secondi." 2>/dev/null
+    ;;
+  "Cambia fuso orario")
+    NUOVO="$(timedatectl list-timezones | zenity --list --title="$TITOLO" --width=420 --height=520 \
+      --text="Scegli il fuso orario (scrivi per cercare, es. Rome o Zurich)" --column="Fuso orario" 2>/dev/null)" || exit 0
+    [ -n "$NUOVO" ] && pkexec timedatectl set-timezone "$NUOVO" && \
+      zenity --info --title="$TITOLO" --text="Fuso orario impostato: <b>$NUOVO</b>" 2>/dev/null
+    ;;
+  "Imposta data e ora a mano")
+    GIORNO="$(zenity --calendar --title="$TITOLO" --text="Scegli la data" --date-format=%Y-%m-%d 2>/dev/null)" || exit 0
+    ORA="$(zenity --entry --title="$TITOLO" --text="Scrivi l'ora (formato 17:05)" --entry-text="$(date +%H:%M)" 2>/dev/null)" || exit 0
+    if ! [[ "$ORA" =~ ^([01]?[0-9]|2[0-3]):[0-5][0-9]$ ]]; then
+      zenity --error --title="$TITOLO" --text="Ora non valida. Usa il formato 17:05" 2>/dev/null; exit 1
+    fi
+    pkexec bash -c "timedatectl set-ntp false; timedatectl set-time '$GIORNO $ORA:00'" && \
+      zenity --info --title="$TITOLO" --text="Data e ora impostate. L'ora automatica è stata disattivata." 2>/dev/null
+    ;;
+  "Correggi"*)
+    zenity --question --title="$TITOLO" --width=440 \
+      --text="Windows e Linux leggono l'orologio del PC in modo diverso, per questo l'ora può risultare sbagliata di 1-2 ore.\n\nVuoi che Alba usi lo stesso metodo di Windows?" 2>/dev/null || exit 0
+    pkexec bash -c "timedatectl set-local-rtc 1 --adjust-system-clock; timedatectl set-ntp true" && \
+      zenity --info --title="$TITOLO" --text="Fatto: ora Alba e Windows mostrano la stessa ora." 2>/dev/null
+    ;;
+esac

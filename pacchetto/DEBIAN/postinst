@@ -154,6 +154,14 @@ fi
 systemctl enable alba-diagnosi.timer >/dev/null 2>&1 || true
 sistema_avviato && systemctl start --no-block alba-diagnosi.timer >/dev/null 2>&1 || true
 
+# --- Grafica senza difetti (sfarfallio Intel, strappi AMD/NVIDIA) -----------
+systemctl enable alba-grafica.service >/dev/null 2>&1 || true
+"$LIB/alba-grafica" || true
+if [ "$(cat "$STATO/grafica-versione" 2>/dev/null)" != "1" ] && ls /boot/initrd.img-* >/dev/null 2>&1; then
+  update-initramfs -u -k all >/dev/null 2>&1 || true
+  echo 1 > "$STATO/grafica-versione"
+fi
+
 # --- Driver grafico automatico (NVIDIA) --------------------------------------
 systemctl enable alba-driver-auto.service >/dev/null 2>&1 || true
 if sistema_avviato; then

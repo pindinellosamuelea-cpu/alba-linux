@@ -1,0 +1,11 @@
+[Unit]
+Description=Alba - grafica senza strappi per la scheda presente
+Before=display-manager.service
+After=systemd-udev-settle.service systemd-modules-load.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/alba/alba-grafica
+
+[Install]
+WantedBy=multi-user.target

@@ -24,6 +24,18 @@ fi
 #     (c'è già il menu Bluetooth di Alba nella barra)
 gsettings set org.blueman.general plugin-list "['!StatusIcon', '!ShowConnected']" 2>/dev/null
 
+# 2c. Grafica senza difetti
+#  - senza compositore la barra fluttuante avrebbe i bordi neri: la attacchiamo al bordo
+if [ "$(xfconf-query -c xfwm4 -p /general/use_compositing 2>/dev/null)" = "false" ] && \
+   [ "$(cat "$CONF/barra" 2>/dev/null || echo fluttuante)" = "fluttuante" ]; then
+  /usr/bin/alba-barra bordo >/dev/null 2>&1
+fi
+#  - NVIDIA che pilota direttamente lo schermo (PC fissi): niente strappi
+if [ -e /proc/driver/nvidia/version ] && command -v nvidia-settings >/dev/null && \
+   xrandr --listproviders 2>/dev/null | grep -m1 "Provider 0" | grep -qi nvidia; then
+  nvidia-settings --assign CurrentMetaMode="nvidia-auto-select +0+0 { ForceFullCompositionPipeline = On }" >/dev/null 2>&1
+fi
+
 # 3. Risoluzione e frequenza dello schermo scelte nelle Impostazioni
 [ -f "$CONF/schermo.sh" ] && bash "$CONF/schermo.sh" >/dev/null 2>&1
 

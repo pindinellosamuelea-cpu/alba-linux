@@ -1,0 +1,16 @@
+#!/bin/bash
+# Alba Linux - all'accensione, prima della schermata di accesso:
+# imposta la grafica senza strappi per la scheda presente.
+set -u
+CONF=/etc/X11/xorg.conf.d/20-alba-amd.conf
+SCHEDE="$(lspci -k 2>/dev/null | grep -A3 -Ei 'vga|3d|display')"
+# Solo con una sola scheda AMD (con più schede l'impostazione automatica è migliore)
+N="$(lspci 2>/dev/null | grep -Eic 'vga|3d controller|display controller')"
+if [ "$N" = 1 ] && echo "$SCHEDE" | grep -q "Kernel driver in use: amdgpu" && \
+   [ -f /usr/lib/xorg/modules/drivers/amdgpu_drv.so ]; then
+  mkdir -p /etc/X11/xorg.conf.d
+  cp /usr/share/alba/xorg/20-alba-amd.conf "$CONF"
+else
+  rm -f "$CONF"
+fi
+exit 0

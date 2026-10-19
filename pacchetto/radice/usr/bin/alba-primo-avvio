@@ -33,6 +33,11 @@ comando "<Primary><Shift>Escape"  "alba-gestione-attivita"       # Gestione atti
 comando "<Primary><Alt>Delete"    "alba-gestione-attivita"
 comando "<Super><Shift>s"         "xfce4-screenshooter -r"       # Cattura area
 comando "Print"                   "xfce4-screenshooter -f"       # Stamp
+comando "XF86AudioRaiseVolume"    "alba-volume su"               # tasti del volume
+comando "XF86AudioLowerVolume"    "alba-volume giu"
+comando "XF86AudioMute"           "alba-volume muto"
+comando "<Super>a"                "alba-rapido controlli"        # Impostazioni rapide
+comando "<Super>n"                "alba-rapido notifiche"        # Notifiche e calendario
 comando "<Super>period"           "xfce4-appfinder"              # cerca app/emoji
 comando "<Primary><Alt>t"         "xfce4-terminal"               # Terminale
 finestra "<Super>d"               "show_desktop_key"             # Mostra desktop

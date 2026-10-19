@@ -1,0 +1,16 @@
+#!/bin/bash
+# Alba Linux - tasti del volume: cambia il volume e mostra un piccolo indicatore.
+# Uso: alba-volume su|giu|muto
+case "${1:-}" in
+  su)   pactl set-sink-mute @DEFAULT_SINK@ 0; pactl set-sink-volume @DEFAULT_SINK@ +5% ;;
+  giu)  pactl set-sink-volume @DEFAULT_SINK@ -5% ;;
+  muto) pactl set-sink-mute @DEFAULT_SINK@ toggle ;;
+  *) exit 1 ;;
+esac
+V="$(pactl get-sink-volume @DEFAULT_SINK@ | grep -o '[0-9]*%' | head -1 | tr -d %)"
+[ "${V:-0}" -gt 100 ] && { pactl set-sink-volume @DEFAULT_SINK@ 100%; V=100; }
+if pactl get-sink-mute @DEFAULT_SINK@ | grep -q yes; then I=audio-volume-muted-symbolic; T="Audio disattivato"
+elif [ "$V" -lt 34 ]; then I=audio-volume-low-symbolic; T="Volume $V%"
+elif [ "$V" -lt 67 ]; then I=audio-volume-medium-symbolic; T="Volume $V%"
+else I=audio-volume-high-symbolic; T="Volume $V%"; fi
+notify-send -a "Volume" -i "$I" -t 1200 -h int:value:"$V" -h string:x-canonical-private-synchronous:volume "$T" 2>/dev/null

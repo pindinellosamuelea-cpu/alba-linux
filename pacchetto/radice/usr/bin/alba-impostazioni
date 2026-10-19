@@ -1643,6 +1643,18 @@ def app_cie():
     return None
 
 
+def webcam_collegate():
+    if DEMO:
+        return ["Elgato Facecam"]
+    nomi = []
+    base = "/sys/class/video4linux"
+    for d in sorted(os.listdir(base)) if os.path.isdir(base) else []:
+        nome = leggi_file(f"{base}/{d}/name").split(":")[0].strip()
+        if nome and nome not in nomi:
+            nomi.append(nome)
+    return nomi
+
+
 def touchscreen_presente():
     if DEMO:
         return True
@@ -1683,6 +1695,9 @@ class PaginaDispositivi(Pagina):
         self.pulsante_cie = pulsante("Installa", self._cie)
         self.riga_cie = r.aggiungi(Riga("CIE ID", "Il programma ufficiale per usare la Carta d'Identità Elettronica",
                                         self.pulsante_cie, icona="contact-new"))
+        r = self.sezione("Webcam")
+        self.riga_webcam = r.aggiungi(Riga("Webcam", "", pulsante("Regola", self._regola_webcam), icona="camera-web"))
+
         r = self.sezione("Touchscreen")
         self.tastiera = Interruttore(self._tastiera)
         self.riga_touch = r.aggiungi(Riga("Tastiera sullo schermo",
@@ -1704,6 +1719,23 @@ class PaginaDispositivi(Pagina):
         r.aggiungi(Riga("Scanner", "Acquisisci documenti e foto",
                         pulsante("Apri", lambda: avvia(["simple-scan"])), icona="scanner"))
         GLib.timeout_add_seconds(3, self._periodico)
+
+    def _regola_webcam(self):
+        """Luminosità, messa a fuoco, esposizione… (come Elgato Camera Hub)."""
+        if uscita(["flatpak", "info", "hu.irl.cameractrls"]) or uscita(["flatpak", "info", "--user", "hu.irl.cameractrls"]):
+            avvia(["flatpak", "run", "hu.irl.cameractrls"])
+            return
+        if domanda(self.finestra, "Installare il pannello della webcam?",
+                   "Cameractrls regola luminosità, contrasto, messa a fuoco, esposizione e zoom della webcam, "
+                   "come Elgato Camera Hub su Windows. Si scarica una volta sola da Flathub.", si="Installa"):
+            def installa():
+                esegui(["flatpak", "remote-add", "--user", "--if-not-exists", "flathub",
+                        "https://dl.flathub.org/repo/flathub.flatpakrepo"], timeout=60)
+                return esegui(["flatpak", "install", "--user", "-y", "--noninteractive", "flathub",
+                               "hu.irl.cameractrls"], timeout=900)
+            in_sottofondo(installa, lambda r: avvia(["flatpak", "run", "hu.irl.cameractrls"]) if r and r[0] == 0
+                          else (avvia(["guvcview"]) or messaggio(self.finestra, "Download non riuscito",
+                                                                 "Controlla la connessione e riprova.")))
 
     def _tastiera(self, attiva):
         segno = os.path.join(CONF, "tastiera-spenta")
@@ -1749,6 +1781,14 @@ class PaginaDispositivi(Pagina):
             self.riga_lettori.imposta_sottotitolo("Collegato: " + ", ".join(lettori) + " ✓")
         else:
             self.riga_lettori.imposta_sottotitolo("Nessun lettore collegato. Funzionano i lettori USB di tutte le marche principali.")
+        cam = webcam_collegate()
+        elgato = any("elgato" in c.lower() or "facecam" in c.lower() for c in cam)
+        if cam:
+            self.riga_webcam.imposta_sottotitolo("Collegata: " + ", ".join(cam) + " ✓" +
+                                                 ("  Usa una porta USB 3.0 (blu) per la massima qualità." if elgato else ""))
+        else:
+            self.riga_webcam.imposta_sottotitolo("Nessuna webcam collegata. Elgato Facecam, Logitech e le webcam "
+                                                 "USB standard funzionano senza driver.")
         touch = touchscreen_presente()
         self.tastiera.set_sensitive(touch and esiste("onboard"))
         self.tastiera.imposta(touch and not os.path.exists(os.path.join(CONF, "tastiera-spenta")))

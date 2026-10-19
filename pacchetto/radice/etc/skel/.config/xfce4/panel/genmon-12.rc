@@ -1,0 +1,6 @@
+Command=alba-icona volume
+UseLabel=0
+Text=
+UpdatePeriod=2000
+Font=Inter Semi-Bold 10
+EnableSingleRow=1

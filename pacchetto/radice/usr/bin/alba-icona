@@ -19,7 +19,7 @@ case "${1:-}" in
         ICONA=network-wireless-signal-none-symbolic; TIP="Non connesso: clicca per scegliere una rete"
       fi
     fi
-    echo "<icon>$ICONA</icon><iconclick>alba-rapido wifi</iconclick><tool>$TIP</tool>"
+    echo "<icon>$ICONA</icon><iconclick>alba-rapido controlli</iconclick><tool>$TIP</tool>"
     ;;
   bluetooth)
     if ! command -v bluetoothctl >/dev/null || ! bluetoothctl show >/dev/null 2>&1 || [ -z "$(bluetoothctl list 2>/dev/null)" ]; then
@@ -32,7 +32,21 @@ case "${1:-}" in
     else
       ICONA=bluetooth-disabled-symbolic; TIP="Bluetooth spento"
     fi
-    echo "<icon>$ICONA</icon><iconclick>alba-rapido bluetooth</iconclick><tool>$TIP</tool>"
+    echo "<icon>$ICONA</icon><iconclick>alba-rapido controlli</iconclick><tool>$TIP</tool>"
+    ;;
+  volume)
+    V="$(pactl get-sink-volume @DEFAULT_SINK@ 2>/dev/null | grep -o '[0-9]*%' | head -1 | tr -d %)"
+    if [ -z "$V" ]; then echo "<icon>audio-volume-muted-symbolic</icon><iconclick>alba-rapido controlli</iconclick><tool>Audio non disponibile</tool>"; exit 0; fi
+    if pactl get-sink-mute @DEFAULT_SINK@ 2>/dev/null | grep -q yes || [ "$V" -eq 0 ]; then L=muted
+    elif [ "$V" -lt 34 ]; then L=low; elif [ "$V" -lt 67 ]; then L=medium; else L=high; fi
+    echo "<icon>audio-volume-$L-symbolic</icon><iconclick>alba-rapido controlli</iconclick><tool>Volume: $V%</tool>"
+    ;;
+  batteria)
+    B="$(ls -d /sys/class/power_supply/BAT* 2>/dev/null | head -1)"
+    if [ -z "$B" ]; then echo "<txt></txt>"; exit 0; fi
+    P="$(cat "$B/capacity")"; S="$(cat "$B/status")"
+    C=""; [ "$S" = Charging ] || [ "$S" = Full ] && C="-charging"
+    echo "<icon>battery-level-$(( (P + 5) / 10 * 10 ))$C-symbolic</icon><txt>$P%</txt><iconclick>alba-rapido controlli</iconclick><txtclick>alba-rapido controlli</txtclick><tool>Batteria: $P%$([ "$S" = Charging ] && echo ' (in carica)')</tool>"
     ;;
   notifiche)
     if [ "$(xfconf-query -c xfce4-notifyd -p /do-not-disturb 2>/dev/null)" = "true" ]; then

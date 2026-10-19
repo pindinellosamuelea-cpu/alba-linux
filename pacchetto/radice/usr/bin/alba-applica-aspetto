@@ -3,7 +3,7 @@
 # Con --se-serve lo fa solo se l'aspetto è cambiato dall'ultima volta
 # (per non cancellare le personalizzazioni a ogni aggiornamento).
 set -u
-VERSIONE_ASPETTO=9
+VERSIONE_ASPETTO=10
 CONF="${XDG_CONFIG_HOME:-$HOME/.config}/alba"
 MARCA="$CONF/aspetto-versione"
 mkdir -p "$CONF"
@@ -59,7 +59,9 @@ setsid -f xfwm4 --replace >/dev/null 2>&1
 setsid -f xfce4-panel >/dev/null 2>&1
 
 # Scorciatoie aggiornate (Impostazioni e Gestione attività)
-for k in "<Super>i=alba-impostazioni" "<Primary><Shift>Escape=alba-gestione-attivita" "<Primary><Alt>Delete=alba-gestione-attivita"; do
+for k in "<Super>i=alba-impostazioni" "<Primary><Shift>Escape=alba-gestione-attivita" "<Primary><Alt>Delete=alba-gestione-attivita" \
+         "XF86AudioRaiseVolume=alba-volume su" "XF86AudioLowerVolume=alba-volume giu" "XF86AudioMute=alba-volume muto" \
+         "<Super>a=alba-rapido controlli" "<Super>n=alba-rapido notifiche"; do
   xfconf-query -c xfce4-keyboard-shortcuts -p "/commands/custom/${k%%=*}" -n -t string -s "${k#*=}" 2>/dev/null || \
   xfconf-query -c xfce4-keyboard-shortcuts -p "/commands/custom/${k%%=*}" -s "${k#*=}" 2>/dev/null
 done

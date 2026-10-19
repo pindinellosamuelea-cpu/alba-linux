@@ -33,8 +33,8 @@
         <value type="int" value="5"/>
         <value type="int" value="9"/>
         <value type="int" value="10"/>
-        <value type="int" value="6"/>
-        <value type="int" value="7"/>
+        <value type="int" value="12"/>
+        <value type="int" value="13"/>
         <value type="int" value="8"/>
         <value type="int" value="11"/>
       </property>
@@ -56,12 +56,6 @@
       <property name="icon-size" type="int" value="18"/>
       <property name="hide-new-items" type="bool" value="false"/>
     </property>
-    <property name="plugin-6" type="string" value="pulseaudio">
-      <property name="enable-keyboard-shortcuts" type="bool" value="true"/>
-      <property name="show-notifications" type="bool" value="true"/>
-      <property name="mixer-command" type="string" value="alba-impostazioni --pagina suono"/>
-    </property>
-    <property name="plugin-7" type="string" value="power-manager-plugin"/>
     <property name="plugin-8" type="string" value="clock">
       <property name="mode" type="uint" value="2"/>
       <property name="digital-layout" type="uint" value="0"/>
@@ -91,6 +85,20 @@
       <property name="use-label" type="bool" value="false"/>
       <property name="text" type="string" value=""/>
       <property name="update-period" type="int" value="3000"/>
+      <property name="enable-single-row" type="bool" value="true"/>
+    </property>
+    <property name="plugin-12" type="string" value="genmon">
+      <property name="command" type="string" value="alba-icona volume"/>
+      <property name="use-label" type="bool" value="false"/>
+      <property name="text" type="string" value=""/>
+      <property name="update-period" type="int" value="2000"/>
+      <property name="enable-single-row" type="bool" value="true"/>
+    </property>
+    <property name="plugin-13" type="string" value="genmon">
+      <property name="command" type="string" value="alba-icona batteria"/>
+      <property name="use-label" type="bool" value="false"/>
+      <property name="text" type="string" value=""/>
+      <property name="update-period" type="int" value="20000"/>
       <property name="enable-single-row" type="bool" value="true"/>
     </property>
   </property>

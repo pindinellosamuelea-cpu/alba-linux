@@ -36,12 +36,16 @@ xfce4-popup-whiskermenu >/dev/null 2>&1
 foto 02-menu-start 3
 xdotool key Escape 2>/dev/null || pkill -f whiskermenu-popup 2>/dev/null
 
-for modo in wifi bluetooth notifiche; do
+for modo in controlli notifiche; do
   /usr/bin/alba-rapido "$modo" >/dev/null 2>&1 &
   PID=$!
   foto "05-menu-rapido-$modo" 4
   kill $PID 2>/dev/null; rm -f /tmp/alba-rapido.pid
 done
+/usr/bin/alba-tema chiaro; sleep 1
+/usr/bin/alba-rapido controlli >/dev/null 2>&1 &
+PID=$!; foto "06-menu-rapido-chiaro" 4; kill $PID 2>/dev/null; rm -f /tmp/alba-rapido.pid
+/usr/bin/alba-tema scuro; sleep 1
 
 for pagina in batteria aspetto wifi scheda-grafica aggiornamenti data-ora problemi telefono dispositivi; do
   /usr/bin/alba-impostazioni --pagina "$pagina" >/dev/null 2>&1 &

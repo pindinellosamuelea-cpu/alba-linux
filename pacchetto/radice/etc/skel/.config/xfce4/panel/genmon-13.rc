@@ -1,0 +1,6 @@
+Command=alba-icona batteria
+UseLabel=0
+Text=
+UpdatePeriod=20000
+Font=Inter Semi-Bold 10
+EnableSingleRow=1

@@ -73,14 +73,15 @@ kill $PID 2>/dev/null
 if apt-get install -y -q plymouth-x11 >/dev/null 2>&1 && [ -e /usr/lib/x86_64-linux-gnu/plymouth/renderers/x11.so ]; then
   plymouth-set-default-theme alba >/dev/null 2>&1
   pkill -x xfce4-panel; pkill -x xfdesktop
-  plymouthd --no-daemon --debug-file=/tmp/plymouth.log >/dev/null 2>&1 &
+  mkdir -p /run/plymouth
+  plymouthd --no-daemon --debug --debug-file=/tmp/plymouth.log --kernel-command-line="quiet splash plymouth.force-splash" >/dev/null 2>&1 &
   sleep 1
   plymouth show-splash; plymouth change-mode --system-upgrade 2>/dev/null
   plymouth system-update --progress=45
   plymouth display-message --text="Installo le novità…"
   foto 35-aggiornamento-al-riavvio 2
   plymouth quit 2>/dev/null; sleep 1
-  grep -iE "error|script" /tmp/plymouth.log | tail -15
+  echo "== plymouth"; grep -iE "error|script|renderer|x11|fail" /tmp/plymouth.log | tail -25
 fi
 
 # Schermata di accesso

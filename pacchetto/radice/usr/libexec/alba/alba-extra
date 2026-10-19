@@ -46,6 +46,10 @@ apt_extra appimage libfuse2t64
 apt_extra telefono kdeconnect
 apt_extra exe winetricks cabextract
 apt_extra audio libspa-0.2-bluetooth alsa-ucm-conf firmware-sof-signed
+# Schede di acquisizione video USB (anche le economiche MS2109/MS2130) e
+# camera virtuale per OBS. I driver em28xx, usbtv, stk1160, cx231xx sono già
+# nel kernel; qui aggiungiamo strumenti e firmware.
+apt_extra acquisizione v4l-utils v4l2loopback-dkms "linux-headers-$(uname -r)" firmware-linux-free
 
 # Touchscreen: tastiera sullo schermo, gesti, rotazione (solo se c'è un touch)
 TOUCH=0

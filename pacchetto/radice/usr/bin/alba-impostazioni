@@ -1695,8 +1695,9 @@ class PaginaDispositivi(Pagina):
         self.pulsante_cie = pulsante("Installa", self._cie)
         self.riga_cie = r.aggiungi(Riga("CIE ID", "Il programma ufficiale per usare la Carta d'Identità Elettronica",
                                         self.pulsante_cie, icona="contact-new"))
-        r = self.sezione("Webcam")
-        self.riga_webcam = r.aggiungi(Riga("Webcam", "", pulsante("Regola", self._regola_webcam), icona="camera-web"))
+        r = self.sezione("Webcam e acquisizione video")
+        self.riga_webcam = r.aggiungi(Riga("Webcam e schede di acquisizione", "", pulsante("Regola", self._regola_webcam),
+                                           icona="camera-web"))
 
         r = self.sezione("Touchscreen")
         self.tastiera = Interruttore(self._tastiera)
@@ -1787,8 +1788,9 @@ class PaginaDispositivi(Pagina):
             self.riga_webcam.imposta_sottotitolo("Collegata: " + ", ".join(cam) + " ✓" +
                                                  ("  Usa una porta USB 3.0 (blu) per la massima qualità." if elgato else ""))
         else:
-            self.riga_webcam.imposta_sottotitolo("Nessuna webcam collegata. Elgato Facecam, Logitech e le webcam "
-                                                 "USB standard funzionano senza driver.")
+            self.riga_webcam.imposta_sottotitolo("Nessuna collegata. Webcam (Elgato Facecam, Logitech…) e schede di "
+                                                 "acquisizione HDMI USB, anche le economiche, funzionano senza driver: "
+                                                 "aprile in OBS come «Dispositivo di acquisizione video».")
         touch = touchscreen_presente()
         self.tastiera.set_sensitive(touch and esiste("onboard"))
         self.tastiera.imposta(touch and not os.path.exists(os.path.join(CONF, "tastiera-spenta")))

@@ -71,6 +71,12 @@ fi
 # 4. Steam: Proton Experimental predefinito e shader più veloci
 /usr/bin/alba-steam >/dev/null 2>&1
 
+# 4b. Aggiornamento di Alba installato da solo: chiede di riavviare
+(
+  sleep 20
+  while true; do /usr/libexec/alba/alba-chiedi-riavvio; sleep 60; done
+) >/dev/null 2>&1 &
+
 # 5. Avviso quando ci sono aggiornamenti (controlla ogni 6 ore)
 (
   sleep 90

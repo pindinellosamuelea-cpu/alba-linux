@@ -1,0 +1,16 @@
+#!/bin/bash
+# Alba Linux - se Alba si è aggiornata (anche da sola, in automatico) e il
+# computer non è ancora stato riavviato, chiede il riavvio con il conto alla
+# rovescia. Leggerissimo: controlla solo un file.
+CONF="${XDG_CONFIG_HOME:-$HOME/.config}/alba"
+M=/var/lib/alba/riavvio-aggiornamento
+[ -f "$M" ] || exit 0
+[ "$(cat "$M")" = "$(cat "$CONF/riavvio-visto" 2>/dev/null)" ] && exit 0
+AVVIO=$(( $(date +%s) - $(cut -d. -f1 /proc/uptime) ))
+if [ "$(stat -c %Y "$M")" -lt "$AVVIO" ]; then
+  mkdir -p "$CONF"; cat "$M" > "$CONF/riavvio-visto"   # già riavviato dopo l'aggiornamento
+  exit 0
+fi
+fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 && exit 0     # sta ancora installando
+pgrep -u "$(id -u)" -f "alba-impostazioni --riavvio-aggiornamento" >/dev/null && exit 0
+exec /usr/bin/alba-impostazioni --riavvio-aggiornamento

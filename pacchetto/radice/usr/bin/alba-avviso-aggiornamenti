@@ -6,6 +6,9 @@ set -u
 CONF="${XDG_CONFIG_HOME:-$HOME/.config}/alba"
 mkdir -p "$CONF"
 
+# Alba aggiornata da sola: chiedi il riavvio (in una finestra a parte)
+setsid -f /usr/libexec/alba/alba-chiedi-riavvio >/dev/null 2>&1
+
 # Riparazioni fatte da sole in sottofondo: avvisa con una notifica chiara
 REG=/var/lib/alba/riparazioni.log
 if [ -f "$REG" ]; then

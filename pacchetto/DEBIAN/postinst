@@ -180,6 +180,12 @@ if [ -n "${2:-}" ] && [ "$(cat "$STATO/pulizia-versione" 2>/dev/null)" != "$(cat
   fi
 fi
 
+# --- Dopo un aggiornamento: alla sessione aperta viene chiesto di riavviare ---
+# (anche quando l'aggiornamento si è installato da solo in automatico)
+if [ -n "${2:-}" ]; then
+  cat /usr/share/alba/versione > "$STATO/riavvio-aggiornamento" 2>/dev/null || true
+fi
+
 # --- Nome e versione ---------------------------------------------------------------
 VERSIONE="$(cat /usr/share/alba/versione 2>/dev/null || echo 1)"
 cat > /etc/alba-release <<EOF

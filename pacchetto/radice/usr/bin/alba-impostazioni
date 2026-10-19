@@ -1486,11 +1486,21 @@ class PaginaGrafica(Pagina):
                         pulsante("Apri", lambda: avvia(["alba-gestione-attivita"]))))
         self.riga_pannello = r.aggiungi(Riga("Pannello della scheda grafica", "Frequenze, ventole e consumi",
                                              pulsante("Apri", self._pannello)))
+        self.riga_obs = r.aggiungi(Riga("Registrare e fare dirette (OBS)", "Controllo…", icona="media-record"))
+        in_sottofondo(codificatori_video, self._mostra_obs)
         self.fps = Interruttore(self._fps)
         r.aggiungi(Riga("Mostra FPS e temperature nei giochi", "Un piccolo riquadro in alto a sinistra durante il gioco", self.fps))
         r.aggiungi(Riga("Driver", "Controlla se c'è un driver migliore per la tua scheda",
                         pulsante("Controlla", lambda: avvia(["alba-driver-grafici"]))))
         self._timer = None
+
+    def _mostra_obs(self, trovati):
+        if not trovati:
+            self.riga_obs.imposta_sottotitolo("Registra con il processore. Il supporto della scheda grafica "
+                                              "si installa da solo con gli aggiornamenti.")
+            return
+        self.riga_obs.imposta_sottotitolo("Pronto ✓ " + " · ".join(trovati) +
+                                          ". In OBS: Impostazioni → Uscita → Codificatore.")
 
     def _azione_avviso(self):
         if self._azione == "riavvia":
@@ -2291,8 +2301,30 @@ class PaginaAggiornamenti(Pagina):
         in_sottofondo(lavoro, fatto)
 
 
+def codificatori_video():
+    """Quali codificatori hardware può usare OBS (Quick Sync, VA-API, NVENC)."""
+    if DEMO:
+        return ["Intel Quick Sync (QuickSync H.264/HEVC)", "NVIDIA NVENC"]
+    trovati = []
+    schede = uscita(["lspci"]).lower()
+    va = uscita(["vainfo"], timeout=10) if esiste("vainfo") else ""
+    if "VAEntrypointEncSlice" in va:
+        if "intel" in schede and "iHD" in va or "Intel" in va:
+            trovati.append("Intel Quick Sync (QuickSync H.264/HEVC)")
+        if re.search(r"amd|radeon", va, re.I):
+            trovati.append("AMD / Vega (FFmpeg VAAPI)")
+    if os.path.exists("/proc/driver/nvidia/version") and glob.glob("/usr/lib/x86_64-linux-gnu/libnvidia-encode.so*"):
+        trovati.append("NVIDIA NVENC")
+    return trovati
+
+
 def riavvio_con_conto(finestra, secondi=15):
     """Finestra "Riavvio tra 15 secondi" con Riavvia ora / Più tardi."""
+    try:  # segna come già chiesto (non lo richiede di nuovo da solo)
+        with open(os.path.join(CONF, "riavvio-visto"), "w") as f:
+            f.write(leggi_file("/var/lib/alba/riavvio-aggiornamento"))
+    except OSError:
+        pass
     d = Gtk.Dialog(transient_for=finestra, modal=True, title="Aggiornamento completato")
     d.set_default_size(420, -1)
     d.add_button("Più tardi", Gtk.ResponseType.CANCEL)
@@ -2488,6 +2520,10 @@ AUTOTEST = "--autotest" in sys.argv
 
 
 def main():
+    if "--riavvio-aggiornamento" in sys.argv:
+        # aggiornamento installato da solo (in automatico): chiede il riavvio
+        riavvio_con_conto(None, 60)
+        return
     pagina = None
     if "--pagina" in sys.argv:
         i = sys.argv.index("--pagina")

@@ -130,6 +130,35 @@ if ! fatto wine-recente; then
   rm -f /tmp/winehq.sources
 fi
 
+# Registrare e fare dirette con la scheda grafica (OBS): Intel Quick Sync,
+# AMD/Vega (VA-API) e NVIDIA (NVENC). Il processore resta libero per il gioco.
+SCHEDE="$(lspci -nn 2>/dev/null | grep -iE 'vga|3d|display')"
+if echo "$SCHEDE" | grep -qi intel; then
+  apt_extra codifica-intel intel-media-va-driver-non-free i965-va-driver-shaders libvpl2 libmfx-gen1.2 vainfo
+fi
+if echo "$SCHEDE" | grep -qiE 'amd|ati |radeon'; then
+  apt_extra codifica-amd mesa-va-drivers vainfo
+fi
+if echo "$SCHEDE" | grep -qi nvidia && [ -e /proc/driver/nvidia/version ]; then
+  apt_extra codifica-nvidia libnvidia-encode1
+fi
+# Se l'OBS installato non ha Quick Sync, metto la versione ufficiale di OBS
+# (Flatpak) che lo include, e tolgo il doppione.
+if echo "$SCHEDE" | grep -qi intel && ! fatto obs-quicksync; then
+  if ls /usr/lib/x86_64-linux-gnu/obs-plugins/obs-qsv11.so >/dev/null 2>&1 || ! command -v obs >/dev/null; then
+    segna obs-quicksync
+  elif command -v flatpak >/dev/null && \
+       flatpak install --system -y --noninteractive flathub com.obsproject.Studio >/dev/null 2>&1; then
+    for ramo in 24.08 25.08 23.08; do
+      flatpak install --system -y --noninteractive flathub "org.freedesktop.Platform.VAAPI.Intel//$ramo" >/dev/null 2>&1
+    done
+    "${APT[@]}" remove obs-studio >/dev/null 2>&1 || true
+    segna obs-quicksync
+  else
+    echo "ATTENZIONE: OBS con Quick Sync non installato (riprovo più tardi)"
+  fi
+fi
+
 # Telefono: apri il firewall solo verso la rete di casa (KDE Connect e LocalSend)
 if command -v ufw >/dev/null && ! fatto firewall-telefono; then
   for rete in 192.168.0.0/16 10.0.0.0/8 172.16.0.0/12; do

@@ -2,7 +2,10 @@
 # Alba Linux - icone dinamiche della barra (plugin "genmon"):
 # Wi-Fi, Bluetooth, volume, batteria e notifiche.
 # Un clic apre il menu di quella cosa (Wi-Fi -> reti, batteria -> batteria...).
-# Uso: alba-icona wifi|bluetooth|notifiche
+# Uso: alba-icona wifi|bluetooth|volume|batteria|notifiche
+# I comandi in inglese: nmcli in italiano scrive "sì" invece di "yes"
+# e l'icona del Wi-Fi risultava "non connesso" anche quando lo era.
+export LC_ALL=C.UTF-8
 case "${1:-}" in
   wifi)
     if ! command -v nmcli >/dev/null; then echo "<icon>network-offline-symbolic</icon>"; exit 0; fi
@@ -21,11 +24,11 @@ case "${1:-}" in
         ICONA=alba-wifi-scollegato-symbolic; TIP="Non connesso: clicca per scegliere una rete"
       fi
     fi
-    echo "<icon>$ICONA</icon><iconclick>alba-rapido wifi</iconclick><tool>$TIP</tool>"
+    echo "<icon>$ICONA</icon><iconclick>alba-rapido controlli</iconclick><tool>$TIP</tool>"
     ;;
   bluetooth)
     if ! command -v bluetoothctl >/dev/null || ! bluetoothctl show >/dev/null 2>&1 || [ -z "$(bluetoothctl list 2>/dev/null)" ]; then
-      echo "<icon>alba-bluetooth-spento-symbolic</icon><iconclick>alba-rapido bluetooth</iconclick><tool>Bluetooth non disponibile</tool>"; exit 0
+      echo "<icon>alba-bluetooth-spento-symbolic</icon><iconclick>alba-rapido controlli</iconclick><tool>Bluetooth non disponibile</tool>"; exit 0
     fi
     if bluetoothctl show 2>/dev/null | grep -q "Powered: yes"; then
       N="$(bluetoothctl devices Connected 2>/dev/null | wc -l)"
@@ -34,14 +37,14 @@ case "${1:-}" in
     else
       ICONA=alba-bluetooth-spento-symbolic; TIP="Bluetooth spento"
     fi
-    echo "<icon>$ICONA</icon><iconclick>alba-rapido bluetooth</iconclick><tool>$TIP</tool>"
+    echo "<icon>$ICONA</icon><iconclick>alba-rapido controlli</iconclick><tool>$TIP</tool>"
     ;;
   volume)
     V="$(pactl get-sink-volume @DEFAULT_SINK@ 2>/dev/null | grep -o '[0-9]*%' | head -1 | tr -d %)"
-    if [ -z "$V" ]; then echo "<icon>alba-volume-muto-symbolic</icon><iconclick>alba-rapido audio</iconclick><tool>Audio non disponibile</tool>"; exit 0; fi
+    if [ -z "$V" ]; then echo "<icon>alba-volume-muto-symbolic</icon><iconclick>alba-rapido controlli</iconclick><tool>Audio non disponibile</tool>"; exit 0; fi
     if pactl get-sink-mute @DEFAULT_SINK@ 2>/dev/null | grep -q yes; then L=muto
     elif [ "$V" -eq 0 ]; then L=0; elif [ "$V" -lt 34 ]; then L=1; elif [ "$V" -lt 67 ]; then L=2; else L=3; fi
-    echo "<icon>alba-volume-$L-symbolic</icon><iconclick>alba-rapido audio</iconclick><tool>Volume: $V%</tool>"
+    echo "<icon>alba-volume-$L-symbolic</icon><iconclick>alba-rapido controlli</iconclick><tool>Volume: $V%</tool>"
     ;;
   batteria)
     B="$(ls -d /sys/class/power_supply/BAT* 2>/dev/null | head -1)"
@@ -49,7 +52,7 @@ case "${1:-}" in
     P="$(cat "$B/capacity")"; S="$(cat "$B/status")"
     C=""; { [ "$S" = Charging ] || [ "$S" = Full ]; } && C="-carica"
     L=$(( (P + 5) / 10 * 10 )); [ "$L" -gt 100 ] && L=100
-    echo "<icon>alba-batteria-$L$C-symbolic</icon><txt>$P%</txt><iconclick>alba-rapido batteria</iconclick><txtclick>alba-rapido batteria</txtclick><tool>Batteria: $P%$([ "$S" = Charging ] && echo ' (in carica)')</tool>"
+    echo "<icon>alba-batteria-$L$C-symbolic</icon><txt>$P%</txt><iconclick>alba-rapido controlli</iconclick><txtclick>alba-rapido controlli</txtclick><tool>Batteria: $P%$([ "$S" = Charging ] && echo ' (in carica)')</tool>"
     ;;
   notifiche)
     if [ "$(xfconf-query -c xfce4-notifyd -p /do-not-disturb 2>/dev/null)" = "true" ]; then

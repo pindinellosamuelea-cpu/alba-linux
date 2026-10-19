@@ -36,7 +36,7 @@ xfce4-popup-whiskermenu >/dev/null 2>&1
 foto 02-menu-start 3
 xdotool key Escape 2>/dev/null || pkill -f whiskermenu-popup 2>/dev/null
 
-for modo in controlli notifiche wifi bluetooth audio batteria; do
+for modo in controlli notifiche; do
   /usr/bin/alba-rapido "$modo" >/dev/null 2>&1 &
   PID=$!
   foto "05-menu-rapido-$modo" 4

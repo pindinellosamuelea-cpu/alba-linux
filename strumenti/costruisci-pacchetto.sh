@@ -68,6 +68,38 @@ if [ "${TEMA_FLUENT:-0}" = 1 ]; then
     if [ -d "$P/usr/share/icons/Fluent-dark" ] && [ -d "$P/usr/share/icons/Fluent" ]; then
       ICONE_CHIARO="Fluent"; ICONE_SCURO="Fluent-dark"
       rm -rf "$P/usr/share/icons/Fluent-light"
+      # Icone della barra e delle Impostazioni rapide: proprio quelle Fluent
+      # scelte dall'utente (le versioni "symbolic", pulite a ogni dimensione),
+      # copiate con nomi Alba così non vengono sostituite da varianti diverse.
+      SIMB="$P/usr/share/icons/Fluent/symbolic"
+      DEST="$P/usr/share/icons/hicolor/scalable/status"
+      copia() { # alba-nome  nome-fluent
+        local f
+        f="$(find -L "$SIMB" -name "$2.svg" 2>/dev/null | head -1)"
+        [ -n "$f" ] && cp -L "$f" "$DEST/$1.svg" && return 0
+        echo "   (manca $2: tengo l'icona Alba)"
+      }
+      copia alba-wifi-0-symbolic network-wireless-signal-none-symbolic
+      copia alba-wifi-1-symbolic network-wireless-signal-weak-symbolic
+      copia alba-wifi-2-symbolic network-wireless-signal-ok-symbolic
+      copia alba-wifi-3-symbolic network-wireless-signal-good-symbolic
+      copia alba-wifi-4-symbolic network-wireless-signal-excellent-symbolic
+      copia alba-wifi-scollegato-symbolic network-wireless-disconnected-symbolic
+      copia alba-wifi-spento-symbolic network-wireless-offline-symbolic
+      copia alba-volume-0-symbolic audio-volume-muted-symbolic
+      copia alba-volume-1-symbolic audio-volume-low-symbolic
+      copia alba-volume-2-symbolic audio-volume-medium-symbolic
+      copia alba-volume-3-symbolic audio-volume-high-symbolic
+      copia alba-volume-muto-symbolic audio-volume-muted-symbolic
+      for l in 0 10 20 30 40 50 60 70 80 90 100; do
+        copia "alba-batteria-$l-symbolic" "battery-level-$l-symbolic"
+        if [ "$l" = 100 ]; then copia "alba-batteria-100-carica-symbolic" battery-level-100-charged-symbolic
+        else copia "alba-batteria-$l-carica-symbolic" "battery-level-$l-charging-symbolic"; fi
+      done
+      copia alba-bluetooth-symbolic bluetooth-active-symbolic
+      copia alba-bluetooth-connesso-symbolic bluetooth-active-symbolic
+      copia alba-bluetooth-spento-symbolic bluetooth-disabled-symbolic
+      copia alba-ingranaggio-symbolic emblem-system-symbolic
     fi
   fi
 fi

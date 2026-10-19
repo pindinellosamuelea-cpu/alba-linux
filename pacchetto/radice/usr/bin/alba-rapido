@@ -456,7 +456,7 @@ class Rapido(Gtk.Window):
         self.testo_batteria = etichetta("", "piccolo")
         basso.pack_start(self.icona_batteria, False, False, 0)
         basso.pack_start(self.testo_batteria, True, True, 0)
-        ingranaggio = Gtk.Button.new_from_icon_name("emblem-system-symbolic", Gtk.IconSize.BUTTON)
+        ingranaggio = Gtk.Button.new_from_icon_name("alba-ingranaggio-symbolic", Gtk.IconSize.LARGE_TOOLBAR)
         ingranaggio.set_relief(Gtk.ReliefStyle.NONE)
         ingranaggio.set_tooltip_text("Tutte le impostazioni")
         ingranaggio.connect("clicked", lambda *_: (avvia(["alba-impostazioni"]), self.destroy()))
@@ -496,25 +496,24 @@ class Rapido(Gtk.Window):
         riga = Gtk.Box(spacing=8)
         riga.get_style_context().add_class("cursore-rapido")
         img = Gtk.Image.new_from_icon_name(icona, Gtk.IconSize.LARGE_TOOLBAR)
+        b = Gtk.Button()   # sempre un pulsante: icone e cursori allineati
+        b.set_relief(Gtk.ReliefStyle.NONE)
+        b.add(img)
         if clic_icona:
-            b = Gtk.Button()
-            b.set_relief(Gtk.ReliefStyle.NONE)
-            b.add(img)
             b.connect("clicked", lambda *_: clic_icona())
-            riga.pack_start(b, False, False, 0)
-        else:
-            img.set_margin_start(8)
-            img.set_margin_end(8)
-            riga.pack_start(img, False, False, 0)
+        riga.pack_start(b, False, False, 0)
         cur = A.Cursore(azione, 0, 100)
-        cur.set_size_request(220, -1)
+        cur.set_size_request(200, -1)
         riga.pack_start(cur, True, True, 0)
+        f = Gtk.Button.new_from_icon_name("go-next-symbolic", Gtk.IconSize.MENU)
+        f.set_relief(Gtk.ReliefStyle.NONE)
         if freccia:
-            f = Gtk.Button.new_from_icon_name("go-next-symbolic", Gtk.IconSize.MENU)
-            f.set_relief(Gtk.ReliefStyle.NONE)
             f.set_tooltip_text("Scegli casse o cuffie")
             f.connect("clicked", lambda *_: freccia())
-            riga.pack_start(f, False, False, 0)
+        else:   # spazio vuoto uguale: i due cursori restano allineati e dentro il pannello
+            f.set_opacity(0)
+            f.set_sensitive(False)
+        riga.pack_start(f, False, False, 0)
         return riga, cur, img
 
     def _carica_controlli(self):
@@ -975,8 +974,10 @@ def cancella_notifiche():
 
 if __name__ == "__main__":
     modo = sys.argv[1] if len(sys.argv) > 1 else "controlli"
-    # Ogni icona apre il SUO menu (Wi-Fi -> reti, batteria -> batteria...);
-    # le impostazioni rapide con tutto insieme restano su Super+A.
+    # Wi-Fi, Bluetooth, volume e batteria aprono tutti le Impostazioni rapide:
+    # un solo menu con tutto, come preferisce l'utente.
+    if modo in ("wifi", "bluetooth", "audio", "batteria"):
+        modo = "controlli"
     if modo not in ("wifi", "bluetooth", "audio", "batteria", "controlli", "notifiche"):
         print(__doc__)
         sys.exit(1)

@@ -1,0 +1,7 @@
+#!/bin/bash
+# Alba Linux - Apple Music in una finestra tutta sua (Apple non fa un'app
+# per Linux: si usa la versione web ufficiale, con le stesse funzioni).
+URL="https://music.apple.com/it/"
+if command -v firefox-esr >/dev/null; then exec firefox-esr --new-window "$URL"
+elif command -v firefox >/dev/null; then exec firefox --new-window "$URL"
+else exec xdg-open "$URL"; fi

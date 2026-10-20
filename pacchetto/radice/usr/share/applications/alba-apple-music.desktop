@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Apple Music
+Comment=Ascolta Apple Music (serve un abbonamento Apple)
+Exec=/usr/bin/alba-apple-music
+Icon=multimedia-audio-player
+Categories=AudioVideo;Audio;Player;
+Keywords=apple;music;itunes;musica;
+StartupNotify=true

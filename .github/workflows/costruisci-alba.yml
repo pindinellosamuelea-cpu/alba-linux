@@ -100,6 +100,14 @@ jobs:
           if bash -n /usr/libexec/alba/alba-aggiornamento && [ ! -e /system-update ]; then
             echo "OK  aggiornamento al riavvio (prepara/annulla)" >> $R
           else echo "ERR aggiornamento al riavvio (vedi controlli.log)" >> $R; OK=false; fi
+          # Office: le impostazioni di Alba non devono impedire l'avvio di LibreOffice
+          apt-get install -y --no-install-recommends libreoffice-writer-nogui >> registro/installazione.log 2>&1 || true
+          if command -v soffice >/dev/null; then
+            mkdir -p /tmp/lo && echo "Prova Alba" > /tmp/lo/prova.txt
+            HOME=/tmp/lo timeout 120 soffice --headless --convert-to docx --outdir /tmp/lo /tmp/lo/prova.txt >> registro/controlli.log 2>&1 || true
+            if [ -s /tmp/lo/prova.docx ]; then echo "OK  Office (LibreOffice parte e salva in .docx)" >> $R
+            else echo "ERR Office: LibreOffice non parte (vedi controlli.log)" >> $R; OK=false; fi
+          fi
           apt-get install -y gir1.2-lightdm-1 >> registro/installazione.log 2>&1 || true
           if python3 -c "import gi; gi.require_version('LightDM','1'); from gi.repository import LightDM" >> registro/controlli.log 2>&1; then
             echo "OK  schermata di accesso: componenti presenti" >> $R

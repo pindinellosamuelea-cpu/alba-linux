@@ -95,6 +95,10 @@ RINOMINA = {
     "audacity": ("Audacity (audio)", None),
     "simple-scan": ("Scanner", None),
     "clamtk": ("Antivirus", None),
+    "libreoffice-writer": ("Word · Documenti", None),
+    "libreoffice-calc": ("Excel · Fogli di calcolo", None),
+    "libreoffice-impress": ("PowerPoint · Presentazioni", None),
+    "alba-apple-music": ("Apple Music", None),
 }
 
 

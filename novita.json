@@ -2,6 +2,20 @@
   "nota": "Novità di Alba mostrate in Impostazioni → Aggiornamenti. 'data' = quando la novità è entrata in Alba (UTC). Le più recenti in alto.",
   "versioni": [
     {
+      "data": "2026-10-20T12:30",
+      "titolo": "Alba 1.2: accesso, audio, Office e nuova installazione",
+      "novita": [
+        "Schermata di accesso con meteo (tocca per le previsioni), rete e batteria; dopo la password compare «Benvenuto» e lo sfondo diventa quello del tuo desktop, senza stacchi",
+        "Volume e luminosità dai tasti Fn: un solo indicatore in basso al centro, come Windows 11, niente più notifiche a raffica",
+        "Microfono più affidabile: non perde più le prime parole; in Impostazioni → Suono c'è la prova con la barra che si muove mentre parli",
+        "Office più simile a Microsoft Office: barra a schede, salvataggio in .docx/.xlsx/.pptx, nomi Word, Excel e PowerPoint nel menu",
+        "Apple Music nel menu Start",
+        "Nuova pagina Tastiera: due lingue e cambio con Super+Spazio, come su Windows (anche Svizzero e Mac)",
+        "Processori Intel: temperatura più stabile, ventole che salgono più gradualmente",
+        "Nuova installazione dalla chiavetta: parte subito l'installer di Alba a tutto schermo; al primo avvio la Configurazione iniziale con lingua, Wi-Fi, account, ora e aspetto"
+      ]
+    },
+    {
       "data": "2026-10-19T23:30",
       "titolo": "Correzioni agli aggiornamenti",
       "novita": [

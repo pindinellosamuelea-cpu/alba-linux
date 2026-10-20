@@ -1,0 +1,11 @@
+[Unit]
+Description=Alba: configurazione iniziale al primo avvio
+Before=display-manager.service lightdm.service
+After=systemd-user-sessions.service local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/alba/alba-oobe-controlla
+
+[Install]
+WantedBy=graphical.target

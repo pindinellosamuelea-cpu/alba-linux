@@ -1,0 +1,12 @@
+#!/bin/bash
+# Alba Linux - sessione della chiavetta: solo il programma di installazione,
+# a tutto schermo, con i colori di Alba. Se lo chiudi, riparte.
+xsetroot -solid "#0b0f29" 2>/dev/null
+xfsettingsd >/dev/null 2>&1 &
+xfwm4 --compositor=off >/dev/null 2>&1 &
+export QT_QPA_PLATFORMTHEME=gtk3
+sleep 1
+while true; do
+  sudo -E calamares >/tmp/calamares.log 2>&1
+  sleep 1
+done

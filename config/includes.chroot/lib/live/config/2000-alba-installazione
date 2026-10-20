@@ -1,0 +1,10 @@
+#!/bin/sh
+# Alba Linux (chiavetta): si parte direttamente con l'installazione,
+# senza la sessione "prova". Gira solo all'avvio dalla chiavetta.
+mkdir -p /etc/lightdm/lightdm.conf.d
+cat > /etc/lightdm/lightdm.conf.d/70-alba-installazione.conf <<EOC
+[Seat:*]
+autologin-user=${LIVE_USERNAME:-alba}
+autologin-user-timeout=0
+autologin-session=alba-installazione
+EOC

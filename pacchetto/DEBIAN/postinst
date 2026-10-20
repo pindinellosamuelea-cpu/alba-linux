@@ -86,6 +86,8 @@ EOF
 rm -f /etc/apt/apt.conf.d/52alba-unattended
 sistema_avviato && systemctl daemon-reload >/dev/null 2>&1 || true
 systemctl enable alba-aggiornamento-offline.service >/dev/null 2>&1 || true
+# Configurazione iniziale al primo avvio dopo l'installazione (come Windows)
+systemctl enable alba-oobe-controlla.service >/dev/null 2>&1 || true
 systemctl enable alba-scarica-aggiornamenti.timer >/dev/null 2>&1 || true
 sistema_avviato && systemctl start --no-block alba-scarica-aggiornamenti.timer >/dev/null 2>&1 || true
 # PackageKit (app "Software") non deve fare aggiornamenti al riavvio per conto suo

@@ -71,6 +71,14 @@ PID=$!
 foto 20-impostazioni-chiaro 5
 kill $PID 2>/dev/null
 
+# Configurazione iniziale (primo avvio dopo l'installazione)
+pkill -x xfce4-panel; pkill -x xfdesktop
+for n in 0 2 3 5; do
+  python3 /usr/libexec/alba/alba-oobe --prova $n >/tmp/oobe.log 2>&1 &
+  PID=$!; foto "50-configurazione-$n" 3; kill $PID 2>/dev/null
+done
+tail -5 /tmp/oobe.log
+
 # Schermata "Sto applicando l'aggiornamento" (tema di avvio, renderer finestra X11)
 if apt-get install -y -q plymouth-x11 >/dev/null 2>&1 && [ -e /usr/lib/x86_64-linux-gnu/plymouth/renderers/x11.so ]; then
   plymouth-set-default-theme alba >/dev/null 2>&1

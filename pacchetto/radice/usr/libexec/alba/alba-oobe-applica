@@ -1,0 +1,97 @@
+#!/usr/bin/python3
+"""Alba Linux - applica la configurazione iniziale (eseguito come root via sudo
+SOLO dall'utente temporaneo della configurazione). Legge le scelte in JSON da
+stdin, le controlla una per una e crea il tuo account."""
+import json
+import os
+import re
+import subprocess
+import sys
+
+if os.geteuid() != 0:
+    sys.exit("servono i permessi di amministratore")
+
+try:
+    d = json.load(sys.stdin)
+except ValueError:
+    sys.exit("dati non validi")
+
+utente = str(d.get("utente", ""))
+nome = str(d.get("nome", "")).strip()
+password = str(d.get("password", ""))
+lingua = str(d.get("lingua", "it_IT.UTF-8"))
+layout = str(d.get("layout", "it"))
+variante = str(d.get("variante", ""))
+fuso = str(d.get("fuso", ""))
+tema = str(d.get("tema", "scuro"))
+foto = str(d.get("foto", ""))
+
+LINGUE = {"it_IT.UTF-8", "en_US.UTF-8", "en_GB.UTF-8", "de_DE.UTF-8", "de_CH.UTF-8", "fr_FR.UTF-8", "fr_CH.UTF-8",
+          "es_ES.UTF-8", "pt_PT.UTF-8", "pt_BR.UTF-8", "ro_RO.UTF-8", "pl_PL.UTF-8", "ru_RU.UTF-8", "uk_UA.UTF-8"}
+errori = []
+if not re.fullmatch(r"[a-z][a-z0-9_-]{0,30}", utente) or utente in ("root", "albaoobe", "lightdm"):
+    errori.append("nome utente")
+if not nome or any(c in nome for c in ":\n,=") or len(nome) > 60:
+    errori.append("nome")
+if not password or "\n" in password:
+    errori.append("password")
+if lingua not in LINGUE:
+    errori.append("lingua")
+if not re.fullmatch(r"[a-z]{2,3}(,[a-z]{2,3})?", layout) or not re.fullmatch(r"[a-z_,]*", variante):
+    errori.append("tastiera")
+fusi = subprocess.run(["timedatectl", "list-timezones"], capture_output=True, text=True).stdout.split()
+if fuso and fuso not in fusi:
+    errori.append("fuso orario")
+if tema not in ("chiaro", "scuro"):
+    errori.append("tema")
+if subprocess.run(["id", utente], capture_output=True).returncode == 0:
+    errori.append("utente già esistente")
+if errori:
+    sys.exit("non validi: " + ", ".join(errori))
+
+
+def fai(*cmd, **kw):
+    return subprocess.run(list(cmd), capture_output=True, text=True, **kw)
+
+
+# 1. account (amministratore, come il primo account di Windows)
+gruppi = [g for g in ("sudo", "audio", "video", "plugdev", "netdev", "bluetooth", "lpadmin", "scanner", "users",
+                      "dialout", "input", "render", "docker") if fai("getent", "group", g).returncode == 0]
+r = fai("useradd", "-m", "-s", "/bin/bash", "-c", nome, "-G", ",".join(gruppi), utente)
+if r.returncode != 0:
+    sys.exit("creazione account non riuscita: " + r.stderr)
+fai("chpasswd", input=f"{utente}:{password}\n")
+casa = os.path.expanduser(f"~{utente}")
+
+# foto dell'account (facoltativa: solo immagini dalla cartella della configurazione)
+if foto and os.path.realpath(foto).startswith("/var/lib/alba-oobe/") and os.path.isfile(foto):
+    fai("cp", foto, os.path.join(casa, ".face"))
+    fai("chown", f"{utente}:{utente}", os.path.join(casa, ".face"))
+
+# 2. lingua, tastiera, fuso orario
+fai("localectl", "set-locale", f"LANG={lingua}")
+with open("/etc/default/locale", "w") as f:
+    f.write(f"LANG={lingua}\n")
+fai("localectl", "set-x11-keymap", layout, "pc105", variante, "grp:win_space_toggle")
+if fuso:
+    fai("timedatectl", "set-timezone", fuso)
+fai("timedatectl", "set-ntp", "true")
+
+# 3. tema scelto (lo applica Alba al primo accesso)
+conf = os.path.join(casa, ".config", "alba")
+os.makedirs(conf, exist_ok=True)
+with open(os.path.join(conf, "tema"), "w") as f:
+    f.write(tema + "\n")
+fai("chown", "-R", f"{utente}:{utente}", os.path.join(casa, ".config"))
+
+# 4. reti Wi-Fi salvate durante la configurazione: valgono per tutti
+for riga in fai("nmcli", "-t", "-f", "NAME,TYPE", "connection", "show").stdout.splitlines():
+    if ":802-11-wireless" in riga:
+        fai("nmcli", "connection", "modify", riga.rsplit(":", 1)[0], "connection.permissions", "")
+
+# 5. fine: tra qualche secondo si chiude la configurazione e compare l'accesso
+fai("systemd-run", "--on-active=3", "--unit=alba-oobe-fine", "/bin/sh", "-c",
+    "rm -f /etc/lightdm/lightdm.conf.d/40-alba-oobe.conf /etc/sudoers.d/alba-oobe; "
+    "loginctl terminate-user albaoobe; sleep 2; systemctl restart lightdm; sleep 3; "
+    "userdel -r albaoobe 2>/dev/null || userdel albaoobe")
+print("ok")

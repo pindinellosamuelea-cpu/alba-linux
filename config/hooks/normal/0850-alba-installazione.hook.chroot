@@ -1,0 +1,41 @@
+#!/bin/sh
+# Alba Linux - installazione "come Windows":
+#  - l'installer usa il marchio Alba ed è a tutto schermo
+#  - niente creazione dell'utente durante l'installazione: lo fai al primo
+#    avvio, nella Configurazione iniziale (lingua, Wi-Fi, account, ora, aspetto)
+#  - alla fine riavvia da solo
+set -e
+S=/etc/calamares/settings.conf
+[ -f "$S" ] || S=/usr/share/calamares/settings.conf
+if [ ! -f "$S" ]; then
+  echo "ATTENZIONE: settings.conf di Calamares non trovato"; exit 0
+fi
+cp "$S" "$S.debian"
+python3 - "$S" <<'PY'
+import re, sys
+p = sys.argv[1]
+s = open(p).read()
+orig = s
+# 1. niente pagina "Utenti" né creazione utente (la fa la Configurazione iniziale)
+s = re.sub(r"(?m)^[ \t]*-[ \t]*users[ \t]*\n", "", s)
+s = re.sub(r"(\[[^\]\n]*?)\busers\b,?\s*", r"\1", s)
+# 2. marchio Alba
+if re.search(r"(?m)^branding:", s):
+    s = re.sub(r"(?m)^branding:.*$", "branding: alba", s)
+else:
+    s += "\nbranding: alba\n"
+open(p, "w").write(s)
+print("settings.conf: utenti tolti" if s != orig else "settings.conf: nessuna modifica")
+PY
+grep -n "users\|branding" "$S" || true
+
+mkdir -p /etc/calamares/modules
+cat > /etc/calamares/modules/finished.conf <<'EOC'
+---
+restartNowMode: always
+restartNowCommand: "systemctl -i reboot"
+notifyOnFinished: false
+EOC
+# icona "Installa" sul desktop della sessione di prova non serve più
+rm -f /etc/skel/Desktop/install-debian.desktop /etc/skel/Scrivania/install-debian.desktop 2>/dev/null || true
+exit 0

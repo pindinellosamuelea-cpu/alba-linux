@@ -1,0 +1,7 @@
+#!/bin/bash
+# Sessione della configurazione iniziale: solo la finestra di Alba a tutto schermo.
+export GTK_THEME=Adwaita:dark
+xsetroot -solid "#0b0f29" 2>/dev/null
+setxkbmap it 2>/dev/null
+xfwm4 --compositor=off >/dev/null 2>&1 &
+exec /usr/bin/python3 /usr/libexec/alba/alba-oobe

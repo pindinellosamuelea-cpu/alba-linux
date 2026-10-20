@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=Configurazione di Alba
+Comment=Prima configurazione del computer
+Exec=/usr/libexec/alba/alba-sessione-oobe
+Type=Application
+NoDisplay=true

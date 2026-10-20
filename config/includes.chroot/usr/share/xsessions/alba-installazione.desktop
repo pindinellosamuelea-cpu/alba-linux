@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=Installa Alba
+Comment=Installazione di Alba Linux
+Exec=/usr/local/libexec/alba-installazione
+Type=Application
+NoDisplay=true

@@ -1,0 +1,584 @@
+#!/usr/bin/python3
+"""Alba Linux - Configurazione iniziale (primo avvio dopo l'installazione).
+
+Come su Windows, ma con lo stile di Alba: lingua, tastiera, Wi-Fi, il tuo
+account, fuso orario e aspetto. Alla fine compare la schermata di accesso
+con il tuo nome già pronto.
+
+  alba-oobe                  (avviata da sola al primo avvio)
+  alba-oobe --prova [N]      per vedere la pagina N senza cambiare niente
+"""
+import json
+import os
+import re
+import subprocess
+import sys
+import threading
+import time
+import unicodedata
+
+import gi
+gi.require_version("Gtk", "3.0")
+gi.require_version("Gdk", "3.0")
+from gi.repository import Gdk, GdkPixbuf, GLib, Gtk, Pango  # noqa: E402
+
+PROVA = "--prova" in sys.argv
+SFONDO = "/usr/share/backgrounds/alba/accesso.png"
+LOGO = "/usr/share/alba/logo.png"
+
+LINGUE = [("it_IT.UTF-8", "Italiano"), ("en_US.UTF-8", "English (US)"), ("en_GB.UTF-8", "English (UK)"),
+          ("de_DE.UTF-8", "Deutsch"), ("de_CH.UTF-8", "Deutsch (Schweiz)"), ("fr_FR.UTF-8", "Français"),
+          ("fr_CH.UTF-8", "Français (Suisse)"), ("es_ES.UTF-8", "Español"), ("pt_PT.UTF-8", "Português"),
+          ("pt_BR.UTF-8", "Português (Brasil)"), ("ro_RO.UTF-8", "Română"), ("pl_PL.UTF-8", "Polski"),
+          ("ru_RU.UTF-8", "Русский"), ("uk_UA.UTF-8", "Українська")]
+LAYOUT = [("it", "", "Italiano"), ("it", "mac", "Italiano (Mac)"), ("ch", "it", "Svizzero (italiano)"),
+          ("ch", "", "Svizzero (tedesco)"), ("ch", "fr", "Svizzero (francese)"), ("us", "", "Inglese (Stati Uniti)"),
+          ("us", "intl", "Inglese (internazionale)"), ("gb", "", "Inglese (Regno Unito)"), ("de", "", "Tedesco"),
+          ("fr", "", "Francese"), ("es", "", "Spagnolo"), ("pt", "", "Portoghese"), ("br", "", "Portoghese (Brasile)"),
+          ("ro", "", "Rumeno"), ("pl", "", "Polacco"), ("ru", "", "Russo"), ("ua", "", "Ucraino")]
+FUSI = [("Europe/Rome", "Italia (Roma)"), ("Europe/Zurich", "Svizzera (Zurigo)"), ("Europe/Berlin", "Germania"),
+        ("Europe/Paris", "Francia"), ("Europe/London", "Regno Unito"), ("Europe/Madrid", "Spagna"),
+        ("Europe/Lisbon", "Portogallo"), ("Europe/Bucharest", "Romania"), ("Europe/Warsaw", "Polonia"),
+        ("Europe/Kyiv", "Ucraina"), ("Europe/Moscow", "Russia"), ("America/New_York", "Stati Uniti (est)"),
+        ("America/Los_Angeles", "Stati Uniti (ovest)"), ("America/Sao_Paulo", "Brasile")]
+FUSO_DA_LINGUA = {"de_CH.UTF-8": "Europe/Zurich", "fr_CH.UTF-8": "Europe/Zurich", "de_DE.UTF-8": "Europe/Berlin",
+                  "fr_FR.UTF-8": "Europe/Paris", "en_GB.UTF-8": "Europe/London", "es_ES.UTF-8": "Europe/Madrid",
+                  "pt_PT.UTF-8": "Europe/Lisbon", "pt_BR.UTF-8": "America/Sao_Paulo", "ro_RO.UTF-8": "Europe/Bucharest",
+                  "pl_PL.UTF-8": "Europe/Warsaw", "ru_RU.UTF-8": "Europe/Moscow", "uk_UA.UTF-8": "Europe/Kyiv",
+                  "en_US.UTF-8": "America/New_York"}
+LAYOUT_DA_LINGUA = {"de_CH.UTF-8": 3, "fr_CH.UTF-8": 4, "en_US.UTF-8": 5, "en_GB.UTF-8": 7, "de_DE.UTF-8": 8,
+                    "fr_FR.UTF-8": 9, "es_ES.UTF-8": 10, "pt_PT.UTF-8": 11, "pt_BR.UTF-8": 12, "ro_RO.UTF-8": 13,
+                    "pl_PL.UTF-8": 14, "ru_RU.UTF-8": 15, "uk_UA.UTF-8": 16}
+
+CSS = b"""
+* { font-family: "Inter", "Noto Sans", sans-serif; }
+window { background-color: #0b0f29; }
+.scheda { background-color: rgba(24, 26, 44, 0.92); border-radius: 26px; border: 1px solid alpha(#ffffff, 0.12); }
+.lato { background-image: linear-gradient(160deg, #ff9a5c, #e2566a 55%, #7b3fa0); border-radius: 26px 0 0 26px; }
+.lato label { color: #ffffff; }
+.passo { font-size: 13px; opacity: 0.85; }
+.titolo-lato { font-size: 26px; font-weight: 700; }
+.spiega-lato { font-size: 14px; }
+.titolo { color: #ffffff; font-size: 24px; font-weight: 700; }
+.testo { color: alpha(#ffffff, 0.72); font-size: 14px; }
+.campo label, label.campo { color: alpha(#ffffff, 0.85); font-size: 13px; font-weight: 600; }
+entry { min-height: 40px; border-radius: 10px; padding: 0 12px; color: #ffffff; font-size: 14px;
+        background-color: alpha(#ffffff, 0.08); border: 1px solid alpha(#ffffff, 0.16); box-shadow: none; }
+entry:focus { border-color: #ff8a4c; }
+combobox button, combobox box { min-height: 38px; border-radius: 10px; }
+list, row { background-color: transparent; color: #ffffff; }
+row { border-radius: 10px; padding: 9px 12px; }
+row:hover { background-color: alpha(#ffffff, 0.07); }
+row:selected { background-color: alpha(#ff8a4c, 0.25); }
+button.avanti { background-image: none; background-color: #ff8a4c; color: #ffffff; border: none; box-shadow: none;
+                border-radius: 10px; padding: 8px 26px; font-weight: 700; }
+button.avanti:hover { background-color: #ff9d66; }
+button.avanti:disabled { background-color: alpha(#ff8a4c, 0.35); }
+button.indietro { background: none; border: none; box-shadow: none; color: alpha(#ffffff, 0.8); padding: 8px 18px; }
+button.indietro:hover { background-color: alpha(#ffffff, 0.08); border-radius: 10px; }
+button.tessera { background-image: none; background-color: alpha(#ffffff, 0.06); border: 2px solid transparent;
+                 border-radius: 16px; padding: 14px; color: #ffffff; }
+button.tessera:checked { border-color: #ff8a4c; background-color: alpha(#ff8a4c, 0.12); }
+.errore { color: #ffb4a0; font-size: 13px; }
+.puntino { min-width: 8px; min-height: 8px; border-radius: 4px; background-color: alpha(#ffffff, 0.35); }
+.puntino.attivo { background-color: #ffffff; min-width: 22px; }
+"""
+
+
+def esegui(cmd, **kw):
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=kw.pop("timeout", 30), **kw)
+        return r.returncode, r.stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return 1, ""
+
+
+def etichetta(testo, classe=None, wrap=False, xalign=0.0):
+    e = Gtk.Label(label=testo, xalign=xalign)
+    if classe:
+        e.get_style_context().add_class(classe)
+    if wrap:
+        e.set_line_wrap(True)
+        e.set_max_width_chars(48)
+    return e
+
+
+def nome_utente_da(nome):
+    base = unicodedata.normalize("NFKD", nome.split()[0] if nome.split() else "").encode("ascii", "ignore").decode()
+    base = re.sub(r"[^a-z0-9]", "", base.lower())
+    if not base or not base[0].isalpha():
+        base = "utente" + base
+    return base[:24]
+
+
+class Configurazione(Gtk.Window):
+    PAGINE = ["lingua", "tastiera", "rete", "account", "fuso", "aspetto", "fine"]
+    TITOLI = {
+        "lingua": ("Ciao!", "Benvenuto in Alba. Ci vuole solo un minuto per preparare il computer."),
+        "tastiera": ("Tastiera", "Scegli la disposizione dei tasti. Puoi aggiungerne un'altra in seguito."),
+        "rete": ("Internet", "Collegati a Internet per l'ora esatta e gli aggiornamenti. Puoi anche farlo dopo."),
+        "account": ("Il tuo account", "Il nome che vedrai all'accesso e la password per entrare."),
+        "fuso": ("Data e ora", "L'ora si regola da sola: scegli solo dove ti trovi."),
+        "aspetto": ("Aspetto", "Chiaro o scuro? Lo puoi cambiare quando vuoi nelle Impostazioni."),
+        "fine": ("Ci siamo", "Sto preparando il tuo computer."),
+    }
+
+    def __init__(self):
+        super().__init__(title="Configurazione di Alba")
+        self.scelte = {"lingua": "it_IT.UTF-8", "layout": 0, "fuso": "Europe/Rome", "tema": "scuro"}
+        stile = Gtk.CssProvider()
+        stile.load_from_data(CSS)
+        Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(), stile,
+                                                 Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION + 10)
+        Gtk.Settings.get_default().set_property("gtk-application-prefer-dark-theme", True)
+        schermo = Gdk.Screen.get_default()
+        self.L, self.A = schermo.get_width(), schermo.get_height()
+        self.set_default_size(self.L, self.A)
+        self.set_decorated(False)
+        if not PROVA:
+            self.fullscreen()
+
+        sovrapposto = Gtk.Overlay()
+        sfondo = Gtk.DrawingArea()
+        try:
+            self.sfondo = GdkPixbuf.Pixbuf.new_from_file(SFONDO)
+        except GLib.Error:
+            self.sfondo = None
+        sfondo.connect("draw", self._disegna_sfondo)
+        sovrapposto.add(sfondo)
+        self.add(sovrapposto)
+
+        scheda = Gtk.Box()
+        scheda.get_style_context().add_class("scheda")
+        scheda.set_halign(Gtk.Align.CENTER)
+        scheda.set_valign(Gtk.Align.CENTER)
+        scheda.set_size_request(min(940, self.L - 60), min(580, self.A - 60))
+        sovrapposto.add_overlay(scheda)
+
+        # lato sinistro: logo, titolo del passo, spiegazione
+        lato = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        lato.get_style_context().add_class("lato")
+        lato.set_size_request(320, -1)
+        lato.set_border_width(34)
+        if os.path.exists(LOGO):
+            lato.pack_start(Gtk.Image.new_from_pixbuf(GdkPixbuf.Pixbuf.new_from_file_at_size(LOGO, 56, 56)),
+                            False, False, 0)
+            lato.get_children()[0].set_halign(Gtk.Align.START)
+        self.passo = etichetta("", "passo")
+        self.titolo_lato = etichetta("", "titolo-lato", wrap=True)
+        self.spiega_lato = etichetta("", "spiega-lato", wrap=True)
+        self.spiega_lato.set_max_width_chars(26)
+        lato.pack_start(self.passo, False, False, 18)
+        lato.pack_start(self.titolo_lato, False, False, 0)
+        lato.pack_start(self.spiega_lato, False, False, 0)
+        self.puntini = Gtk.Box(spacing=6)
+        self.puntini.set_valign(Gtk.Align.END)
+        lato.pack_end(self.puntini, True, True, 0)
+        scheda.pack_start(lato, False, False, 0)
+
+        # destra: contenuto del passo + pulsanti
+        destra = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        destra.set_border_width(34)
+        self.pila = Gtk.Stack()
+        self.pila.set_transition_type(Gtk.StackTransitionType.SLIDE_LEFT_RIGHT)
+        self.pila.set_transition_duration(260)
+        destra.pack_start(self.pila, True, True, 0)
+        pulsanti = Gtk.Box(spacing=10)
+        self.indietro = Gtk.Button(label="Indietro")
+        self.indietro.get_style_context().add_class("indietro")
+        self.indietro.connect("clicked", lambda *_: self.vai(-1))
+        self.avanti = Gtk.Button(label="Avanti")
+        self.avanti.get_style_context().add_class("avanti")
+        self.avanti.connect("clicked", lambda *_: self.vai(+1))
+        self.errore = etichetta("", "errore", wrap=True)
+        pulsanti.pack_start(self.indietro, False, False, 0)
+        pulsanti.pack_start(self.errore, True, True, 6)
+        pulsanti.pack_end(self.avanti, False, False, 0)
+        destra.pack_end(pulsanti, False, False, 0)
+        scheda.pack_start(destra, True, True, 0)
+
+        for p in self.PAGINE:
+            self.pila.add_named(getattr(self, f"pagina_{p}")(), p)
+            d = Gtk.Box()
+            d.get_style_context().add_class("puntino")
+            d.set_valign(Gtk.Align.CENTER)
+            self.puntini.pack_start(d, False, False, 0)
+        self.indice = 0
+        self.connect("destroy", Gtk.main_quit)
+        self.show_all()
+        iniziale = 0
+        if PROVA and len(sys.argv) > sys.argv.index("--prova") + 1:
+            try:
+                iniziale = int(sys.argv[sys.argv.index("--prova") + 1])
+            except ValueError:
+                pass
+        self.mostra(iniziale)
+
+    # ------------------------------------------------------------ generale
+    def _disegna_sfondo(self, w, cr):
+        L, A = w.get_allocated_width(), w.get_allocated_height()
+        if self.sfondo:
+            s = max(L / self.sfondo.get_width(), A / self.sfondo.get_height())
+            if not hasattr(self, "_scalato") or self._scalato.get_width() < L:
+                self._scalato = self.sfondo.scale_simple(int(self.sfondo.get_width() * s) + 1,
+                                                         int(self.sfondo.get_height() * s) + 1,
+                                                         GdkPixbuf.InterpType.BILINEAR)
+            Gdk.cairo_set_source_pixbuf(cr, self._scalato, (L - self._scalato.get_width()) / 2,
+                                        (A - self._scalato.get_height()) / 2)
+            cr.paint()
+        cr.set_source_rgba(0.02, 0.03, 0.08, 0.35)
+        cr.paint()
+
+    def mostra(self, i):
+        self.indice = max(0, min(i, len(self.PAGINE) - 1))
+        p = self.PAGINE[self.indice]
+        self.pila.set_visible_child_name(p)
+        titolo, spiega = self.TITOLI[p]
+        self.passo.set_text(f"Passo {self.indice + 1} di {len(self.PAGINE) - 1}" if p != "fine" else "Quasi fatto")
+        self.titolo_lato.set_text(titolo)
+        self.spiega_lato.set_text(spiega)
+        for j, d in enumerate(self.puntini.get_children()):
+            (d.get_style_context().add_class if j == self.indice else d.get_style_context().remove_class)("attivo")
+        self.indietro.set_visible(0 < self.indice < len(self.PAGINE) - 1)
+        self.avanti.set_visible(p != "fine")
+        self.avanti.set_label("Fine" if p == "aspetto" else ("Salta" if p == "rete" and not self.connesso else "Avanti"))
+        self.errore.set_text("")
+        if p == "account":
+            GLib.idle_add(self.nome.grab_focus)
+        if p == "rete":
+            self.cerca_reti()
+        if p == "fine":
+            self.applica()
+
+    def vai(self, verso):
+        if verso > 0:
+            errore = self.controlla(self.PAGINE[self.indice])
+            if errore:
+                self.errore.set_text(errore)
+                return
+        self.mostra(self.indice + verso)
+
+    def controlla(self, p):
+        if p == "account":
+            nome, utente = self.nome.get_text().strip(), self.utente.get_text().strip()
+            if not nome:
+                return "Scrivi il tuo nome."
+            if not re.fullmatch(r"[a-z][a-z0-9_-]{0,30}", utente):
+                return "Il nome utente può avere solo lettere minuscole e numeri."
+            if len(self.password.get_text()) < 4:
+                return "Scegli una password di almeno 4 caratteri."
+            if self.password.get_text() != self.conferma.get_text():
+                return "Le due password non sono uguali."
+        return None
+
+    # ------------------------------------------------------------- pagine
+    @staticmethod
+    def contenitore(titolo, testo=None):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        box.pack_start(etichetta(titolo, "titolo"), False, False, 0)
+        if testo:
+            box.pack_start(etichetta(testo, "testo", wrap=True), False, False, 0)
+        return box
+
+    @staticmethod
+    def scorri(widget, altezza=300):
+        s = Gtk.ScrolledWindow()
+        s.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        s.set_min_content_height(altezza)
+        s.add(widget)
+        return s
+
+    def pagina_lingua(self):
+        box = self.contenitore("In che lingua vuoi usare Alba?")
+        lista = Gtk.ListBox()
+        for codice, nome in LINGUE:
+            r = Gtk.ListBoxRow()
+            r.codice = codice
+            r.add(etichetta(nome))
+            lista.add(r)
+        lista.connect("row-selected", lambda l, r: r and self._lingua(r.codice))
+        lista.select_row(lista.get_row_at_index(0))
+        box.pack_start(self.scorri(lista), True, True, 0)
+        return box
+
+    def _lingua(self, codice):
+        self.scelte["lingua"] = codice
+        self.scelte["fuso"] = FUSO_DA_LINGUA.get(codice, "Europe/Rome")
+        if hasattr(self, "combo_layout"):
+            self.combo_layout.set_active(LAYOUT_DA_LINGUA.get(codice, 0))
+        if hasattr(self, "combo_fuso"):
+            self.combo_fuso.set_active_id(self.scelte["fuso"])
+
+    def pagina_tastiera(self):
+        box = self.contenitore("Che tastiera hai?")
+        self.combo_layout = Gtk.ComboBoxText()
+        for _, _, nome in LAYOUT:
+            self.combo_layout.append_text(nome)
+        self.combo_layout.set_active(0)
+        self.combo_layout.connect("changed", self._layout)
+        box.pack_start(self.combo_layout, False, False, 6)
+        prova = Gtk.Entry(placeholder_text="Prova a scrivere qui: àèéìòù € @ #")
+        box.pack_start(etichetta("Prova", "campo"), False, False, 6)
+        box.pack_start(prova, False, False, 0)
+        return box
+
+    def _layout(self, combo):
+        i = max(0, combo.get_active())
+        self.scelte["layout"] = i
+        l, v, _ = LAYOUT[i]
+        if not PROVA:
+            esegui(["setxkbmap", "-layout", l, "-variant", v])
+
+    connesso = False
+
+    def pagina_rete(self):
+        box = self.contenitore("Scegli la tua rete")
+        self.stato_rete = etichetta("", "testo", wrap=True)
+        box.pack_start(self.stato_rete, False, False, 0)
+        self.lista_reti = Gtk.ListBox()
+        self.lista_reti.connect("row-activated", self._scegli_rete)
+        box.pack_start(self.scorri(self.lista_reti, 220), True, True, 0)
+        self.riga_pw = Gtk.Box(spacing=8)
+        self.pw_rete = Gtk.Entry(visibility=False, placeholder_text="Password della rete")
+        self.pw_rete.connect("activate", lambda *_: self._collega())
+        collega = Gtk.Button(label="Collega")
+        collega.get_style_context().add_class("avanti")
+        collega.connect("clicked", lambda *_: self._collega())
+        self.riga_pw.pack_start(self.pw_rete, True, True, 0)
+        self.riga_pw.pack_start(collega, False, False, 0)
+        self.riga_pw.set_no_show_all(True)
+        self.pw_rete.show()
+        collega.show()
+        box.pack_start(self.riga_pw, False, False, 0)
+        self.rete_scelta = None
+        return box
+
+    def cerca_reti(self):
+        self.stato_rete.set_text("Cerco le reti vicine…")
+
+        def leggi():
+            if PROVA:
+                return False, [("CasaMia", 92, "WPA2"), ("Vodafone-5G", 70, "WPA2"), ("Ospiti", 41, "")]
+            _, att = esegui(["nmcli", "-t", "-f", "TYPE,STATE", "device"])
+            cavo = any(l.startswith("ethernet:connected") for l in att.splitlines())
+            _, out = esegui(["nmcli", "-t", "-e", "no", "-f", "SSID,SIGNAL,SECURITY", "device", "wifi", "list",
+                             "--rescan", "yes"], timeout=25)
+            reti = {}
+            for l in out.splitlines():
+                p = l.rsplit(":", 2)
+                if len(p) == 3 and p[0] and (p[0] not in reti or int(p[1] or 0) > reti[p[0]][1]):
+                    reti[p[0]] = (p[0], int(p[1] or 0), p[2])
+            return cavo, sorted(reti.values(), key=lambda r: -r[1])
+
+        def mostra(r):
+            cavo, reti = r
+            for c in self.lista_reti.get_children():
+                self.lista_reti.remove(c)
+            if cavo:
+                self.connesso = True
+                self.stato_rete.set_text("Sei già collegato a Internet con il cavo. ✓")
+                self.avanti.set_label("Avanti")
+            else:
+                self.stato_rete.set_text("Tocca una rete per collegarti." if reti else "Nessuna rete trovata.")
+            for ssid, segnale, sicurezza in reti[:20]:
+                riga = Gtk.ListBoxRow()
+                riga.rete = (ssid, sicurezza)
+                b = Gtk.Box(spacing=10)
+                liv = "excellent" if segnale > 75 else "good" if segnale > 50 else "ok" if segnale > 25 else "weak"
+                b.pack_start(Gtk.Image.new_from_icon_name(f"network-wireless-signal-{liv}-symbolic",
+                                                          Gtk.IconSize.LARGE_TOOLBAR), False, False, 0)
+                n = etichetta(ssid)
+                n.set_ellipsize(Pango.EllipsizeMode.END)
+                b.pack_start(n, True, True, 0)
+                if sicurezza:
+                    b.pack_end(Gtk.Image.new_from_icon_name("changes-prevent-symbolic", Gtk.IconSize.MENU),
+                               False, False, 0)
+                riga.add(b)
+                self.lista_reti.add(riga)
+            self.lista_reti.show_all()
+        threading.Thread(target=lambda: GLib.idle_add(mostra, leggi()), daemon=True).start()
+
+    def _scegli_rete(self, _lista, riga):
+        self.rete_scelta = riga.rete
+        if riga.rete[1]:
+            self.riga_pw.show()
+            self.pw_rete.grab_focus()
+        else:
+            self._collega()
+
+    def _collega(self):
+        if not self.rete_scelta:
+            return
+        ssid = self.rete_scelta[0]
+        self.stato_rete.set_text(f"Mi collego a {ssid}…")
+        cmd = ["nmcli", "device", "wifi", "connect", ssid]
+        if self.rete_scelta[1] and self.pw_rete.get_text():
+            cmd += ["password", self.pw_rete.get_text()]
+
+        def fatto(ok):
+            if ok:
+                self.connesso = True
+                self.stato_rete.set_text(f"Collegato a {ssid}. ✓")
+                self.riga_pw.hide()
+                self.avanti.set_label("Avanti")
+            else:
+                self.stato_rete.set_text("Non riuscito: controlla la password e riprova.")
+        threading.Thread(target=lambda: GLib.idle_add(fatto, PROVA or esegui(cmd, timeout=45)[0] == 0),
+                         daemon=True).start()
+
+    def pagina_account(self):
+        box = self.contenitore("Chi userà questo computer?")
+        griglia = Gtk.Grid(row_spacing=8, column_spacing=12)
+        self.nome = Gtk.Entry(placeholder_text="es. Alessandro Rossi")
+        self.utente = Gtk.Entry(placeholder_text="es. alessandro")
+        self.password = Gtk.Entry(visibility=False, placeholder_text="Password")
+        self.conferma = Gtk.Entry(visibility=False, placeholder_text="Ripeti la password")
+        self._utente_toccato = False
+        self.nome.connect("changed", lambda e: None if self._utente_toccato else
+                          self.utente.set_text(nome_utente_da(e.get_text())))
+        self.utente.connect("key-press-event", lambda *_: setattr(self, "_utente_toccato", True))
+        self.conferma.connect("activate", lambda *_: self.vai(+1))
+        for i, (testo, campo) in enumerate((("Il tuo nome", self.nome), ("Nome utente", self.utente),
+                                            ("Password", self.password), ("Ripeti la password", self.conferma))):
+            griglia.attach(etichetta(testo, "campo"), 0, i * 2, 1, 1)
+            campo.set_hexpand(True)
+            griglia.attach(campo, 0, i * 2 + 1, 1, 1)
+        box.pack_start(griglia, False, False, 4)
+        box.pack_start(etichetta("La password serve solo per entrare e per i cambi importanti: Alba non la "
+                                 "chiede per aprire i programmi.", "testo", wrap=True), False, False, 4)
+        return box
+
+    def pagina_fuso(self):
+        box = self.contenitore("Dove ti trovi?")
+        self.combo_fuso = Gtk.ComboBoxText()
+        for codice, nome in FUSI:
+            self.combo_fuso.append(codice, nome)
+        self.combo_fuso.set_active_id(self.scelte["fuso"])
+        self.combo_fuso.connect("changed", lambda c: self.scelte.__setitem__("fuso", c.get_active_id()))
+        box.pack_start(self.combo_fuso, False, False, 6)
+        self.ora = etichetta("", "titolo")
+        box.pack_start(self.ora, False, False, 18)
+        box.pack_start(etichetta("Con Internet l'ora si sincronizza da sola.", "testo"), False, False, 0)
+
+        def tic():
+            self.ora.set_text(time.strftime("%H:%M"))
+            return True
+        tic()
+        GLib.timeout_add_seconds(5, tic)
+        return box
+
+    def pagina_aspetto(self):
+        box = self.contenitore("Scegli il tuo stile")
+        riga = Gtk.Box(spacing=18, homogeneous=True)
+        self.tessere = {}
+        for chiave, nome, colori in (("chiaro", "Chiaro", ("#f3f4f8", "#ffffff", "#1f2233")),
+                                     ("scuro", "Scuro", ("#1d1f30", "#2a2c42", "#ffffff"))):
+            b = Gtk.ToggleButton()
+            b.get_style_context().add_class("tessera")
+            v = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+            anteprima = Gtk.DrawingArea()
+            anteprima.set_size_request(200, 120)
+            anteprima.connect("draw", self._anteprima, colori)
+            v.pack_start(anteprima, False, False, 0)
+            v.pack_start(etichetta(nome, "campo", xalign=0.5), False, False, 0)
+            b.add(v)
+            b.connect("toggled", lambda w, k=chiave: self._tema(k, w))
+            riga.pack_start(b, True, True, 0)
+            self.tessere[chiave] = b
+        self.tessere["scuro"].set_active(True)
+        box.pack_start(riga, False, False, 10)
+        return box
+
+    @staticmethod
+    def _anteprima(w, cr, colori):
+        fondo, finestra, testo = (Gdk.RGBA() for _ in range(3))
+        for c, v in zip((fondo, finestra, testo), colori):
+            c.parse(v)
+        L, A = w.get_allocated_width(), w.get_allocated_height()
+
+        def tondo(x, y, l, a, r):
+            cr.new_sub_path()
+            for cx, cy, ang in ((x + l - r, y + r, -90), (x + l - r, y + a - r, 0), (x + r, y + a - r, 90),
+                                (x + r, y + r, 180)):
+                cr.arc(cx, cy, r, ang * 3.14159 / 180, (ang + 90) * 3.14159 / 180)
+            cr.close_path()
+        Gdk.cairo_set_source_rgba(cr, fondo)
+        tondo(0, 0, L, A, 12)
+        cr.fill()
+        Gdk.cairo_set_source_rgba(cr, finestra)
+        tondo(18, 16, L - 36, A - 40, 8)
+        cr.fill()
+        cr.set_source_rgb(1.0, 0.54, 0.30)
+        tondo(30, 28, 50, 8, 4)
+        cr.fill()
+        Gdk.cairo_set_source_rgba(cr, testo)
+        for i in range(3):
+            tondo(30, 46 + i * 12, L - 90 - i * 20, 5, 2.5)
+            cr.fill()
+        cr.set_source_rgba(0.12, 0.12, 0.17, 1)
+        tondo(0, A - 16, L, 16, 6)
+        cr.fill()
+
+    def _tema(self, chiave, bottone):
+        if not bottone.get_active():
+            if not any(b.get_active() for b in self.tessere.values()):
+                bottone.set_active(True)
+            return
+        self.scelte["tema"] = chiave
+        for k, b in self.tessere.items():
+            if k != chiave and b.get_active():
+                b.set_active(False)
+
+    def pagina_fine(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18)
+        box.set_valign(Gtk.Align.CENTER)
+        self.rotella = Gtk.Spinner()
+        self.rotella.set_size_request(48, 48)
+        self.messaggio_fine = etichetta("Preparo il tuo account e le tue impostazioni…", "testo", wrap=True, xalign=0.5)
+        box.pack_start(self.rotella, False, False, 0)
+        box.pack_start(self.messaggio_fine, False, False, 0)
+        self.riprova = Gtk.Button(label="Torna indietro")
+        self.riprova.get_style_context().add_class("indietro")
+        self.riprova.connect("clicked", lambda *_: self.mostra(self.PAGINE.index("account")))
+        self.riprova.set_no_show_all(True)
+        self.riprova.set_halign(Gtk.Align.CENTER)
+        box.pack_start(self.riprova, False, False, 0)
+        return box
+
+    # -------------------------------------------------------------- fine
+    def applica(self):
+        self.rotella.start()
+        self.riprova.hide()
+        l, v, _ = LAYOUT[self.scelte["layout"]]
+        dati = {"utente": self.utente.get_text().strip(), "nome": self.nome.get_text().strip(),
+                "password": self.password.get_text(), "lingua": self.scelte["lingua"], "layout": l,
+                "variante": v, "fuso": self.scelte["fuso"], "tema": self.scelte["tema"]}
+
+        def lavoro():
+            if PROVA:
+                time.sleep(2)
+                return True, ""
+            try:
+                r = subprocess.run(["sudo", "-n", "/usr/libexec/alba/alba-oobe-applica"], input=json.dumps(dati),
+                                   capture_output=True, text=True, timeout=120)
+                return r.returncode == 0, (r.stderr or r.stdout).strip()
+            except (OSError, subprocess.TimeoutExpired) as e:
+                return False, str(e)
+
+        def fatto(esito):
+            ok, dettaglio = esito
+            self.rotella.stop()
+            if ok:
+                nome = dati["nome"].split()[0] if dati["nome"] else ""
+                self.titolo_lato.set_text(f"Benvenuto, {nome}!" if nome else "Benvenuto!")
+                self.messaggio_fine.set_text("Tutto pronto. Tra un attimo compare la schermata di accesso: "
+                                             "entra con la password che hai scelto.")
+            else:
+                self.messaggio_fine.set_text("Qualcosa non è andato: " + (dettaglio or "errore sconosciuto"))
+                self.riprova.show()
+        threading.Thread(target=lambda: GLib.idle_add(fatto, lavoro()), daemon=True).start()
+
+
+if __name__ == "__main__":
+    Configurazione()
+    Gtk.main()

@@ -1,0 +1,43 @@
+---
+componentName:  alba
+
+welcomeStyleCalamares:   false
+welcomeExpandingLogo:   true
+
+windowExpanding:    fullscreen
+windowSize: 1024px,640px
+windowPlacement: center
+
+sidebar: widget
+navigation: widget
+
+strings:
+    productName:         Alba Linux
+    shortProductName:    Alba
+    version:             "1.2"
+    shortVersion:        "1.2"
+    versionedName:       Alba Linux 1.2
+    shortVersionedName:  Alba 1.2
+    bootloaderEntryName: Alba
+    productUrl:          https://github.com/pindinellosamuelea-cpu/alba-linux
+    supportUrl:          https://github.com/pindinellosamuelea-cpu/alba-linux
+    knownIssuesUrl:      https://github.com/pindinellosamuelea-cpu/alba-linux
+    releaseNotesUrl:     https://github.com/pindinellosamuelea-cpu/alba-linux
+
+images:
+    productLogo:         "logo.png"
+    productIcon:         "logo.png"
+    productWelcome:      "benvenuto.png"
+
+slideshow:               "show.qml"
+slideshowAPI: 2
+
+style:
+   sidebarBackground:        "#14162a"
+   sidebarText:              "#ffffff"
+   sidebarTextSelect:        "#ff8a4c"
+   sidebarTextHighlight:     "#2a2c45"
+   SidebarBackground:        "#14162a"
+   SidebarText:              "#ffffff"
+   SidebarTextCurrent:       "#ff8a4c"
+   SidebarBackgroundCurrent: "#2a2c45"

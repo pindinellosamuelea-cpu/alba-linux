@@ -1,0 +1,39 @@
+#!/bin/bash
+# Alba Linux - al primo avvio dopo l'installazione non esiste ancora nessun
+# utente: prepara la "Configurazione iniziale" (come Windows) che parte da
+# sola al posto della schermata di accesso. Quando esiste un utente, toglie
+# tutto ciò che serviva alla configurazione.
+set -u
+OOBE=albaoobe
+CONF=/etc/lightdm/lightdm.conf.d/40-alba-oobe.conf
+SUDO=/etc/sudoers.d/alba-oobe
+
+grep -qw "boot=live" /proc/cmdline && exit 0        # chiavetta di installazione: niente
+
+umani="$(awk -F: '$3>=1000 && $3<60000 && $7 !~ /(nologin|false)$/ {print $1}' /etc/passwd | grep -vx "$OOBE")"
+if [ -n "$umani" ]; then
+  # configurazione già fatta: pulizia (se è rimasto qualcosa)
+  rm -f "$CONF" "$SUDO"
+  if id "$OOBE" >/dev/null 2>&1 && ! loginctl list-users --no-legend 2>/dev/null | grep -qw "$OOBE"; then
+    userdel -r "$OOBE" >/dev/null 2>&1 || userdel "$OOBE" >/dev/null 2>&1
+  fi
+  exit 0
+fi
+
+# nessun utente: prepara la configurazione iniziale
+if ! id "$OOBE" >/dev/null 2>&1; then
+  useradd -r -m -d /var/lib/alba-oobe -s /bin/bash -c "Configurazione di Alba" \
+          -G audio,video,netdev,plugdev "$OOBE" 2>/dev/null || \
+  useradd -r -m -d /var/lib/alba-oobe -s /bin/bash -c "Configurazione di Alba" "$OOBE"
+fi
+mkdir -p /etc/lightdm/lightdm.conf.d
+cat > "$CONF" <<EOC
+# Alba Linux: configurazione iniziale (si toglie da sola alla fine)
+[Seat:*]
+autologin-user=$OOBE
+autologin-user-timeout=0
+autologin-session=alba-oobe
+EOC
+echo "$OOBE ALL=(root) NOPASSWD: /usr/libexec/alba/alba-oobe-applica" > "$SUDO"
+chmod 440 "$SUDO"
+exit 0

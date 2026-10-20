@@ -58,7 +58,13 @@ CSS = b"""
 .tessera:checked { border-color: #ff8a4c; }
 .avviso { background-color: alpha(#ff8a4c, 0.12); border-radius: 12px;
           border: 1px solid alpha(#ff8a4c, 0.35); }
-levelbar block.filled { background-color: #ff8a4c; }
+levelbar trough { min-height: 8px; min-width: 200px; border-radius: 4px; border: none;
+                 background-color: alpha(@theme_fg_color, 0.12); }
+levelbar block { min-height: 8px; border-radius: 4px; border: none; }
+levelbar block.empty { background-color: transparent; }
+levelbar block.filled, levelbar block.low, levelbar block.high, levelbar block.full { background-color: #ff8a4c; }
+levelbar.microfono block.filled, levelbar.microfono block.low, levelbar.microfono block.high,
+levelbar.microfono block.full { background-color: #30d158; }
 """
 
 COLORI = {
@@ -796,6 +802,9 @@ class PaginaSuono(Pagina):
         self.livello_mic.set_max_value(1)
         self.livello_mic.set_size_request(240, 10)
         self.livello_mic.set_valign(Gtk.Align.CENTER)
+        self.livello_mic.get_style_context().add_class("microfono")
+        for nome in ("low", "high", "full"):
+            self.livello_mic.remove_offset_value(nome)
         r.aggiungi(Riga("Prova il microfono", "Parla: la barra deve muoversi. Se resta ferma o bassa, alza il volume del microfono.",
                         self.livello_mic))
         self._ascolto = None

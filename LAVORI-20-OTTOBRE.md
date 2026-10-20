@@ -20,3 +20,6 @@ Richieste di Alessandro (messaggio delle 06:11). Stato RAM dall'ultimo riepilogo
 7. **Installer della ISO in stile Windows ma migliore**: niente modalità live "prova Alba".
    - L'installazione parte subito: scegli il disco, conferma, e l'installazione è pulita.
    - Poi stacchi la chiavetta e al primo avvio fai la configurazione (OOBE: lingua, tastiera, Wi-Fi, utente, fuso orario), tutto con grafica Alba.
+
+## Versione
+Questo è un aggiornamento importante: esce come **Alba 1.2**. Nel workflow la versione passa da `1.1.<run>` a `1.2.<run>` solo quando i lavori sono pronti (non prima, per non pubblicare una 1.2 incompleta). Nelle novità e nella pagina Aggiornamenti va presentata come "Alba 1.2".

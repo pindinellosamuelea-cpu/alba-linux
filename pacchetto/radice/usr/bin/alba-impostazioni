@@ -8,6 +8,7 @@ Uso:  alba-impostazioni [--pagina NOME] [--autotest]
 """
 import json
 import math
+import glob
 import os
 import re
 import shutil
@@ -69,7 +70,7 @@ levelbar.microfono block.full { background-color: #30d158; }
 
 COLORI = {
     "wifi": "#0a84ff", "bluetooth": "#0a84ff", "schermo": "#5e5ce6", "suono": "#ff375f",
-    "batteria": "#30b158", "aspetto": "#bf5af2", "data-ora": "#8e8e93",
+    "batteria": "#30b158", "alimentazione": "#ffb340", "aspetto": "#bf5af2", "data-ora": "#8e8e93",
     "scheda-grafica": "#ff9f0a", "dispositivi": "#34aadc", "tastiera": "#5e5ce6", "telefono": "#30b158", "problemi": "#ff453a", "sicurezza": "#64748b", "aggiornamenti": "#8e8e93",
     "info": "#8e8e93",
 }
@@ -1141,6 +1142,144 @@ class PaginaBatteria(Pagina):
             self.riga_condizione.imposta_sottotitolo(testo)
         self.riga_cicli.imposta_sottotitolo(
             f"{d['cicli']} cariche complete finora" if d["cicli"] else "Dato non fornito dalla batteria")
+
+
+# ---------------------------------------------------------------------------
+# Alimentazione (come "Schermo, sospensione e ibernazione" di Windows)
+# ---------------------------------------------------------------------------
+def ibernazione_possibile():
+    """L'ibernazione salva tutto sul disco: serve uno swap su disco grande quanto la RAM
+    (la RAM compressa non basta) e Secure Boot non deve bloccarla."""
+    if "disk" not in leggi_file("/sys/power/state"):
+        return False
+    if re.search(r"\[(integrity|confidentiality)\]", leggi_file("/sys/kernel/security/lockdown")):
+        return False
+    ram = 0
+    for riga in leggi_file("/proc/meminfo").splitlines():
+        if riga.startswith("MemTotal:"):
+            ram = int(riga.split()[1])
+    disco = 0
+    for riga in leggi_file("/proc/swaps").splitlines()[1:]:
+        p = riga.split()
+        if len(p) >= 3 and "zram" not in p[0]:
+            disco += int(p[2])
+    return disco >= ram * 0.9
+
+
+class PaginaAlimentazione(Pagina):
+    nome, titolo, icona = "alimentazione", "Alimentazione", "system-shutdown-symbolic"
+    parole = ("alimentazione sospensione ibernazione spegnimento schermo timeout coperchio pulsante "
+              "accensione risparmio standby")
+    SCHERMO = [(1, "1 minuto"), (2, "2 minuti"), (3, "3 minuti"), (5, "5 minuti"), (10, "10 minuti"),
+               (15, "15 minuti"), (30, "30 minuti"), (60, "1 ora"), (0, "Mai")]
+    SOSPENSIONE = [(15, "15 minuti"), (20, "20 minuti"), (30, "30 minuti"), (45, "45 minuti"), (60, "1 ora"),
+                   (120, "2 ore"), (180, "3 ore"), (0, "Mai")]
+
+    def costruisci(self):
+        self.sottotitolo.set_text("Quando si spegne lo schermo, quando il computer va in sospensione "
+                                  "e cosa succede chiudendo il coperchio.")
+        self.portatile = bool(glob.glob("/sys/class/power_supply/BAT*")) or DEMO
+        self.coperchio = bool(glob.glob("/proc/acpi/button/lid/*")) or DEMO
+        self._muto = False
+
+        r = self.sezione("Schermo")
+        self.c_schermo = {}
+        for chiave, testo in (("battery", "A batteria, spegni lo schermo dopo"), ("ac", "Collegato alla corrente, dopo")):
+            if chiave == "battery" and not self.portatile:
+                continue
+            c = self._combo(self.SCHERMO, lambda v, k=chiave: self._schermo(k, v))
+            self.c_schermo[chiave] = c
+            r.aggiungi(Riga(testo if self.portatile else "Spegni lo schermo dopo", None, c))
+
+        r = self.sezione("Sospensione")
+        self.c_sosp = {}
+        for chiave, testo in (("battery", "A batteria, sospendi dopo"), ("ac", "Collegato alla corrente, dopo")):
+            if chiave == "battery" and not self.portatile:
+                continue
+            c = self._combo(self.SOSPENSIONE, lambda v, k=chiave: self._sospensione(k, v))
+            self.c_sosp[chiave] = c
+            r.aggiungi(Riga(testo if self.portatile else "Sospendi il computer dopo", None, c))
+        self.blocca = Interruttore(lambda v: xfconf_scrivi("xfce4-power-manager",
+                                                          "/xfce4-power-manager/lock-screen-suspend-hibernate", "bool", v))
+        r.aggiungi(Riga("Al risveglio chiedi la password", "Compare la schermata di accesso di Alba, "
+                        "come all'accensione", self.blocca))
+
+        self.iberna = ibernazione_possibile()
+        azioni = [("suspend", "Sospendi"), ("hibernate", "Iberna"), ("poweroff", "Spegni"), ("ignore", "Non fare niente")]
+        if not self.iberna:
+            azioni = [a for a in azioni if a[0] != "hibernate"]
+        r = self.sezione("Coperchio e pulsante di accensione")
+        if self.coperchio:
+            self.c_coperchio = Gtk.ComboBoxText()
+            for k, t in azioni:
+                self.c_coperchio.append(k, t)
+            self.c_coperchio.connect("changed", lambda c: None if self._muto or not c.get_active_id() else
+                                     in_sottofondo(lambda: come_amministratore("coperchio", c.get_active_id())))
+            r.aggiungi(Riga("Quando chiudi il coperchio", "Con un monitor esterno collegato non succede niente",
+                            self.c_coperchio))
+        # pulsante: valori di xfce4-power-manager (0 niente, 1 sospendi, 2 iberna, 3 chiedi, 4 spegni)
+        self.c_pulsante = Gtk.ComboBoxText()
+        for k, t in (("3", "Chiedi cosa fare"), ("1", "Sospendi"), ("2", "Iberna"), ("4", "Spegni"), ("0", "Non fare niente")):
+            if k == "2" and not self.iberna:
+                continue
+            self.c_pulsante.append(k, t)
+        self.c_pulsante.connect("changed", lambda c: None if self._muto or not c.get_active_id() else
+                                xfconf_scrivi("xfce4-power-manager", "/xfce4-power-manager/power-button-action",
+                                              "uint", c.get_active_id()))
+        r.aggiungi(Riga("Pulsante di accensione", None, self.c_pulsante))
+
+        nota = ("Ibernazione disponibile: salva tutto sul disco e spegne il computer, al riavvio ritrovi tutto aperto."
+                if self.iberna else
+                "Ibernazione non disponibile su questo computer (serve uno spazio di scambio sul disco grande "
+                "quanto la RAM e Secure Boot spento). La sospensione invece funziona sempre.")
+        self.colonna.pack_start(etichetta(nota, "riga-sottotitolo", wrap=True), False, False, 8)
+
+    def _combo(self, voci, azione):
+        c = Gtk.ComboBoxText()
+        for v, t in voci:
+            c.append(str(v), t)
+        c.connect("changed", lambda w: None if self._muto or w.get_active_id() is None else azione(int(w.get_active_id())))
+        return c
+
+    def _schermo(self, dove, minuti):
+        b = "battery" if dove == "battery" else "ac"
+        xfconf_scrivi("xfce4-power-manager", "/xfce4-power-manager/dpms-enabled", "bool", True)
+        # prima si oscura (1 minuto prima), poi si spegne
+        xfconf_scrivi("xfce4-power-manager", f"/xfce4-power-manager/dpms-on-{b}-sleep", "uint", max(0, minuti - 1) if minuti else 0)
+        xfconf_scrivi("xfce4-power-manager", f"/xfce4-power-manager/dpms-on-{b}-off", "uint", minuti)
+        xfconf_scrivi("xfce4-power-manager", f"/xfce4-power-manager/blank-on-{b}", "int", 0)
+
+    def _sospensione(self, dove, minuti):
+        b = "battery" if dove == "battery" else "ac"
+        # in xfce4-power-manager "14" vuol dire "mai"
+        xfconf_scrivi("xfce4-power-manager", f"/xfce4-power-manager/inactivity-on-{b}", "uint", minuti if minuti else 14)
+        xfconf_scrivi("xfce4-power-manager", f"/xfce4-power-manager/inactivity-sleep-mode-on-{b}", "uint", 1)
+
+    @staticmethod
+    def _vicino(voci, valore):
+        return str(min((v for v, _ in voci), key=lambda v: abs((v or 10_000) - (valore or 10_000))))
+
+    def aggiorna(self):
+        self._muto = True
+
+        def leggi(prop, predefinito):
+            v = xfconf_leggi("xfce4-power-manager", f"/xfce4-power-manager/{prop}")
+            try:
+                return int(v)
+            except (TypeError, ValueError):
+                return predefinito
+        for chiave, c in self.c_schermo.items():
+            c.set_active_id(self._vicino(self.SCHERMO, leggi(f"dpms-on-{chiave}-off", 10 if chiave == "ac" else 5)))
+        for chiave, c in self.c_sosp.items():
+            v = leggi(f"inactivity-on-{chiave}", 14)
+            c.set_active_id("0" if v <= 14 else self._vicino(self.SOSPENSIONE, v))
+        self.blocca.imposta(xfconf_leggi("xfce4-power-manager", "/xfce4-power-manager/lock-screen-suspend-hibernate") != "false")
+        if self.coperchio:
+            testo = leggi_file("/etc/systemd/logind.conf.d/50-alba.conf")
+            m = re.search(r"HandleLidSwitch=(\w+)", testo)
+            self.c_coperchio.set_active_id(m.group(1) if m else "suspend")
+        self.c_pulsante.set_active_id(str(leggi("power-button-action", 3)))
+        self._muto = False
 
 
 # ---------------------------------------------------------------------------
@@ -2649,7 +2788,7 @@ class PaginaInfo(Pagina):
 # ---------------------------------------------------------------------------
 # Finestra principale
 # ---------------------------------------------------------------------------
-PAGINE = [PaginaWifi, PaginaBluetooth, None, PaginaSchermo, PaginaSuono, PaginaBatteria, None,
+PAGINE = [PaginaWifi, PaginaBluetooth, None, PaginaSchermo, PaginaSuono, PaginaBatteria, PaginaAlimentazione, None,
           PaginaAspetto, PaginaDataOra, PaginaGrafica, PaginaDispositivi, PaginaTastiera, PaginaTelefono, None, PaginaSicurezza, PaginaProblemi, PaginaAggiornamenti, PaginaInfo]
 
 

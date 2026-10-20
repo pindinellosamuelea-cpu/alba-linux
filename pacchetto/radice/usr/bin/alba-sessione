@@ -125,6 +125,20 @@ done
   [ -f "$IMG" ] && busctl call org.freedesktop.Accounts "/org/freedesktop/Accounts/User$(id -u)" \
       org.freedesktop.Accounts.User SetBackgroundFile s "$IMG" >/dev/null 2>&1 ) &
 
+# 2i. Blocco e risveglio: compare la stessa schermata di accesso di Alba
+#     (quella dell'accensione), non un blocco schermo diverso.
+if [ ! -f "$CONF/blocco-v1" ]; then
+  xfconf-query -c xfce4-session -p /general/LockCommand -n -t string -s "dm-tool lock" 2>/dev/null || \
+    xfconf-query -c xfce4-session -p /general/LockCommand -s "dm-tool lock" 2>/dev/null
+  xfconf-query -c xfce4-screensaver -p /lock/enabled -n -t bool -s false 2>/dev/null || \
+    xfconf-query -c xfce4-screensaver -p /lock/enabled -s false 2>/dev/null
+  for p in lock-screen-suspend-hibernate logind-handle-lid-switch; do
+    xfconf-query -c xfce4-power-manager -p "/xfce4-power-manager/$p" -n -t bool -s true 2>/dev/null || \
+      xfconf-query -c xfce4-power-manager -p "/xfce4-power-manager/$p" -s true 2>/dev/null
+  done
+  touch "$CONF/blocco-v1"
+fi
+
 # 3. Risoluzione e frequenza dello schermo scelte nelle Impostazioni
 [ -f "$CONF/schermo.sh" ] && bash "$CONF/schermo.sh" >/dev/null 2>&1
 

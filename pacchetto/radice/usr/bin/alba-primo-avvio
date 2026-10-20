@@ -67,7 +67,7 @@ done
 # --- Sicurezza: blocco dello schermo ---------------------------------------
 imposta xfce4-session /shutdown/LockScreen bool true
 imposta xfce4-power-manager /xfce4-power-manager/lock-screen-suspend-hibernate bool true
-imposta xfce4-screensaver /lock/enabled bool true
+imposta xfce4-screensaver /lock/enabled bool false   # blocco: schermata di accesso di Alba
 imposta xfce4-screensaver /saver/idle-activation/delay int 10
 
 # --- Thunar: comportamento familiare --------------------------------------

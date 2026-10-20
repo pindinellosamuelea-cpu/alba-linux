@@ -51,6 +51,14 @@ case "${1:-}" in
     timedatectl list-timezones | grep -qxF -- "$ARG" || exit 2
     timedatectl set-timezone "$ARG"
     ;;
+  coperchio)
+    # cosa fa la chiusura del coperchio (per tutti, anche prima dell'accesso)
+    case "$ARG" in suspend|hibernate|poweroff|ignore) ;; *) exit 2 ;; esac
+    mkdir -p /etc/systemd/logind.conf.d
+    printf '[Login]\nHandleLidSwitch=%s\nHandleLidSwitchExternalPower=%s\nHandleLidSwitchDocked=ignore\n' \
+      "$ARG" "$ARG" > /etc/systemd/logind.conf.d/50-alba.conf
+    systemctl kill -s HUP systemd-logind
+    ;;
   tastiera)
     # layout della tastiera per tutto il sistema (anche schermata di accesso)
     # ARG = "it" oppure "it,ch" ; VARIANTE in $3 (es. ",fr")

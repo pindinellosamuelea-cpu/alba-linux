@@ -647,7 +647,8 @@ class Accesso:
         sfondo nitido del desktop. Il desktop parte da quell'immagine: nessuno
         stacco nero, nessun pezzo che salta fuori."""
         nome = (self.utente.get_display_name() or self.utente.get_name()) if self.utente else ""
-        self.nome.set_text(f"Benvenuto, {nome.split()[0]}" if nome else "Benvenuto")
+        saluto = "Bentornato" if (self.greeter and self.greeter.get_lock_hint()) else "Benvenuto"
+        self.nome.set_text(f"{saluto}, {nome.split()[0]}" if nome else saluto)
         self.riga_password.set_opacity(0)
         self.rotella.show()
         self.rotella.start()

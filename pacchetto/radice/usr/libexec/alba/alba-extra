@@ -43,6 +43,9 @@ apt_extra() {
 apt_extra archivi 7zip 7zip-rar unrar unar
 apt_extra barra xfce4-genmon-plugin
 apt_extra accesso gir1.2-lightdm-1
+# Processori Intel: thermald tiene la temperatura stabile (meno picchi di
+# calore = ventole che salgono gradualmente invece che di colpo)
+grep -qi "GenuineIntel" /proc/cpuinfo && apt_extra termico thermald
 /usr/libexec/alba/alba-configura-accesso
 apt_extra appimage libfuse2t64
 apt_extra telefono kdeconnect

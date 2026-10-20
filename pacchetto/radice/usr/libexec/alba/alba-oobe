@@ -54,11 +54,12 @@ CSS = b"""
 * { font-family: "Inter", "Noto Sans", sans-serif; }
 window { background-color: #0b0f29; }
 .scheda { background-color: rgba(24, 26, 44, 0.92); border-radius: 26px; border: 1px solid alpha(#ffffff, 0.12); }
-.lato { background-image: linear-gradient(160deg, #ff9a5c, #e2566a 55%, #7b3fa0); border-radius: 26px 0 0 26px; }
+.lato { background-image: linear-gradient(160deg, #ff9a5c, #e2566a 55%, #7b3fa0); border-radius: 25px 0 0 25px;
+        padding: 36px 30px 30px 32px; }
 .lato label { color: #ffffff; }
-.passo { font-size: 13px; opacity: 0.85; }
-.titolo-lato { font-size: 26px; font-weight: 700; }
-.spiega-lato { font-size: 14px; }
+.passo { font-size: 13px; font-weight: 600; opacity: 0.9; }
+.titolo-lato { font-size: 30px; font-weight: 800; }
+.spiega-lato { font-size: 15px; }
 .titolo { color: #ffffff; font-size: 24px; font-weight: 700; }
 .testo { color: alpha(#ffffff, 0.72); font-size: 14px; }
 .campo label, label.campo { color: alpha(#ffffff, 0.85); font-size: 13px; font-weight: 600; }
@@ -159,7 +160,7 @@ class Configurazione(Gtk.Window):
         lato = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         lato.get_style_context().add_class("lato")
         lato.set_size_request(320, -1)
-        lato.set_border_width(34)
+        lato.set_border_width(0)
         if os.path.exists(LOGO):
             lato.pack_start(Gtk.Image.new_from_pixbuf(GdkPixbuf.Pixbuf.new_from_file_at_size(LOGO, 56, 56)),
                             False, False, 0)

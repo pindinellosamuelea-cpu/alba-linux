@@ -1,0 +1,163 @@
+#!/usr/bin/python3
+"""Alba Linux - indicatore di volume e luminosità (come Windows 11).
+
+Un'unica "pillola" in basso al centro che si aggiorna mentre tieni premuto il
+tasto, e sparisce dolcemente dopo un attimo: mai una notifica per ogni scatto.
+
+Resta in attesa (leggerissimo) e riceve i comandi da alba-volume e
+alba-luminosita tramite $XDG_RUNTIME_DIR/alba-osd, righe del tipo:
+    volume 45 [muto]
+    luce 70
+"""
+import os
+import stat
+import sys
+import time
+
+import gi
+gi.require_version("Gtk", "3.0")
+gi.require_version("Gdk", "3.0")
+from gi.repository import Gdk, GLib, Gtk  # noqa: E402
+
+TUBO = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "alba-osd")
+
+CSS = b"""
+.osd { background-color: rgba(32, 33, 44, 0.94); border-radius: 22px; padding: 10px 18px;
+       border: 1px solid rgba(255, 255, 255, 0.10); }
+.osd image { color: #ffffff; }
+.osd label { color: #ffffff; font-weight: 600; font-size: 11pt; min-width: 34px; }
+.osd levelbar trough { min-height: 6px; min-width: 150px; border-radius: 3px; background-color: rgba(255,255,255,0.18);
+                       border: none; }
+.osd levelbar block.filled { background-color: #ff8a4c; border-radius: 3px; border: none; }
+.osd levelbar block.empty { background-color: transparent; border: none; }
+window.trasparente { background-color: transparent; }
+"""
+
+
+def icona_volume(v, muto):
+    if muto or v == 0:
+        return "alba-volume-muto-symbolic"
+    return f"alba-volume-{1 if v < 34 else 2 if v < 67 else 3}-symbolic"
+
+
+class Osd(Gtk.Window):
+    def __init__(self):
+        super().__init__(type=Gtk.WindowType.POPUP)
+        self.get_style_context().add_class("trasparente")
+        self.set_app_paintable(True)
+        v = self.get_screen().get_rgba_visual()
+        if v:
+            self.set_visual(v)
+        self.set_type_hint(Gdk.WindowTypeHint.NOTIFICATION)
+        self.set_accept_focus(False)
+        self.set_keep_above(True)
+        stile = Gtk.CssProvider()
+        stile.load_from_data(CSS)
+        Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(), stile,
+                                                 Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        box = Gtk.Box(spacing=12)
+        box.get_style_context().add_class("osd")
+        self.icona = Gtk.Image()
+        self.icona.set_pixel_size(20)
+        self.barra = Gtk.LevelBar()
+        self.barra.set_mode(Gtk.LevelBarMode.CONTINUOUS)
+        self.barra.set_min_value(0)
+        self.barra.set_max_value(100)
+        self.barra.set_valign(Gtk.Align.CENTER)
+        for nome in ("low", "high", "full"):
+            self.barra.remove_offset_value(nome)
+        self.numero = Gtk.Label(xalign=1)
+        box.pack_start(self.icona, False, False, 0)
+        box.pack_start(self.barra, True, True, 0)
+        box.pack_start(self.numero, False, False, 0)
+        self.add(box)
+        self.timer = None
+        self.dissolvenza = None
+        self.opacita = 0.0
+
+    def mostra(self, tipo, valore, muto=False):
+        valore = max(0, min(100, valore))
+        if tipo == "luce":
+            self.icona.set_from_icon_name("display-brightness-symbolic", Gtk.IconSize.LARGE_TOOLBAR)
+        else:
+            self.icona.set_from_icon_name(icona_volume(valore, muto), Gtk.IconSize.LARGE_TOOLBAR)
+        self.barra.set_value(0 if muto else valore)
+        self.numero.set_text("" if muto else str(valore))
+        self.show_all()
+        self._posiziona()
+        self._dissolvi(1.0, 120)
+        if self.timer:
+            GLib.source_remove(self.timer)
+        self.timer = GLib.timeout_add(1400, self._nascondi)
+
+    def _posiziona(self):
+        d = Gdk.Display.get_default()
+        _, px, py = d.get_default_seat().get_pointer().get_position()
+        m = d.get_monitor_at_point(px, py) or d.get_primary_monitor() or d.get_monitor(0)
+        area = m.get_workarea()
+        l, a = self.get_size()
+        self.move(area.x + (area.width - l) // 2, area.y + area.height - a - 28)
+
+    def _nascondi(self):
+        self.timer = None
+        self._dissolvi(0.0, 220, self.hide)
+        return False
+
+    def _dissolvi(self, verso, durata, poi=None):
+        if self.dissolvenza:
+            GLib.source_remove(self.dissolvenza)
+            self.dissolvenza = None
+        if not self.get_screen().is_composited():
+            self.opacita = verso
+            if poi:
+                poi()
+            return
+        partenza, inizio = self.opacita, time.monotonic()
+
+        def tic():
+            t = min(1.0, (time.monotonic() - inizio) * 1000 / durata)
+            self.opacita = partenza + (verso - partenza) * (1 - (1 - t) ** 3)
+            self.set_opacity(self.opacita)
+            if t >= 1.0:
+                self.dissolvenza = None
+                if poi:
+                    poi()
+                return False
+            return True
+        self.dissolvenza = GLib.timeout_add(16, tic)
+
+
+def main():
+    if os.path.exists(TUBO) and not stat.S_ISFIFO(os.stat(TUBO).st_mode):
+        os.remove(TUBO)
+    if not os.path.exists(TUBO):
+        os.mkfifo(TUBO, 0o600)
+    osd = Osd()
+    # aperto in lettura+scrittura: non riceve mai "fine file" quando chi scrive chiude
+    fd = os.open(TUBO, os.O_RDWR | os.O_NONBLOCK)
+    resto = {"testo": ""}
+
+    def arrivato(_fd, _cond):
+        try:
+            dati = os.read(fd, 4096).decode(errors="replace")
+        except BlockingIOError:
+            return True
+        resto["testo"] += dati
+        *righe, resto["testo"] = resto["testo"].split("\n")
+        for riga in righe[-1:]:   # conta solo l'ultimo valore (tasto tenuto premuto)
+            parti = riga.split()
+            if len(parti) >= 2 and parti[0] in ("volume", "luce") and parti[1].isdigit():
+                osd.mostra(parti[0], int(parti[1]), "muto" in parti[2:])
+        return True
+    GLib.io_add_watch(fd, GLib.IO_IN, arrivato)
+    Gtk.main()
+
+
+if __name__ == "__main__":
+    if "--prova" in sys.argv:
+        o = Osd()
+        o.mostra("volume", 45)
+        GLib.timeout_add(3000, Gtk.main_quit)
+        Gtk.main()
+    else:
+        main()

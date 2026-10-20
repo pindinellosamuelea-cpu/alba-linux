@@ -48,6 +48,8 @@ for modo in controlli notifiche; do
   foto "05-menu-rapido-$modo" 4
   kill $PID 2>/dev/null; rm -f /tmp/alba-rapido.pid
 done
+/usr/bin/alba-osd --prova >/dev/null 2>&1 &
+PID=$!; foto "08-indicatore-volume" 1; kill $PID 2>/dev/null
 /usr/bin/alba-menu-x >/dev/null 2>&1 &
 PID=$!; foto "07-menu-super-x" 3; kill $PID 2>/dev/null
 /usr/bin/alba-tema chiaro; sleep 1
@@ -89,6 +91,12 @@ pkill -x xfce4-panel; pkill -x xfdesktop; pkill -x xfwm4
 HOME=/tmp/accesso-prova python3 /usr/libexec/alba/alba-accesso --prova >/tmp/accesso.log 2>&1 &
 PID=$!
 foto 30-schermata-accesso 4
+kill $PID 2>/dev/null
+# passaggio accesso -> desktop: "Benvenuto", poi lo sfondo diventa quello del desktop
+HOME=/tmp/accesso-prova python3 /usr/libexec/alba/alba-accesso --prova --prova-ingresso >>/tmp/accesso.log 2>&1 &
+PID=$!
+foto 31-accesso-benvenuto 1.9
+foto 32-accesso-dopo 2.5
 kill $PID 2>/dev/null
 cat /tmp/accesso.log 2>/dev/null | tail -5
 if false && command -v slick-greeter >/dev/null; then

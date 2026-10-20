@@ -190,11 +190,20 @@ class Sfondo(Gtk.DrawingArea):
         self.originale = None
         self.scalato = None
         self.zoom = 1.0
+        self.nitido = None        # sfondo del desktop dell'utente (passaggio finale)
+        self.nitido_scalato = None
+        self.misto = 0.0          # 0 = sfondo sfocato dell'accesso, 1 = desktop
         try:
             self.originale = GdkPixbuf.Pixbuf.new_from_file(SFONDO)
         except GLib.Error:
             pass
         self.connect("draw", self.disegna)
+
+    @staticmethod
+    def copri(pix, L, A):
+        s = max(L / pix.get_width(), A / pix.get_height())
+        return pix.scale_simple(max(1, int(pix.get_width() * s)), max(1, int(pix.get_height() * s)),
+                                GdkPixbuf.InterpType.BILINEAR)
 
     def disegna(self, w, cr):
         L, A = w.get_allocated_width(), w.get_allocated_height()
@@ -216,9 +225,16 @@ class Sfondo(Gtk.DrawingArea):
         else:
             cr.set_source_rgb(0.04, 0.06, 0.16)
             cr.paint()
-        # velo scuro per leggere bene i testi
-        cr.set_source_rgba(0.02, 0.03, 0.08, 0.30)
+        # velo scuro per leggere bene i testi (sparisce verso il desktop)
+        cr.set_source_rgba(0.02, 0.03, 0.08, 0.30 * (1 - self.misto))
         cr.paint()
+        # passaggio al desktop: lo sfondo sfocato diventa quello nitido dell'utente
+        if self.nitido and self.misto > 0:
+            if not self.nitido_scalato or self.nitido_scalato.get_width() < L or self.nitido_scalato.get_height() < A:
+                self.nitido_scalato = self.copri(self.nitido, L, A)
+            Gdk.cairo_set_source_pixbuf(cr, self.nitido_scalato, (L - self.nitido_scalato.get_width()) / 2,
+                                        (A - self.nitido_scalato.get_height()) / 2)
+            cr.paint_with_alpha(self.misto)
 
 
 class Accesso:
@@ -258,6 +274,8 @@ class Accesso:
 
         self.scegli_utente(self.utente_iniziale(), animazione=False)
         self.entrata()
+        if PROVA and "--prova-ingresso" in sys.argv:   # per le foto di prova
+            GLib.timeout_add(1500, lambda: (self.uscita(Gtk.main_quit), False)[1])
 
     # ------------------------------------------------------------ interfaccia
     def crea_finestra(self, g, principale):
@@ -442,13 +460,65 @@ class Accesso:
         anima(420, passo)
 
     def uscita(self, poi):
-        """Accesso riuscito: tutto svanisce dolcemente prima del desktop."""
+        """Accesso riuscito, come su macOS/Windows: "Benvenuto" per un attimo,
+        poi orologio e scheda svaniscono mentre lo sfondo sfocato diventa lo
+        sfondo nitido del desktop. Il desktop parte da quell'immagine: nessuno
+        stacco nero, nessun pezzo che salta fuori."""
+        nome = (self.utente.get_display_name() or self.utente.get_name()) if self.utente else ""
+        self.nome.set_text(f"Benvenuto, {nome.split()[0]}" if nome else "Benvenuto")
+        self.riga_password.set_opacity(0)
+        self.rotella.show()
+        self.rotella.start()
+        nitido = self.sfondo_desktop()
+        for sf in self.sfondi:
+            sf.nitido = nitido
+
         def passo(t):
             e = morbido(t)
             for w in (self.blocco_ora, self.centro):
                 w.set_opacity(1 - e)
-            self.centro.set_margin_top(int(self.margine_centro - 20 * e))
-        anima(320, passo, poi)
+            if nitido:
+                for sf in self.sfondi:
+                    sf.misto = e
+                    sf.queue_draw()
+
+        def fine():
+            self.imposta_sfondo_schermo(nitido)
+            poi()
+        GLib.timeout_add(450, lambda: (anima(650, passo, fine), False)[1])
+
+    def sfondo_desktop(self):
+        """Lo sfondo del desktop dell'utente (lo comunica Alba ad AccountsService)."""
+        percorsi = []
+        if self.utente is not None and hasattr(self.utente, "get_background"):
+            percorsi.append(self.utente.get_background() or "")
+        percorsi.append("/usr/share/backgrounds/alba/alba.png")
+        for p in percorsi:
+            if p and os.path.isfile(p):
+                try:
+                    return GdkPixbuf.Pixbuf.new_from_file(p)
+                except GLib.Error:
+                    continue
+        return None
+
+    @staticmethod
+    def imposta_sfondo_schermo(pix):
+        """Mette lo sfondo del desktop anche "sotto" le finestre: mentre il
+        desktop si carica si vede quello, non uno schermo nero."""
+        if pix is None:
+            return
+        try:
+            radice = Gdk.get_default_root_window()
+            L, A = radice.get_width(), radice.get_height()
+            superficie = radice.create_similar_surface(__import__("cairo").CONTENT_COLOR, L, A)
+            cr = __import__("cairo").Context(superficie)
+            img = Sfondo.copri(pix, L, A)
+            Gdk.cairo_set_source_pixbuf(cr, img, (L - img.get_width()) / 2, (A - img.get_height()) / 2)
+            cr.paint()
+            radice.set_background_pattern(__import__("cairo").SurfacePattern(superficie))
+            Gdk.flush()
+        except Exception:  # noqa: BLE001 - è solo un abbellimento
+            pass
 
     # ------------------------------------------------------------------ utenti
     def utente_iniziale(self):
@@ -535,8 +605,10 @@ class Accesso:
             return
         testo = self.password.get_text()
         if PROVA:
-            self.mostra_messaggio("Password errata. Riprova.") if testo != "alba" else Gtk.main_quit()
-            if testo != "alba":
+            if testo == "alba":
+                self.uscita(Gtk.main_quit)
+            else:
+                self.mostra_messaggio("Password errata. Riprova.")
                 self.scuoti()
             return
         if not self.greeter.get_in_authentication():

@@ -790,6 +790,16 @@ class PaginaSuono(Pagina):
         self.combo_ingresso.connect("changed", lambda c: None if self._muto_agg or not c.get_active_id()
                                     else esegui(["pactl", "set-default-source", c.get_active_id()]))
         r.aggiungi(Riga("Microfono in uso", None, self.combo_ingresso))
+        # Prova del microfono: la barra si muove mentre parli
+        self.livello_mic = Gtk.LevelBar()
+        self.livello_mic.set_min_value(0)
+        self.livello_mic.set_max_value(1)
+        self.livello_mic.set_size_request(240, 10)
+        self.livello_mic.set_valign(Gtk.Align.CENTER)
+        r.aggiungi(Riga("Prova il microfono", "Parla: la barra deve muoversi. Se resta ferma o bassa, alza il volume del microfono.",
+                        self.livello_mic))
+        self._ascolto = None
+        self._picco = 0.0
         self._muto_agg = False
 
     @staticmethod
@@ -804,8 +814,48 @@ class PaginaSuono(Pagina):
         return [(l.split("\t")[1], l.split("\t")[1]) for l in uscita(["pactl", "list", "short", tipo]).splitlines()
                 if "\t" in l and not l.split("\t")[1].endswith(".monitor")]
 
+    def _avvia_ascolto(self):
+        """Legge il microfono (solo mentre questa pagina è aperta) per la barra del livello."""
+        if self._ascolto or not esiste("parec") or DEMO:
+            if DEMO:
+                self.livello_mic.set_value(0.55)
+            return
+        try:
+            self._ascolto = subprocess.Popen(["parec", "--raw", "--format=s16le", "--channels=1", "--rate=16000",
+                                              "--latency-msec=60"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        except OSError:
+            return
+        import array
+        import threading
+
+        def leggi(proc):
+            while proc.poll() is None:
+                dati = proc.stdout.read(1600)
+                if not dati:
+                    break
+                campioni = array.array("h", dati[:len(dati) // 2 * 2])
+                if campioni:
+                    self._picco = max(abs(min(campioni)), max(campioni)) / 32768
+        threading.Thread(target=leggi, args=(self._ascolto,), daemon=True).start()
+
+        def disegna():
+            visibile = self.finestra.pila.get_visible_child_name() == self.nome and self.finestra.get_visible()
+            if not visibile:
+                self._ascolto.terminate()
+                self._ascolto = None
+                self.livello_mic.set_value(0)
+                return False
+            # scala "da orecchio": i suoni deboli si vedono comunque
+            v = min(1.0, (self._picco ** 0.5) * 1.15)
+            self.livello_mic.set_value(max(v, self.livello_mic.get_value() * 0.75))
+            self._picco *= 0.5
+            return True
+        GLib.timeout_add(60, disegna)
+
     def aggiorna(self):
         disponibile = esiste("pactl") and bool(uscita(["pactl", "info"]))
+        if disponibile:
+            self._avvia_ascolto()
         for w in (self.volume, self.muto, self.combo_uscita, self.mic, self.combo_ingresso):
             w.set_sensitive(disponibile)
         if not disponibile:

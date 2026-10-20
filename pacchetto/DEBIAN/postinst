@@ -101,6 +101,8 @@ if una_volta servizi-remoti; then
 fi
 if sistema_avviato; then
   sysctl -q --system >/dev/null 2>&1 || true
+# audio sempre pronto (vale subito, senza riavvio)
+[ -w /sys/module/snd_hda_intel/parameters/power_save ] && echo 0 > /sys/module/snd_hda_intel/parameters/power_save 2>/dev/null || true
   timedatectl set-ntp true >/dev/null 2>&1 || true
 fi
 

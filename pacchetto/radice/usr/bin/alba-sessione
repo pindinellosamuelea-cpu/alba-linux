@@ -95,6 +95,36 @@ fi
 # 2e. Modalità gioco automatica (giochi a schermo intero: grafica diretta)
 pgrep -u "$(id -u)" -f "bash /usr/bin/alba-modalita-gioco" >/dev/null || setsid -f /usr/bin/alba-modalita-gioco >/dev/null 2>&1
 
+# 2f. Microfono: una volta sola porta il volume a un livello che si sente bene
+#     (molti portatili partono troppo bassi e la voce "non viene capita")
+if [ ! -f "$CONF/microfono-v1" ] && command -v pactl >/dev/null; then
+  ( sleep 8
+    V="$(pactl get-source-volume @DEFAULT_SOURCE@ 2>/dev/null | grep -o '[0-9]*%' | head -1 | tr -d %)"
+    if [ -n "$V" ] && [ "$V" -lt 60 ]; then pactl set-source-volume @DEFAULT_SOURCE@ 80%; fi
+    pactl set-source-mute @DEFAULT_SOURCE@ 0 2>/dev/null
+    touch "$CONF/microfono-v1" ) >/dev/null 2>&1 &
+fi
+
+# 2g. Indicatore unico di volume e luminosità (tasti Fn): sempre pronto.
+#     La luminosità la gestisce Alba (niente doppio avviso del risparmio energetico).
+pgrep -u "$(id -u)" -f "python3 /usr/bin/alba-osd" >/dev/null || setsid -f /usr/bin/python3 /usr/bin/alba-osd >/dev/null 2>&1
+for p in handle-brightness-keys show-brightness-popup; do
+  xfconf-query -c xfce4-power-manager -p "/xfce4-power-manager/$p" -n -t bool -s false 2>/dev/null || \
+    xfconf-query -c xfce4-power-manager -p "/xfce4-power-manager/$p" -s false 2>/dev/null
+done
+for k in XF86MonBrightnessUp=su XF86MonBrightnessDown=giu; do
+  xfconf-query -c xfce4-keyboard-shortcuts -p "/commands/custom/${k%%=*}" -n -t string -s "alba-luminosita ${k#*=}" 2>/dev/null || \
+    xfconf-query -c xfce4-keyboard-shortcuts -p "/commands/custom/${k%%=*}" -s "alba-luminosita ${k#*=}" 2>/dev/null
+done
+
+# 2h. La schermata di accesso deve conoscere il tuo sfondo: dopo la password
+#     lo sfondo sfocato diventa proprio quello del tuo desktop, senza stacchi.
+( sleep 15
+  IMG="$(xfconf-query -c xfce4-desktop -l 2>/dev/null | grep -m1 'last-image$' | xargs -r -I{} xfconf-query -c xfce4-desktop -p {} 2>/dev/null)"
+  case "$IMG" in /usr/share/*) ;; *) IMG=/usr/share/backgrounds/alba/alba.png ;; esac
+  [ -f "$IMG" ] && busctl call org.freedesktop.Accounts "/org/freedesktop/Accounts/User$(id -u)" \
+      org.freedesktop.Accounts.User SetBackgroundFile s "$IMG" >/dev/null 2>&1 ) &
+
 # 3. Risoluzione e frequenza dello schermo scelte nelle Impostazioni
 [ -f "$CONF/schermo.sh" ] && bash "$CONF/schermo.sh" >/dev/null 2>&1
 

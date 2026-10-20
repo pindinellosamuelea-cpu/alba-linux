@@ -61,7 +61,8 @@ setsid -f xfce4-panel >/dev/null 2>&1
 # Scorciatoie aggiornate (Impostazioni e Gestione attività)
 for k in "<Super>i=alba-impostazioni" "<Primary><Shift>Escape=alba-gestione-attivita" "<Primary><Alt>Delete=alba-gestione-attivita" \
          "XF86AudioRaiseVolume=alba-volume su" "XF86AudioLowerVolume=alba-volume giu" "XF86AudioMute=alba-volume muto" \
-         "<Super>a=alba-rapido controlli" "<Super>n=alba-rapido notifiche" "<Super>x=alba-menu-x"; do
+         "<Super>a=alba-rapido controlli" "<Super>n=alba-rapido notifiche" "<Super>x=alba-menu-x" \
+         "XF86MonBrightnessUp=alba-luminosita su" "XF86MonBrightnessDown=alba-luminosita giu"; do
   xfconf-query -c xfce4-keyboard-shortcuts -p "/commands/custom/${k%%=*}" -n -t string -s "${k#*=}" 2>/dev/null || \
   xfconf-query -c xfce4-keyboard-shortcuts -p "/commands/custom/${k%%=*}" -s "${k#*=}" 2>/dev/null
 done

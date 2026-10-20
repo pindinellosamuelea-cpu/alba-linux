@@ -1,0 +1,12 @@
+#!/bin/bash
+# Alba Linux - tasti della luminosità (anche Fn) con l'indicatore unico.
+# Uso: alba-luminosita su|giu
+command -v brightnessctl >/dev/null || exit 0
+case "${1:-}" in
+  su)  brightnessctl -q -c backlight set 5%+ ;;
+  giu) # mai completamente nero
+       brightnessctl -q -c backlight -n 3% set 5%- ;;
+  *) exit 1 ;;
+esac
+L="$(brightnessctl -m -c backlight 2>/dev/null | cut -d, -f4 | tr -d %)"
+exec /usr/libexec/alba/alba-osd-invia luce "${L:-0}"

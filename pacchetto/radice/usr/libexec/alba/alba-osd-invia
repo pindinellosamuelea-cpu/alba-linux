@@ -1,0 +1,13 @@
+#!/bin/bash
+# Manda un valore all'indicatore di Alba (lo avvia se non è acceso).
+# Uso: alba-osd-invia volume|luce VALORE [muto]
+TUBO="${XDG_RUNTIME_DIR:-/tmp}/alba-osd"
+if ! pgrep -u "$(id -u)" -f "python3 /usr/bin/alba-osd" >/dev/null; then
+  setsid -f /usr/bin/python3 /usr/bin/alba-osd >/dev/null 2>&1
+  for _ in 1 2 3 4 5 6 7 8 9 10; do [ -p "$TUBO" ] && break; sleep 0.1; done
+fi
+if [ -p "$TUBO" ]; then
+  timeout 1 bash -c 'printf "%s\n" "$1" > "$2"' _ "$*" "$TUBO" && exit 0
+fi
+# riserva: notifica classica che si sostituisce da sola
+notify-send -a "Alba" -t 1200 -h string:x-canonical-private-synchronous:alba-osd -h int:value:"$2" "$1 $2%" 2>/dev/null

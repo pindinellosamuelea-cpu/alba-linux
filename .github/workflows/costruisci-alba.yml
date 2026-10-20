@@ -41,7 +41,7 @@ jobs:
 
       - name: Numero di versione
         id: versione
-        run: echo "versione=1.1.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+        run: echo "versione=1.2.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
 
       - name: Costruisci il pacchetto
         run: |

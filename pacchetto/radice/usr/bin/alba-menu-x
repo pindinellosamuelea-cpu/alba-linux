@@ -18,7 +18,7 @@ VOCI = [
     ("Batteria e alimentazione", "battery", ["alba-rapido", "batteria"], ""),
     ("Risoluzione problemi", "help-faq", ["alba-impostazioni", "--pagina", "problemi"], ""),
     None,
-    ("Blocca lo schermo", "system-lock-screen", ["xflock4"], "Super+L"),
+    ("Blocca lo schermo", "system-lock-screen", ["alba-blocco", "--ora"], "Super+L"),
     ("Spegni o esci…", "system-shutdown", ["xfce4-session-logout"], ""),
 ]
 

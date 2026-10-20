@@ -1199,8 +1199,7 @@ class PaginaAlimentazione(Pagina):
             c = self._combo(self.SOSPENSIONE, lambda v, k=chiave: self._sospensione(k, v))
             self.c_sosp[chiave] = c
             r.aggiungi(Riga(testo if self.portatile else "Sospendi il computer dopo", None, c))
-        self.blocca = Interruttore(lambda v: xfconf_scrivi("xfce4-power-manager",
-                                                          "/xfce4-power-manager/lock-screen-suspend-hibernate", "bool", v))
+        self.blocca = Interruttore(self._blocco)
         r.aggiungi(Riga("Al risveglio chiedi la password", "Compare la schermata di accesso di Alba, "
                         "come all'accensione", self.blocca))
 
@@ -1233,6 +1232,16 @@ class PaginaAlimentazione(Pagina):
                 "Ibernazione non disponibile su questo computer (serve uno spazio di scambio sul disco grande "
                 "quanto la RAM e Secure Boot spento). La sospensione invece funziona sempre.")
         self.colonna.pack_start(etichetta(nota, "riga-sottotitolo", wrap=True), False, False, 8)
+
+    @staticmethod
+    def _blocco(acceso):
+        segno = os.path.join(CONF, "blocco-spento")
+        if acceso:
+            if os.path.exists(segno):
+                os.remove(segno)
+        else:
+            os.makedirs(CONF, exist_ok=True)
+            open(segno, "w").close()
 
     def _combo(self, voci, azione):
         c = Gtk.ComboBoxText()
@@ -1273,7 +1282,7 @@ class PaginaAlimentazione(Pagina):
         for chiave, c in self.c_sosp.items():
             v = leggi(f"inactivity-on-{chiave}", 14)
             c.set_active_id("0" if v <= 14 else self._vicino(self.SOSPENSIONE, v))
-        self.blocca.imposta(xfconf_leggi("xfce4-power-manager", "/xfce4-power-manager/lock-screen-suspend-hibernate") != "false")
+        self.blocca.imposta(not os.path.exists(os.path.join(CONF, "blocco-spento")))
         if self.coperchio:
             testo = leggi_file("/etc/systemd/logind.conf.d/50-alba.conf")
             m = re.search(r"HandleLidSwitch=(\w+)", testo)

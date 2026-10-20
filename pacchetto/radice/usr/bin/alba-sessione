@@ -125,19 +125,23 @@ done
   [ -f "$IMG" ] && busctl call org.freedesktop.Accounts "/org/freedesktop/Accounts/User$(id -u)" \
       org.freedesktop.Accounts.User SetBackgroundFile s "$IMG" >/dev/null 2>&1 ) &
 
-# 2i. Blocco e risveglio: compare la stessa schermata di accesso di Alba
-#     (quella dell'accensione), non un blocco schermo diverso.
-if [ ! -f "$CONF/blocco-v1" ]; then
-  xfconf-query -c xfce4-session -p /general/LockCommand -n -t string -s "dm-tool lock" 2>/dev/null || \
-    xfconf-query -c xfce4-session -p /general/LockCommand -s "dm-tool lock" 2>/dev/null
+# 2i. Blocco e risveglio: prima di ogni sospensione (coperchio chiuso, menu,
+#     tempo scaduto) Alba blocca il computer; al risveglio compare la stessa
+#     schermata di accesso dell'accensione, con la password e "Bentornato".
+#     Lo fa alba-blocco (un solo blocco, niente doppioni del risparmio energetico).
+if [ ! -f "$CONF/blocco-v2" ]; then
+  xfconf-query -c xfce4-session -p /general/LockCommand -n -t string -s "alba-blocco --ora" 2>/dev/null || \
+    xfconf-query -c xfce4-session -p /general/LockCommand -s "alba-blocco --ora" 2>/dev/null
   xfconf-query -c xfce4-screensaver -p /lock/enabled -n -t bool -s false 2>/dev/null || \
     xfconf-query -c xfce4-screensaver -p /lock/enabled -s false 2>/dev/null
-  for p in lock-screen-suspend-hibernate logind-handle-lid-switch; do
-    xfconf-query -c xfce4-power-manager -p "/xfce4-power-manager/$p" -n -t bool -s true 2>/dev/null || \
-      xfconf-query -c xfce4-power-manager -p "/xfce4-power-manager/$p" -s true 2>/dev/null
-  done
-  touch "$CONF/blocco-v1"
+  xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/lock-screen-suspend-hibernate -n -t bool -s false 2>/dev/null || \
+    xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/lock-screen-suspend-hibernate -s false 2>/dev/null
+  xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/logind-handle-lid-switch -n -t bool -s true 2>/dev/null || \
+    xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/logind-handle-lid-switch -s true 2>/dev/null
+  touch "$CONF/blocco-v2"
 fi
+pgrep -u "$(id -u)" -f "python3 /usr/bin/alba-blocco" >/dev/null || \
+  setsid -f /usr/bin/python3 /usr/bin/alba-blocco >/dev/null 2>"${XDG_RUNTIME_DIR:-/tmp}/alba-blocco.log"
 
 # 3. Risoluzione e frequenza dello schermo scelte nelle Impostazioni
 [ -f "$CONF/schermo.sh" ] && bash "$CONF/schermo.sh" >/dev/null 2>&1

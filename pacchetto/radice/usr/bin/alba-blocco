@@ -1,0 +1,91 @@
+#!/usr/bin/python3
+"""Alba Linux - blocca il computer PRIMA della sospensione (coperchio chiuso,
+menu, tempo scaduto), così al risveglio compare la schermata di accesso di
+Alba e serve la password, come su Windows.
+
+Resta in ascolto del sistema (nessun controllo continuo): chiede al sistema
+di aspettare un attimo prima di sospendere, blocca, poi lascia andare.
+"""
+import os
+import subprocess
+import sys
+
+from gi.repository import Gio, GLib
+
+CONF = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")), "alba")
+SPENTO = os.path.join(CONF, "blocco-spento")
+bus = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
+stato = {"fd": -1}
+
+
+def log(*a):
+    print("alba-blocco:", *a, file=sys.stderr, flush=True)
+
+
+def inibisci():
+    """Il sistema aspetta (al massimo pochi secondi) che abbiamo bloccato."""
+    if stato["fd"] >= 0:
+        return
+    try:
+        r, fds = bus.call_with_unix_fd_list_sync(
+            "org.freedesktop.login1", "/org/freedesktop/login1", "org.freedesktop.login1.Manager", "Inhibit",
+            GLib.Variant("(ssss)", ("sleep", "Alba", "Blocca lo schermo prima della sospensione", "delay")),
+            GLib.VariantType("(h)"), Gio.DBusCallFlags.NONE, -1, None, None)
+        stato["fd"] = fds.get(r.unpack()[0])
+    except GLib.Error as e:
+        log("inibizione non riuscita:", e.message)
+
+
+def lascia():
+    if stato["fd"] >= 0:
+        os.close(stato["fd"])
+        stato["fd"] = -1
+    return False
+
+
+def sede():
+    seat = os.environ.get("XDG_SEAT_PATH")
+    if seat:
+        return seat
+    try:
+        r = bus.call_sync("org.freedesktop.DisplayManager", "/org/freedesktop/DisplayManager",
+                          "org.freedesktop.DBus.Properties", "Get",
+                          GLib.Variant("(ss)", ("org.freedesktop.DisplayManager", "Seats")),
+                          GLib.VariantType("(v)"), Gio.DBusCallFlags.NONE, -1, None)
+        sedi = r.unpack()[0]
+        return sedi[0] if sedi else None
+    except GLib.Error:
+        return None
+
+
+def blocca():
+    if os.path.exists(SPENTO):
+        return
+    s = sede()
+    try:
+        if s:
+            bus.call_sync("org.freedesktop.DisplayManager", s, "org.freedesktop.DisplayManager.Seat", "Lock",
+                          None, None, Gio.DBusCallFlags.NONE, 5000, None)
+            return
+    except GLib.Error as e:
+        log("blocco LightDM non riuscito:", e.message)
+    subprocess.run(["dm-tool", "lock"], timeout=5)
+
+
+def sospensione(_conn, _mittente, _percorso, _interfaccia, _segnale, parametri, _dati):
+    sta_per_dormire = parametri.unpack()[0]
+    if sta_per_dormire:
+        blocca()
+        GLib.timeout_add(1200, lascia)   # il tempo di mostrare la schermata di accesso
+    else:
+        inibisci()                       # risveglio: pronti per la prossima volta
+
+
+if __name__ == "__main__":
+    if "--ora" in sys.argv:              # Super+L e "Blocca" nei menu
+        blocca()
+        sys.exit(0)
+    bus.signal_subscribe("org.freedesktop.login1", "org.freedesktop.login1.Manager", "PrepareForSleep",
+                         "/org/freedesktop/login1", None, Gio.DBusSignalFlags.NONE, sospensione, None)
+    inibisci()
+    GLib.MainLoop().run()

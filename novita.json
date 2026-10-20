@@ -6,6 +6,7 @@
       "titolo": "Alimentazione e sospensione come su Windows",
       "novita": [
         "Chiudendo il coperchio del portatile il computer va in sospensione (con un monitor esterno collegato no)",
+        "Corretto: dopo la sospensione (anche chiudendo il coperchio) il computer ora si blocca davvero e al risveglio chiede la password con «Bentornato»",
         "Al risveglio e quando blocchi il computer compare la stessa schermata di accesso di Alba dell'accensione, con «Bentornato»",
         "Nuova pagina Impostazioni → Alimentazione: quando spegnere lo schermo, quando sospendere (a batteria e collegato), cosa fanno il coperchio e il pulsante di accensione, ibernazione se disponibile",
         "Corretto il controllo dei codificatori video per OBS nella pagina Scheda grafica"

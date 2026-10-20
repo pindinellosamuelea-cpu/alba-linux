@@ -2267,6 +2267,11 @@ class PaginaProblemi(Pagina):
                               "awk '{printf \"%6d  %s\\n\", $1/1024, $2}'"]),
                       "", "Servizi attivi:", uscita(["sh", "-c", "systemctl list-units --type=service --state=running "
                                                     "--no-legend --plain | awk '{print $1}' | tr '\\n' ' '"])]
+            parti += ["", "== Blocco e sospensione ==",
+                      "in ascolto: " + ("sì" if esegui(["pgrep", "-f", "python3 /usr/bin/alba-blocco"])[0] == 0 else "NO"),
+                      "sede: " + os.environ.get("XDG_SEAT_PATH", "(non indicata)"),
+                      leggi_file(os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "alba-blocco.log"))[-1500:],
+                      leggi_file("/etc/systemd/logind.conf.d/50-alba.conf")]
             parti += ["", "== Driver grafico ==", leggi_file("/var/lib/alba/driver-auto.log")[-2500:]]
             parti += ["", "== Ultimo programma Windows ==", leggi_file(os.path.expanduser("~/.cache/alba/exe-ultimo.log"))[-2500:]]
             cartella = os.path.expanduser("~/Documenti") if os.path.isdir(os.path.expanduser("~/Documenti")) else os.path.expanduser("~")

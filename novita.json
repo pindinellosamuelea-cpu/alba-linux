@@ -2,6 +2,13 @@
   "nota": "Novità di Alba mostrate in Impostazioni → Aggiornamenti. 'data' = quando la novità è entrata in Alba (UTC). Le più recenti in alto.",
   "versioni": [
     {
+      "data": "2026-10-20T22:40",
+      "titolo": "Supporto per i Mac Intel con chip T2",
+      "novita": [
+        "Mac mini 2018, MacBook 2018-2020 e iMac 2020: Alba installa da sola il kernel apposito per audio interno, ventole, tastiera e trackpad, poi chiede di riavviare"
+      ]
+    },
+    {
       "data": "2026-10-20T15:10",
       "titolo": "Alimentazione e sospensione come su Windows",
       "novita": [

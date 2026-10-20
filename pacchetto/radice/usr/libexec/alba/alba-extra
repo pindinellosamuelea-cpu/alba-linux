@@ -87,6 +87,31 @@ if [ "$SURFACE" = 1 ] && ! fatto surface; then
   fi
 fi
 
+# Mac Intel con chip Apple T2 (Mac mini 2018, MacBook 2018-2020, iMac 2020):
+# kernel t2linux per audio interno, ventole, tastiera/trackpad e Wi-Fi.
+# Il chip T2 si riconosce dalla scheda "Apple ... T2" (106b:1801/1802).
+if lspci -nn 2>/dev/null | grep -qiE "106b:180[12]" && ! fatto mac-t2; then
+  if curl -fsSL --compressed "https://adityagarg8.github.io/t2-ubuntu-repo/KEY.gpg" | gpg --dearmor \
+       > /etc/apt/trusted.gpg.d/t2-ubuntu-repo.gpg 2>/dev/null && \
+     curl -fsSL --compressed -o /etc/apt/sources.list.d/t2.list "https://adityagarg8.github.io/t2-ubuntu-repo/t2.list"; then
+    echo "deb [signed-by=/etc/apt/trusted.gpg.d/t2-ubuntu-repo.gpg] https://github.com/AdityaGarg8/t2-ubuntu-repo/releases/download/trixie ./" \
+      >> /etc/apt/sources.list.d/t2.list
+    "${APT[@]}" update >/dev/null 2>&1 || true
+    if "${APT[@]}" install linux-t2-lts apple-t2-audio-config apple-firmware-script; then
+      cat > /etc/default/grub.d/alba-t2.cfg <<'EOC'
+# Alba Linux: parametri richiesti dai Mac con chip T2
+GRUB_CMDLINE_LINUX="$GRUB_CMDLINE_LINUX intel_iommu=on iommu=pt pm_async=off"
+EOC
+      echo t2bce_vhci > /etc/modules-load.d/t2.conf
+      update-grub >/dev/null 2>&1 || true
+      echo riavvio > /var/lib/alba/mac-t2-riavvio
+      segna mac-t2
+    else
+      echo "ATTENZIONE: kernel per Mac T2 non installato (riprovo più tardi)"
+    fi
+  fi
+fi
+
 # Ultimo .deb pubblicato su GitHub da un progetto (filtro sul nome del file)
 deb_github() {  # nome progetto filtro
   local nome="$1" progetto="$2" filtro="$3"

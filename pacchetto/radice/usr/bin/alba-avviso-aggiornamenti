@@ -43,6 +43,15 @@ if [ -f /var/lib/alba/surface-riavvio ] && ! uname -r | grep -q surface && \
   [ "$R" = "riavvia" ] && systemctl reboot
 fi
 
+# Mac con chip T2: kernel installato, serve un riavvio
+if [ -f /var/lib/alba/mac-t2-riavvio ] && ! uname -r | grep -q t2 && \
+   [ "$(cat "$CONF/avviso-mac" 2>/dev/null)" != "$(date +%F)" ]; then
+  date +%F > "$CONF/avviso-mac"
+  R="$(notify-send -a "Alba" -i computer -A riavvia="Riavvia ora" "Supporto Mac installato" \
+        "Riavvia per attivare audio interno, ventole e il resto del tuo Mac." 2>/dev/null)"
+  [ "$R" = "riavvia" ] && systemctl reboot
+fi
+
 # Driver NVIDIA installato in automatico: serve un riavvio
 if [ -f /var/lib/alba/driver-riavvio ] && [ ! -e /proc/driver/nvidia/version ] && \
    [ "$(cat "$CONF/avviso-driver" 2>/dev/null)" != "$(date +%F)" ]; then

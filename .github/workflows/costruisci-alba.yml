@@ -125,7 +125,7 @@ jobs:
           path: dist/*.deb
 
       - name: Pubblica sul canale aggiornamenti
-        if: steps.prova.outputs.ok == 'true' && github.ref == 'refs/heads/main'
+        if: steps.prova.outputs.ok == 'true' && github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, '(in corso)')
         run: |
           mkdir -p /tmp/apt && cp dist/*.deb /tmp/apt/ && cd /tmp/apt
           apt-ftparchive packages . > Packages

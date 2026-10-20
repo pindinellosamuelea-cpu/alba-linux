@@ -33,6 +33,17 @@ MESI = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", 
         "ottobre", "novembre", "dicembre"]
 
 CSS = """
+button.widget { border-radius: 16px; padding: 6px 14px; border: none; box-shadow: none; background-image: none;
+                background-color: alpha(#ffffff, 0.10); color: #ffffff; transition: background-color 150ms ease; }
+button.widget:hover { background-color: alpha(#ffffff, 0.18); }
+button.widget label, button.widget image { color: #ffffff; }
+.meteo-temp { font-size: 15px; font-weight: 600; }
+.meteo-citta { font-size: 13px; color: alpha(#ffffff, 0.75); }
+.previsioni { background-color: alpha(#ffffff, 0.10); border-radius: 16px; padding: 10px 16px;
+              border: 1px solid alpha(#ffffff, 0.14); }
+.previsioni label { color: #ffffff; font-size: 12px; }
+.stato-basso image, .stato-basso label { color: #ffffff; }
+.stato-basso label { font-size: 12px; }
 * { font-family: "Inter", "Noto Sans", sans-serif; }
 window { background-color: #0b0f29; }
 .ora { color: #ffffff; font-size: 84px; font-weight: 300; letter-spacing: 1px; }
@@ -80,6 +91,34 @@ button.utente label { color: #ffffff; }
          border-radius: 32px; padding: 30px 44px 24px 44px; }
 popover { background-color: transparent; border: none; box-shadow: none; }
 """
+
+
+CITTA = {"Rome": "Roma", "Zurich": "Zurigo", "Milan": "Milano", "Geneva": "Ginevra", "Vienna": "Vienna",
+         "Berlin": "Berlino", "Paris": "Parigi", "London": "Londra", "Madrid": "Madrid", "Lisbon": "Lisbona",
+         "Brussels": "Bruxelles", "Amsterdam": "Amsterdam", "Athens": "Atene", "Warsaw": "Varsavia",
+         "Bucharest": "Bucarest", "Moscow": "Mosca", "New York": "New York", "Busingen": "Büsingen"}
+
+
+def icona_meteo(codice):
+    if codice == 0:
+        return "weather-clear-symbolic"
+    if codice in (1, 2):
+        return "weather-few-clouds-symbolic"
+    if codice == 3:
+        return "weather-overcast-symbolic"
+    if codice in (45, 48):
+        return "weather-fog-symbolic"
+    if codice in (71, 73, 75, 77, 85, 86):
+        return "weather-snow-symbolic"
+    if codice >= 95:
+        return "weather-storm-symbolic"
+    return "weather-showers-symbolic"
+
+
+def descrizione_meteo(codice):
+    return {0: "Sereno", 1: "Poco nuvoloso", 2: "Parzialmente nuvoloso", 3: "Nuvoloso", 45: "Nebbia",
+            48: "Nebbia"}.get(codice, "Neve" if codice in (71, 73, 75, 77, 85, 86) else
+                              "Temporale" if codice >= 95 else "Pioggia" if codice >= 51 else "Variabile")
 
 
 def leggi(percorso, predefinito=""):
@@ -313,12 +352,42 @@ class Accesso:
         self.aggiorna_ora()
         GLib.timeout_add_seconds(1, self.aggiorna_ora)
 
+        # Widget meteo sotto la data (clic: previsioni dei prossimi giorni)
+        self.meteo = Gtk.Button()
+        self.meteo.get_style_context().add_class("widget")
+        self.meteo.set_halign(Gtk.Align.CENTER)
+        self.meteo.set_margin_top(10)
+        riga = Gtk.Box(spacing=8)
+        self.meteo_icona = Gtk.Image.new_from_icon_name("weather-few-clouds-symbolic", Gtk.IconSize.LARGE_TOOLBAR)
+        self.meteo_temp = Gtk.Label()
+        self.meteo_temp.get_style_context().add_class("meteo-temp")
+        self.meteo_citta = Gtk.Label()
+        self.meteo_citta.get_style_context().add_class("meteo-citta")
+        for w in (self.meteo_icona, self.meteo_temp, self.meteo_citta):
+            riga.pack_start(w, False, False, 0)
+        self.meteo.add(riga)
+        self.meteo.set_no_show_all(True)
+        riga.show_all()
+        self.previsioni = Gtk.Revealer()
+        self.previsioni.set_transition_type(Gtk.RevealerTransitionType.SLIDE_DOWN)
+        self.previsioni.set_transition_duration(220)
+        self.previsioni_box = Gtk.Box(spacing=18)
+        self.previsioni_box.get_style_context().add_class("previsioni")
+        self.previsioni_box.set_halign(Gtk.Align.CENTER)
+        self.previsioni_box.set_margin_top(8)
+        self.previsioni.add(self.previsioni_box)
+        self.meteo.connect("clicked", lambda *_: self.previsioni.set_reveal_child(not self.previsioni.get_reveal_child()))
+        self.blocco_ora.pack_start(self.meteo, False, False, 0)
+        self.blocco_ora.pack_start(self.previsioni, False, False, 0)
+        self.carica_meteo()
+        GLib.timeout_add_seconds(600, lambda: (self.carica_meteo(), True)[1])
+
         # Utente al centro
         self.centro = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
         self.centro.get_style_context().add_class("vetro")
         self.centro.set_halign(Gtk.Align.CENTER)
         self.centro.set_valign(Gtk.Align.START)
-        self.margine_centro = int(g.height * 0.36)
+        self.margine_centro = int(g.height * 0.40)
         self.centro.set_margin_top(self.margine_centro)
         self.posto_foto = Gtk.Box()
         self.posto_foto.set_halign(Gtk.Align.CENTER)
@@ -408,6 +477,18 @@ class Accesso:
         angolo.set_margin_end(28)
         angolo.set_margin_bottom(28)
         angolo.pack_end(energia, False, False, 0)
+        # Stato in basso a destra, come su Windows: rete e batteria
+        self.stato_basso = Gtk.Box(spacing=10)
+        self.stato_basso.get_style_context().add_class("stato-basso")
+        self.stato_rete = Gtk.Image()
+        self.stato_bat_icona = Gtk.Image()
+        self.stato_bat = Gtk.Label()
+        for w in (self.stato_rete, self.stato_bat_icona, self.stato_bat):
+            self.stato_basso.pack_start(w, False, False, 0)
+        self.stato_basso.set_valign(Gtk.Align.CENTER)
+        angolo.pack_end(self.stato_basso, False, False, 6)
+        self.aggiorna_stato()
+        GLib.timeout_add_seconds(15, lambda: (self.aggiorna_stato(), True)[1])
         sovrapposto.add_overlay(angolo)
 
         # Logo e nome in basso al centro
@@ -426,6 +507,107 @@ class Accesso:
             marchio.pack_start(t, False, False, 0)
             marchio.set_opacity(0.8)
             sovrapposto.add_overlay(marchio)
+
+    # ---------------------------------------------------------------- widget
+    def carica_meteo(self):
+        """Meteo della città del fuso orario (nessun dato personale inviato)."""
+        import threading
+        import json
+        import urllib.request
+
+        def posizione():
+            tz = os.path.realpath("/etc/localtime").split("zoneinfo/")[-1]
+            for riga in leggi("/usr/share/zoneinfo/zone1970.tab").splitlines():
+                parti = riga.split("\t")
+                if len(parti) >= 3 and parti[2] == tz:
+                    import re
+                    m = re.match(r"([+-])(\d{2})(\d{2})(\d{0,2})([+-])(\d{3})(\d{2})(\d{0,2})", parti[1])
+                    if m:
+                        lat = (int(m[2]) + int(m[3]) / 60) * (1 if m[1] == "+" else -1)
+                        lon = (int(m[6]) + int(m[7]) / 60) * (1 if m[5] == "+" else -1)
+                        citta = tz.split("/")[-1].replace("_", " ")
+                        return lat, lon, CITTA.get(citta, citta)
+            return None
+
+        def lavoro():
+            if PROVA:
+                dati = {"current": {"temperature_2m": 14.2, "weather_code": 2},
+                        "daily": {"time": ["2026-10-20", "2026-10-21", "2026-10-22", "2026-10-23"],
+                                  "weather_code": [2, 61, 3, 0], "temperature_2m_max": [16, 13, 12, 17],
+                                  "temperature_2m_min": [8, 9, 7, 6]}}
+                GLib.idle_add(self.mostra_meteo, dati, "Zurigo")
+                return
+            pos = posizione()
+            if not pos:
+                return
+            lat, lon, citta = pos
+            url = (f"https://api.open-meteo.com/v1/forecast?latitude={lat:.2f}&longitude={lon:.2f}"
+                   "&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min"
+                   "&timezone=auto&forecast_days=4")
+            for _ in range(6):   # la rete può arrivare qualche secondo dopo
+                try:
+                    with urllib.request.urlopen(url, timeout=6) as r:
+                        GLib.idle_add(self.mostra_meteo, json.load(r), citta)
+                        return
+                except (OSError, ValueError):
+                    time.sleep(10)
+        threading.Thread(target=lavoro, daemon=True).start()
+
+    def mostra_meteo(self, dati, citta):
+        try:
+            att = dati["current"]
+            self.meteo_icona.set_from_icon_name(icona_meteo(att["weather_code"]), Gtk.IconSize.LARGE_TOOLBAR)
+            self.meteo_temp.set_text(f"{round(att['temperature_2m'])}°")
+            self.meteo_citta.set_text(f"{citta} · {descrizione_meteo(att['weather_code'])}")
+            for c in self.previsioni_box.get_children():
+                self.previsioni_box.remove(c)
+            g = dati["daily"]
+            for i in range(1, min(4, len(g["time"]))):
+                giorno = time.strptime(g["time"][i], "%Y-%m-%d")
+                col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+                col.pack_start(Gtk.Label(label=GIORNI[giorno.tm_wday][:3].capitalize()), False, False, 0)
+                col.pack_start(Gtk.Image.new_from_icon_name(icona_meteo(g["weather_code"][i]),
+                                                            Gtk.IconSize.LARGE_TOOLBAR), False, False, 0)
+                col.pack_start(Gtk.Label(label=f"{round(g['temperature_2m_max'][i])}° / "
+                                               f"{round(g['temperature_2m_min'][i])}°"), False, False, 0)
+                self.previsioni_box.pack_start(col, False, False, 0)
+            self.previsioni_box.show_all()
+            self.meteo.show()
+        except (KeyError, TypeError, IndexError, ValueError):
+            pass
+        return False
+
+    def aggiorna_stato(self):
+        rete = "network-offline-symbolic"
+        if PROVA:
+            rete = "network-wireless-signal-good-symbolic"
+        elif os.path.isdir("/sys/class/net"):
+            for n in os.listdir("/sys/class/net"):
+                if n == "lo" or leggi(f"/sys/class/net/{n}/operstate") != "up":
+                    continue
+                rete = ("network-wireless-signal-good-symbolic" if os.path.isdir(f"/sys/class/net/{n}/wireless")
+                        else "network-wired-symbolic")
+                break
+        self.stato_rete.set_from_icon_name(rete, Gtk.IconSize.LARGE_TOOLBAR)
+        bat = None
+        if os.path.isdir("/sys/class/power_supply"):
+            for d in sorted(os.listdir("/sys/class/power_supply")):
+                if leggi(f"/sys/class/power_supply/{d}/type") == "Battery":
+                    bat = d
+                    break
+        if PROVA:
+            livello, stato = 76, "Discharging"
+        elif bat:
+            livello = int(leggi(f"/sys/class/power_supply/{bat}/capacity", "0") or 0)
+            stato = leggi(f"/sys/class/power_supply/{bat}/status")
+        else:
+            self.stato_bat_icona.hide()
+            self.stato_bat.hide()
+            return
+        carica = "-charging" if stato in ("Charging", "Full") else ""
+        self.stato_bat_icona.set_from_icon_name(f"battery-level-{min(100, round(livello / 10) * 10)}{carica}-symbolic",
+                                                Gtk.IconSize.LARGE_TOOLBAR)
+        self.stato_bat.set_text(f"{livello}%")
 
     def aggiorna_ora(self):
         adesso = time.localtime()

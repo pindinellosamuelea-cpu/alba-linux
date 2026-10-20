@@ -64,7 +64,7 @@ levelbar block.filled { background-color: #ff8a4c; }
 COLORI = {
     "wifi": "#0a84ff", "bluetooth": "#0a84ff", "schermo": "#5e5ce6", "suono": "#ff375f",
     "batteria": "#30b158", "aspetto": "#bf5af2", "data-ora": "#8e8e93",
-    "scheda-grafica": "#ff9f0a", "dispositivi": "#34aadc", "telefono": "#30b158", "problemi": "#ff453a", "sicurezza": "#64748b", "aggiornamenti": "#8e8e93",
+    "scheda-grafica": "#ff9f0a", "dispositivi": "#34aadc", "tastiera": "#5e5ce6", "telefono": "#30b158", "problemi": "#ff453a", "sicurezza": "#64748b", "aggiornamenti": "#8e8e93",
     "info": "#8e8e93",
 }
 
@@ -2127,6 +2127,73 @@ class PaginaProblemi(Pagina):
 
 
 # ---------------------------------------------------------------------------
+# Tastiera
+# ---------------------------------------------------------------------------
+LAYOUT = [("it", "", "Italiano"), ("it", "mac", "Italiano (Mac)"),
+          ("ch", "it", "Svizzero (italiano)"), ("ch", "", "Svizzero (tedesco)"), ("ch", "fr", "Svizzero (francese)"),
+          ("us", "", "Inglese (Stati Uniti)"), ("us", "intl", "Inglese (internazionale, con accenti)"),
+          ("gb", "", "Inglese (Regno Unito)"), ("de", "", "Tedesco"), ("fr", "", "Francese"), ("es", "", "Spagnolo"),
+          ("pt", "", "Portoghese"), ("br", "", "Portoghese (Brasile)"), ("ro", "", "Rumeno"), ("pl", "", "Polacco"),
+          ("ru", "", "Russo"), ("ua", "", "Ucraino"), ("ar", "", "Arabo"), ("cn", "", "Cinese"), ("jp", "", "Giapponese")]
+
+
+class PaginaTastiera(Pagina):
+    nome, titolo, icona = "tastiera", "Tastiera", "input-keyboard-symbolic"
+    parole = "tastiera layout lingua lettere accenti svizzera mac inglese"
+
+    def costruisci(self):
+        self.sottotitolo.set_text("La disposizione dei tasti. Con due lingue passi dall'una all'altra con Super+Spazio, "
+                                  "come su Windows.")
+        r = self.sezione("Disposizione dei tasti")
+        self.principale = Gtk.ComboBoxText()
+        self.seconda = Gtk.ComboBoxText()
+        self.seconda.append("", "Nessuna")
+        for i, (_, _, nome) in enumerate(LAYOUT):
+            self.principale.append(str(i), nome)
+            self.seconda.append(str(i), nome)
+        r.aggiungi(Riga("Tastiera principale", None, self.principale))
+        r.aggiungi(Riga("Seconda tastiera", "Facoltativa: per scrivere anche in un'altra lingua", self.seconda))
+        applica = pulsante("Applica", self._applica, principale=True)
+        applica.set_halign(Gtk.Align.END)
+        applica.set_margin_top(10)
+        self.colonna.pack_start(applica, False, False, 0)
+        self.prova = Gtk.Entry(placeholder_text="Prova qui: scrivi àèéìòù € @ #")
+        r = self.sezione("Prova")
+        self.prova.set_margin_start(16)
+        self.prova.set_margin_end(16)
+        self.prova.set_margin_top(12)
+        self.prova.set_margin_bottom(12)
+        r.aggiungi(self.prova)
+
+    def aggiorna(self):
+        lay = (xfconf_leggi("keyboard-layout", "/Default/XkbLayout") or "it").split(",")
+        var = (xfconf_leggi("keyboard-layout", "/Default/XkbVariant") or "").split(",") + ["", ""]
+
+        def indice(l, v):
+            for i, (a, b, _) in enumerate(LAYOUT):
+                if a == l and b == v:
+                    return str(i)
+            return None
+        self.principale.set_active_id(indice(lay[0], var[0]) or "0")
+        self.seconda.set_active_id(indice(lay[1], var[1]) if len(lay) > 1 else "")
+
+    def _applica(self):
+        scelte = [LAYOUT[int(i)] for i in (self.principale.get_active_id(), self.seconda.get_active_id()) if i]
+        if not scelte:
+            return
+        layout = ",".join(l for l, _, _ in scelte)
+        varianti = ",".join(v for _, v, _ in scelte)
+        xfconf_scrivi("keyboard-layout", "/Default/XkbDisable", "bool", False)
+        xfconf_scrivi("keyboard-layout", "/Default/XkbLayout", "string", layout)
+        xfconf_scrivi("keyboard-layout", "/Default/XkbVariant", "string", varianti)
+        xfconf_scrivi("keyboard-layout", "/Default/XkbOptions/Group", "string", "grp:win_space_toggle")
+        esegui(["setxkbmap", "-layout", layout, "-variant", varianti, "-option", "", "-option", "grp:win_space_toggle"])
+        # anche per la schermata di accesso (senza password: è una regola di Alba)
+        in_sottofondo(lambda: come_amministratore("tastiera", layout, varianti))
+        self.prova.grab_focus()
+
+
+# ---------------------------------------------------------------------------
 # Telefono
 # ---------------------------------------------------------------------------
 AUTOSTART_KDECONNECT = os.path.expanduser("~/.config/autostart/org.kde.kdeconnect.daemon.desktop")
@@ -2574,7 +2641,7 @@ class PaginaInfo(Pagina):
 # Finestra principale
 # ---------------------------------------------------------------------------
 PAGINE = [PaginaWifi, PaginaBluetooth, None, PaginaSchermo, PaginaSuono, PaginaBatteria, None,
-          PaginaAspetto, PaginaDataOra, PaginaGrafica, PaginaDispositivi, PaginaTelefono, None, PaginaSicurezza, PaginaProblemi, PaginaAggiornamenti, PaginaInfo]
+          PaginaAspetto, PaginaDataOra, PaginaGrafica, PaginaDispositivi, PaginaTastiera, PaginaTelefono, None, PaginaSicurezza, PaginaProblemi, PaginaAggiornamenti, PaginaInfo]
 
 
 class Impostazioni(Gtk.Window):

@@ -297,6 +297,8 @@ class Griglia(Gtk.Window):
             figlio = Gtk.FlowBoxChild()
             figlio.add(b)
             figlio.info = a
+            # strumenti tecnici: nascosti nella griglia, ma si trovano cercandoli
+            figlio.avanzato = "X-Alba-Avanzati" in (a.get_categories() or "")
             figlio.testo = normalizza(" ".join(filter(None, [
                 a.get_display_name(), a.get_name(), getattr(a, "get_generic_name", lambda: "")(),
                 " ".join(a.get_keywords() if hasattr(a, "get_keywords") else []), a.get_executable()])))
@@ -304,7 +306,9 @@ class Griglia(Gtk.Window):
         self.griglia.show_all()
 
     def _visibile(self, figlio):
-        return not self.ricerca or self.ricerca in figlio.testo
+        if not self.ricerca:
+            return not figlio.avanzato
+        return self.ricerca in figlio.testo
 
     def _filtra(self):
         self.ricerca = normalizza(self.cerca.get_text().strip())

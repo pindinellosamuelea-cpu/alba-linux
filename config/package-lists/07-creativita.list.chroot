@@ -1,11 +1,8 @@
-# Editing con accelerazione della scheda grafica, app native Linux
+# Video e 3D (scelta di Alessandro per la 1.2). GIMP, Krita, Inkscape e
+# Darktable si installano quando servono, da Programmi.
 kdenlive
-krita
-gimp
-inkscape
 blender
 audacity
-darktable
 obs-studio
 ffmpeg
 

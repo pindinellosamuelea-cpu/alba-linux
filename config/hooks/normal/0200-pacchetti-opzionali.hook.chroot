@@ -53,18 +53,10 @@ fi
 rm -f /tmp/cie.deb
 
 # Miniature con l'icona vera dei file .exe, info di sistema, giochi
-prova gnome-exe-thumbnailer fastfetch lutris lightdm-gtk-greeter-settings \
-      mugshot menulibre catfish
+prova gnome-exe-thumbnailer lutris
 
-# VSCodium: editor di codice in stile VS Code, completamente open source
-if curl -fsSL https://gitlab.com/paulcarroll/vscodium-deb-rpm-repo/raw/master/pub.gpg \
-     | gpg --dearmor -o /usr/share/keyrings/vscodium-archive-keyring.gpg; then
-  echo "deb [signed-by=/usr/share/keyrings/vscodium-archive-keyring.gpg] https://download.vscodium.com/debs vscodium main" \
-    > /etc/apt/sources.list.d/vscodium.list
-  apt-get update && prova codium
-else
-  echo "ATTENZIONE: VSCodium non installato (repository non raggiungibile)"
-fi
+# VSCodium (editor per programmatori): dalla 1.2 non è più preinstallato,
+# si installa quando serve da Programmi (Flathub).
 
 # Flathub nel negozio di app
 flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo || true

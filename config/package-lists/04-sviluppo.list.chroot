@@ -1,13 +1,5 @@
-# Programmazione
-git
-build-essential
-python3-pip
-python3-venv
-nodejs
-npm
-default-jdk
-docker.io
-docker-compose
+# Strumenti di base (servono ad Alba). Gli strumenti da programmatore
+# (git, Node, Java, Docker, compilatori) dalla 1.2 non sono più nell'ISO:
+# si installano quando servono, da Programmi.
 curl
 wget
-htop

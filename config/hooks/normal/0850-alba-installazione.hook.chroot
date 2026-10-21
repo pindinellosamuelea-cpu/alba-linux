@@ -30,6 +30,39 @@ PY
 grep -n "users\|branding" "$S" || true
 
 mkdir -p /etc/calamares/modules
+# Avvio: copia anche il percorso di riserva EFI/BOOT/BOOTX64.EFI, così il computer
+# parte anche se il firmware non accetta di salvare la voce di avvio (es. Mac T2)
+B=/etc/calamares/modules/bootloader.conf
+[ -f "$B" ] || B=/usr/share/calamares/modules/bootloader.conf
+if [ -f "$B" ]; then
+  if grep -q "^installEFIFallback:" "$B"; then
+    sed -i 's/^installEFIFallback:.*/installEFIFallback: true/' "$B"
+  else
+    echo "installEFIFallback: true" >> "$B"
+  fi
+  grep -n "installEFIFallback\|efiBootloaderId" "$B" || true
+fi
+# Lo script di Debian che installa il programma di avvio: non deve fallire se
+# il pacchetto è già presente o se manca Internet
+H=/usr/share/calamares/helpers/calamares-bootloader-config
+if [ -f "$H" ] && [ ! -f "$H.debian" ]; then
+  echo "== $H (originale)"; cat "$H"
+  mv "$H" "$H.debian"
+  cat > "$H" <<'EOW'
+#!/bin/sh
+# Alba Linux: se il programma di avvio è già nel sistema copiato dalla
+# chiavetta non serve scaricarlo; altrimenti si usa lo script di Debian.
+CHROOT=$(mount | grep proc | grep calamares | awk '{print $3}' | sed -e "s#/proc##g")
+echo "Running bootloader-config (Alba)..."
+if [ -n "$CHROOT" ] && [ -d /sys/firmware/efi/efivars ] && \
+   chroot "$CHROOT" dpkg-query -W -f='${Status}' grub-efi-amd64 2>/dev/null | grep -q "ok installed"; then
+  echo " * grub-efi (uefi) già presente: niente da scaricare"
+  exit 0
+fi
+exec /bin/sh /usr/share/calamares/helpers/calamares-bootloader-config.debian "$@"
+EOW
+  chmod +x "$H"
+fi
 cat > /etc/calamares/modules/finished.conf <<'EOC'
 ---
 restartNowMode: always

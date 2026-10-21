@@ -1,0 +1,9 @@
+# Alba Linux: programma di avvio già pronto sulla chiavetta, così l'installer
+# non deve scaricarlo (funziona anche senza Internet, anche sui Mac con T2)
+grub-efi-amd64
+grub-efi-amd64-signed
+shim-signed
+efibootmgr
+os-prober
+cryptsetup
+keyutils

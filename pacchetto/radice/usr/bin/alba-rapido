@@ -121,10 +121,14 @@ class Rapido(Gtk.Window):
         GLib.timeout_add(260, lambda: (self._posiziona(), False)[1])
 
     def _dissolvi(self, da, a, durata, poi=None):
-        inizio = time.monotonic()
+        """Dissolvenza legata ai fotogrammi dello schermo (fluida a 60 fps)."""
+        inizio = []
 
-        def tic():
-            t = min(1.0, (time.monotonic() - inizio) * 1000 / durata)
+        def tic(_w, orologio):
+            ora = orologio.get_frame_time() / 1000.0
+            if not inizio:
+                inizio.append(ora)
+            t = min(1.0, (ora - inizio[0]) / durata)
             e = 1 - (1 - t) ** 3
             self.scatola.set_opacity(da + (a - da) * e)
             if t >= 1.0:
@@ -132,7 +136,7 @@ class Rapido(Gtk.Window):
                     poi()
                 return False
             return True
-        GLib.timeout_add(16, tic)
+        self.add_tick_callback(tic)
 
     def chiudi(self):
         """Chiusura animata: scende e svanisce, poi la finestra se ne va."""
@@ -621,9 +625,9 @@ class Rapido(Gtk.Window):
             self.icona_batteria.set_from_icon_name(icona_batteria(livello, stato), Gtk.IconSize.LARGE_TOOLBAR)
             extra = " · in carica" if stato == "Charging" else (f" · {tempo}" if tempo else "")
             self.testo_batteria.set_text(f"{livello}%{extra}")
-        else:
-            self.icona_batteria.set_from_icon_name("ac-adapter-symbolic", Gtk.IconSize.LARGE_TOOLBAR)
-            self.testo_batteria.set_text("Collegato alla corrente")
+        else:   # computer fisso: niente batteria da mostrare
+            self.icona_batteria.hide()
+            self.testo_batteria.set_text("")
 
     def _cambia(self, chiave, attivo):
         if chiave == "wifi":

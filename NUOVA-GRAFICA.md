@@ -35,3 +35,13 @@ Anche queste escono sabato alle 06:00, insieme alla nuova grafica.
 5. Programmi .exe: tutto come prima, migliorando dove possibile perché si aprano in modo più naturale.
 6. Fisso o portatile: su un computer fisso (es. Mac mini) niente pagina Batteria né icona della batteria.
 7. Driver: includere tutti i driver e firmware possibili, installati da soli.
+8. Animazioni di accensione e spegnimento, da rivedere e rendere coerenti con la nuova grafica.
+9. Aggiornamenti: togliere avvisi e sottomenu inutili. Resta un solo avviso pulito ("Aggiornamento pronto, riavvia quando vuoi").
+10. Tutte le animazioni fluide a 60 fotogrammi al secondo, sincronizzate con lo schermo.
+11. Installer (Calamares): da rivedere e rendere più bello e semplice, nello stile della nuova grafica.
+
+### Decisioni del 22 ottobre, 01:40
+- **Installer:** grafica e colori della nuova Alba; meno passaggi (lingua, disco, conferma: il resto al primo avvio); diapositive più belle durante la copia, con la barra di avanzamento.
+- **App preinstallate:** si tengono le app che hanno tutti i PC (browser, posta, Office, musica, video, foto, PDF, calcolatrice, note, scanner) e il gruppo Video e 3D (Kdenlive, Blender, OBS Studio, Audacity).
+  Escono dall'ISO: GIMP, Krita, Inkscape, Darktable e gli strumenti da programmatore (git, Node, Java, Docker, compilatori). Si possono sempre installare da Programmi.
+  Sui computer già installati non si toglie nulla: si nascondono solo dalla griglia gli strumenti tecnici.

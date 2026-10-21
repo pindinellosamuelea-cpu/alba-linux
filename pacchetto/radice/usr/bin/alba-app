@@ -7,7 +7,9 @@ Resta pronta in memoria dopo il primo avvio, così si apre all'istante:
   alba-app --sfondo   si prepara senza mostrarsi (all'avvio della sessione)
 """
 import locale
+import math
 import os
+import pwd
 import re
 import subprocess
 import sys
@@ -44,6 +46,15 @@ CSS = """
 #alba-app .app label { color: @testo; font-size: 13px; text-shadow: none; }
 #alba-app .vuoto { color: @tenue; font-size: 16px; }
 #alba-app scrollbar { background: transparent; border: none; }
+#alba-app .piede { padding: 6px 10px; border-radius: 22px; background: @campo; border: 1px solid @bordo; }
+#alba-app .piede label { color: @testo; font-weight: 600; }
+#alba-app .tondo {
+  min-width: 36px; min-height: 36px; padding: 0; border-radius: 18px; border: none; box-shadow: none;
+  background: transparent; color: @testo; transition: background-color 150ms ease-out;
+}
+#alba-app .tondo:hover { background: @sopra; }
+#alba-app .utente { border: none; box-shadow: none; background: transparent; padding: 2px 10px 2px 2px; border-radius: 20px; }
+#alba-app .utente:hover { background: @sopra; }
 """
 COLORI = {
     "chiaro": dict(testo="#2a2018", tenue="#7a6a5c", campo="rgba(255,255,255,0.78)", bordo="rgba(255,255,255,0.95)",
@@ -89,6 +100,77 @@ def sfoca(percorso, l, a):
     piccolo = pix.scale_simple(max(1, l // 28), max(1, a // 28), GdkPixbuf.InterpType.HYPER)
     medio = piccolo.scale_simple(max(1, l // 7), max(1, a // 7), GdkPixbuf.InterpType.BILINEAR)
     return medio.scale_simple(l, a, GdkPixbuf.InterpType.BILINEAR)
+
+
+def utente_corrente():
+    """Nome da mostrare e foto dell'account (AccountsService o ~/.face)."""
+    p = pwd.getpwuid(os.getuid())
+    nome = (p.pw_gecos.split(",")[0] or p.pw_name).strip()
+    foto = None
+    try:
+        bus = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
+        r = bus.call_sync("org.freedesktop.Accounts", "/org/freedesktop/Accounts", "org.freedesktop.Accounts",
+                          "FindUserByName", GLib.Variant("(s)", (p.pw_name,)), GLib.VariantType("(o)"),
+                          Gio.DBusCallFlags.NONE, 2000, None)
+        v = bus.call_sync("org.freedesktop.Accounts", r.unpack()[0], "org.freedesktop.DBus.Properties", "Get",
+                          GLib.Variant("(ss)", ("org.freedesktop.Accounts.User", "IconFile")),
+                          GLib.VariantType("(v)"), Gio.DBusCallFlags.NONE, 2000, None).unpack()[0]
+        if v and os.path.isfile(v):
+            foto = v
+    except GLib.Error:
+        pass
+    if not foto and os.path.isfile(os.path.expanduser("~/.face")):
+        foto = os.path.expanduser("~/.face")
+    return nome, foto
+
+
+class Foto(Gtk.DrawingArea):
+    """Foto dell'account in un cerchio (o l'iniziale su un cerchio arancione)."""
+
+    def __init__(self, lato):
+        super().__init__()
+        self.lato = lato
+        self.set_size_request(lato, lato)
+        self.immagine, self.iniziale = None, "?"
+        self.connect("draw", self._disegna)
+
+    def aggiorna(self, nome, foto):
+        self.iniziale = (nome or "?")[:1].upper()
+        self.immagine = None
+        if foto:
+            try:
+                self.immagine = GdkPixbuf.Pixbuf.new_from_file_at_scale(foto, self.lato, self.lato, False)
+            except GLib.Error:
+                pass
+        self.queue_draw()
+
+    def _disegna(self, _w, cr):
+        l = self.lato
+        cr.arc(l / 2, l / 2, l / 2, 0, 2 * math.pi)
+        if self.immagine:
+            cr.save()
+            cr.clip()
+            Gdk.cairo_set_source_pixbuf(cr, self.immagine, 0, 0)
+            cr.paint()
+            cr.restore()
+        else:
+            cr.set_source_rgb(0.94, 0.48, 0.12)
+            cr.fill()
+            cr.set_source_rgb(1, 1, 1)
+            cr.select_font_face("Inter", 0, 1)
+            cr.set_font_size(l * 0.45)
+            e = cr.text_extents(self.iniziale)
+            cr.move_to(l / 2 - e.width / 2 - e.x_bearing, l / 2 - e.height / 2 - e.y_bearing)
+            cr.show_text(self.iniziale)
+        return False
+
+
+SPEGNIMENTO = [
+    ("Blocca", "system-lock-screen-symbolic", ["alba-blocco", "--ora"]),
+    ("Sospendi", "media-playback-pause-symbolic", ["systemctl", "suspend"]),
+    ("Riavvia", "system-reboot-symbolic", ["xfce4-session-logout", "--reboot", "--fast"]),
+    ("Spegni", "system-shutdown-symbolic", ["xfce4-session-logout", "--halt", "--fast"]),
+]
 
 
 def normalizza(t):
@@ -147,6 +229,30 @@ class Griglia(Gtk.Window):
         self.vuoto.get_style_context().add_class("vuoto")
         self.vuoto.set_no_show_all(True)
         self.colonna.pack_start(self.vuoto, False, False, 0)
+
+        # in basso: il tuo account (foto e nome) e i pulsanti per spegnere
+        piede = Gtk.Box(spacing=6)
+        piede.get_style_context().add_class("piede")
+        piede.set_halign(Gtk.Align.CENTER)
+        b_utente = Gtk.Button()
+        b_utente.get_style_context().add_class("utente")
+        riga = Gtk.Box(spacing=10)
+        self.foto = Foto(32)
+        self.nome = Gtk.Label()
+        riga.pack_start(self.foto, False, False, 0)
+        riga.pack_start(self.nome, False, False, 0)
+        b_utente.add(riga)
+        b_utente.set_tooltip_text("Il tuo account")
+        b_utente.connect("clicked", lambda *_: self.esegui(["alba-impostazioni", "--pagina", "account"]))
+        piede.pack_start(b_utente, False, False, 0)
+        piede.pack_start(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL), False, False, 6)
+        for testo, icona, cmd in SPEGNIMENTO:
+            b = Gtk.Button.new_from_icon_name(icona, Gtk.IconSize.LARGE_TOOLBAR)
+            b.get_style_context().add_class("tondo")
+            b.set_tooltip_text(testo)
+            b.connect("clicked", lambda _b, c=cmd: self.esegui(c))
+            piede.pack_start(b, False, False, 0)
+        self.colonna.pack_end(piede, False, False, 0)
         self.add(self.colonna)
 
         self.app_info = []
@@ -213,6 +319,13 @@ class Griglia(Gtk.Window):
                 self.avvia(c.info)
                 return
 
+    def esegui(self, cmd):
+        self.chiudi()
+        try:
+            subprocess.Popen(cmd, start_new_session=True)
+        except OSError:
+            pass
+
     def avvia(self, info):
         ctx = Gdk.Display.get_default().get_app_launch_context()
         ctx.set_timestamp(Gtk.get_current_event_time())
@@ -266,12 +379,16 @@ class Griglia(Gtk.Window):
 
     # ---------------------------------------------------- apri / chiudi
     def _dissolvi(self, da, a, durata, poi=None):
-        inizio = time.monotonic()
+        """Animazione legata ai fotogrammi dello schermo (60 al secondo o più)."""
         if self._anim:
-            GLib.source_remove(self._anim)
+            self.remove_tick_callback(self._anim)
+        inizio = []
 
-        def tic():
-            t = min(1.0, (time.monotonic() - inizio) * 1000 / durata)
+        def tic(_w, orologio):
+            ora = orologio.get_frame_time() / 1000.0
+            if not inizio:
+                inizio.append(ora)
+            t = min(1.0, (ora - inizio[0]) / durata)
             e = 1 - (1 - t) ** 3
             v = da + (a - da) * e
             self.set_opacity(v)
@@ -283,12 +400,15 @@ class Griglia(Gtk.Window):
                     poi()
                 return False
             return True
-        self._anim = GLib.timeout_add(15, tic)
+        self._anim = self.add_tick_callback(tic)
 
     def apri(self):
         self._prepara_aspetto()
         self.cerca.set_text("")
         self._filtra()
+        nome, foto = utente_corrente()
+        self.nome.set_text(nome)
+        self.foto.aggiorna(nome, foto)
         self.set_opacity(0)
         self.show()
         self.present_with_time(Gtk.get_current_event_time() or GLib.get_monotonic_time() // 1000)

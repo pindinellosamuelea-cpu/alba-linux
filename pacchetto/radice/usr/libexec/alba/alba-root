@@ -109,6 +109,42 @@ case "${1:-}" in
     apt-get install -y -q "$ARG"
     [ "$ARG" = systemd-timesyncd ] && timedatectl set-ntp true
     ;;
+  utente-nuovo)
+    # Nuovo account. Argomenti: NOME_ACCOUNT standard|amministratore
+    # Da stdin: nome completo, password, (facoltativa) foto.
+    TIPO="${3:-standard}"
+    [[ "$ARG" =~ ^[a-z][a-z0-9_-]{0,30}$ ]] || exit 2
+    case "$ARG" in root|albaoobe|lightdm) exit 2 ;; esac
+    case "$TIPO" in standard|amministratore) ;; *) exit 2 ;; esac
+    id "$ARG" >/dev/null 2>&1 && { echo "Esiste già un account con questo nome" >&2; exit 3; }
+    IFS= read -r NOME || exit 2
+    IFS= read -r PASS || exit 2
+    IFS= read -r FOTO || FOTO=""
+    [ -n "$NOME" ] && [ -n "$PASS" ] || exit 2
+    case "$NOME" in *:*|*,*|*=*) exit 2 ;; esac
+    GRUPPI=""
+    for g in audio video plugdev netdev bluetooth lpadmin scanner users input render; do
+      getent group "$g" >/dev/null && GRUPPI="$GRUPPI,$g"
+    done
+    [ "$TIPO" = amministratore ] && GRUPPI="$GRUPPI,sudo"
+    useradd -m -s /bin/bash -c "$NOME" -G "${GRUPPI#,}" "$ARG" || exit 4
+    printf '%s:%s\n' "$ARG" "$PASS" | chpasswd || exit 4
+    /usr/libexec/alba/alba-root utente-foto "$ARG" "$FOTO" >/dev/null 2>&1 || true
+    ;;
+  utente-foto)
+    # Foto di un account (anche di un altro utente): solo immagini vere
+    U="$ARG"; FOTO="${3:-}"
+    id "$U" >/dev/null 2>&1 || exit 2
+    [ -n "$FOTO" ] && [ -f "$FOTO" ] || exit 0
+    case "$(file -b --mime-type -- "$FOTO")" in image/*) ;; *) exit 2 ;; esac
+    mkdir -p /var/lib/AccountsService/icons /var/lib/AccountsService/users
+    install -m 644 -- "$FOTO" "/var/lib/AccountsService/icons/$U"
+    F="/var/lib/AccountsService/users/$U"
+    if [ -f "$F" ] && grep -q '^Icon=' "$F"; then sed -i "s|^Icon=.*|Icon=/var/lib/AccountsService/icons/$U|" "$F"
+    elif [ -f "$F" ]; then sed -i "/^\[User\]/a Icon=/var/lib/AccountsService/icons/$U" "$F"
+    else printf '[User]\nIcon=/var/lib/AccountsService/icons/%s\nSystemAccount=false\n' "$U" > "$F"; fi
+    systemctl try-restart accounts-daemon >/dev/null 2>&1 || true
+    ;;
   *)
     echo "Comando non riconosciuto" >&2
     exit 2

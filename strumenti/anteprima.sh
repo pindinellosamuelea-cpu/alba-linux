@@ -72,7 +72,7 @@ foto 01-desktop-scuro 3
 PID=$!; foto "06-menu-rapido-scuro" 4; kill $PID 2>/dev/null; rm -f /tmp/alba-rapido.pid
 /usr/bin/alba-tema chiaro; sleep 1
 
-for pagina in batteria aspetto wifi scheda-grafica aggiornamenti data-ora problemi telefono dispositivi tastiera suono alimentazione; do
+for pagina in account schermo batteria aspetto wifi scheda-grafica aggiornamenti data-ora problemi telefono dispositivi tastiera suono alimentazione; do
   /usr/bin/alba-impostazioni --pagina "$pagina" >/dev/null 2>&1 &
   PID=$!
   foto "10-impostazioni-$pagina" 4

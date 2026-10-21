@@ -9,6 +9,10 @@ Uso:  alba-impostazioni [--pagina NOME] [--autotest]
 import json
 import math
 import glob
+import grp
+import pwd
+import tempfile
+import unicodedata
 import os
 import re
 import shutil
@@ -20,7 +24,7 @@ import time
 import gi
 gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
-from gi.repository import Gdk, GdkPixbuf, GLib, Gtk, Pango  # noqa: E402
+from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk, Pango  # noqa: E402
 
 CONF = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")), "alba")
 ROOT = "/usr/libexec/alba/alba-root"
@@ -39,6 +43,8 @@ CSS = b"""
 .cerca { margin: 12px 12px 8px 12px; border-radius: 8px; }
 .titolo-pagina { font-size: 21pt; font-weight: 800; }
 .sottotitolo-pagina { opacity: 0.65; }
+.titolo-grande { font-size: 18pt; font-weight: 700; }
+.sottotitolo { opacity: 0.65; }
 .riquadro { background-color: @theme_base_color; border-radius: 12px;
             border: 1px solid alpha(@theme_fg_color, 0.09); }
 .riga { padding: 11px 16px; }
@@ -73,6 +79,7 @@ COLORI = {
     "batteria": "#30b158", "alimentazione": "#ffb340", "aspetto": "#bf5af2", "data-ora": "#8e8e93",
     "scheda-grafica": "#ff9f0a", "dispositivi": "#34aadc", "tastiera": "#5e5ce6", "telefono": "#30b158", "problemi": "#ff453a", "sicurezza": "#64748b", "aggiornamenti": "#8e8e93",
     "info": "#8e8e93",
+    "account": "#f07a1e",
 }
 
 
@@ -638,6 +645,9 @@ class PaginaSchermo(Pagina):
 
         r = self.sezione("Monitor")
         self.uscita = None
+        self.combo_monitor = Gtk.ComboBoxText()
+        self.combo_monitor.connect("changed", self._cambia_monitor)
+        self.riga_monitor = r.aggiungi(Riga("Monitor", None, self.combo_monitor))
         self.combo_ris = Gtk.ComboBoxText()
         self.combo_ris.connect("changed", self._cambia_risoluzione)
         self.riga_ris = r.aggiungi(Riga("Risoluzione", None, self.combo_ris))
@@ -669,9 +679,15 @@ class PaginaSchermo(Pagina):
         self.modi, attuale, hz_attuale = {}, None, None
         testo = uscita(["xrandr", "--query"]) if esiste("xrandr") else ""
         uscite = re.findall(r"^(\S+) connected( primary)?", testo, re.M)
+        self.combo_monitor.remove_all()
+        for u, _p in uscite:
+            self.combo_monitor.append(u, nome_monitor(u))
+        self.riga_monitor.set_visible(len(uscite) > 1)
         if uscite:
-            scelta = next((u for u, p in uscite if p), uscite[0][0])
+            nomi = [u for u, _p in uscite]
+            scelta = self.uscita if self.uscita in nomi else next((u for u, p in uscite if p), uscite[0][0])
             self.uscita = scelta
+            self.combo_monitor.set_active_id(scelta)
             blocco = testo.split(f"\n{scelta} connected", 1)[1].split("\n")[1:]
             for l in blocco:
                 if not l.startswith("   "):
@@ -695,7 +711,7 @@ class PaginaSchermo(Pagina):
         if attuale:
             self.combo_ris.set_active_id(attuale)
         self.combo_ris.set_sensitive(bool(self.modi))
-        self.riga_ris.imposta_sottotitolo(f"Monitor: {self.uscita}" if self.uscita else "Non disponibile")
+        self.riga_ris.imposta_sottotitolo(nome_monitor(self.uscita) if self.uscita else "Non disponibile")
         self._riempi_hz(attuale, hz_attuale)
 
         dpi = xfconf_leggi("xsettings", "/Xft/DPI")
@@ -712,8 +728,13 @@ class PaginaSchermo(Pagina):
 
     def _riempi_hz(self, ris, hz_attuale=None):
         self.combo_hz.remove_all()
-        for f in sorted(self.modi.get(ris, []), reverse=True):
-            self.combo_hz.append(f"{f:.2f}", f"{round(f)} Hz")
+        freq = sorted(self.modi.get(ris, []), reverse=True)
+        tonde = [round(f) for f in freq]
+        for f in freq:
+            testo = f"{round(f)} Hz" if tonde.count(round(f)) == 1 else f"{f:.2f} Hz".replace(".", ",")
+            if f == freq[0] and len(freq) > 1:
+                testo += "  (la più fluida)"
+            self.combo_hz.append(f"{f:.2f}", testo)
         if hz_attuale:
             self.combo_hz.set_active_id(f"{hz_attuale:.2f}")
         elif self.modi.get(ris):
@@ -732,12 +753,21 @@ class PaginaSchermo(Pagina):
                    "Se lo schermo non si vede bene premi Annulla: tra pochi secondi tornerà come prima.",
                    si="Mantieni", no="Annulla", scadenza=15):
             os.makedirs(CONF, exist_ok=True)
-            with open(os.path.join(CONF, "schermo.sh"), "w") as f:
-                f.write("#!/bin/sh\n" + " ".join(cmd) + "\n")
+            percorso = os.path.join(CONF, "schermo.sh")
+            righe = [r for r in leggi_file(percorso).splitlines()
+                     if r and not r.startswith("#!") and f"--output {self.uscita} " not in r + " "]
+            with open(percorso, "w") as f:
+                f.write("#!/bin/sh\n" + "\n".join(righe + [" ".join(cmd)]) + "\n")
         else:
             m = re.search(rf"^{re.escape(self.uscita)} connected(?: primary)? (\d+x\d+)", precedente, re.M)
             if m:
                 esegui(["xrandr", "--output", self.uscita, "--mode", m.group(1)])
+        self.aggiorna()
+
+    def _cambia_monitor(self, combo):
+        if self._muto or not combo.get_active_id():
+            return
+        self.uscita = combo.get_active_id()
         self.aggiorna()
 
     def _cambia_risoluzione(self, combo):
@@ -888,6 +918,26 @@ class PaginaSuono(Pagina):
 # ---------------------------------------------------------------------------
 # Batteria (stile iPhone)
 # ---------------------------------------------------------------------------
+def nome_monitor(uscita):
+    """Nome comprensibile del monitor: "Schermo del portatile" o "Monitor (HDMI-1)"."""
+    if not uscita:
+        return ""
+    if uscita.startswith(("eDP", "LVDS", "DSI")):
+        return "Schermo del portatile"
+    tipo = re.sub(r"[-_]?\d.*$", "", uscita).replace("DP", "DisplayPort")
+    return f"Monitor {tipo} ({uscita})"
+
+
+def portatile():
+    """Vero se il computer ha una batteria propria (non quella di mouse o cuffie)."""
+    if DEMO:
+        return True
+    for d in glob.glob("/sys/class/power_supply/*"):
+        if leggi_file(f"{d}/type") == "Battery" and leggi_file(f"{d}/scope", "System") != "Device":
+            return True
+    return False
+
+
 def dati_batteria():
     if DEMO:
         ora = time.time()
@@ -895,7 +945,8 @@ def dati_batteria():
         return {"livello": 76, "stato": "Discharging", "salute": 87.4, "cicli": 213,
                 "tempo": "Circa 3 h 40 min rimanenti", "storia": storia, "modello": "Batteria di esempio"}
     basi = [os.path.join("/sys/class/power_supply", d) for d in sorted(os.listdir("/sys/class/power_supply"))
-            if leggi_file(f"/sys/class/power_supply/{d}/type") == "Battery"] if os.path.isdir("/sys/class/power_supply") else []
+            if leggi_file(f"/sys/class/power_supply/{d}/type") == "Battery"
+            and leggi_file(f"/sys/class/power_supply/{d}/scope", "System") != "Device"] if os.path.isdir("/sys/class/power_supply") else []
     if not basi:
         return None
     b = basi[0]
@@ -2822,9 +2873,349 @@ class PaginaInfo(Pagina):
 
 
 # ---------------------------------------------------------------------------
+# Account: foto, nome, password e altri utenti
+# ---------------------------------------------------------------------------
+def accounts_utente(nome):
+    """Percorso D-Bus dell'utente in AccountsService (o None)."""
+    try:
+        bus = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
+        r = bus.call_sync("org.freedesktop.Accounts", "/org/freedesktop/Accounts", "org.freedesktop.Accounts",
+                          "FindUserByName", GLib.Variant("(s)", (nome,)), GLib.VariantType("(o)"),
+                          Gio.DBusCallFlags.NONE, 3000, None)
+        return bus, r.unpack()[0]
+    except GLib.Error:
+        return None, None
+
+
+def accounts_chiama(nome, metodo, valore):
+    bus, percorso = accounts_utente(nome)
+    if not percorso:
+        return False
+    try:
+        bus.call_sync("org.freedesktop.Accounts", percorso, "org.freedesktop.Accounts.User", metodo,
+                      GLib.Variant("(s)", (valore,)), None, Gio.DBusCallFlags.ALLOW_INTERACTIVE_AUTHORIZATION,
+                      60000, None)
+        return True
+    except GLib.Error as e:
+        ERRORI.append(e.message)
+        return False
+
+
+def foto_account(nome):
+    bus, percorso = accounts_utente(nome)
+    if percorso:
+        try:
+            v = bus.call_sync("org.freedesktop.Accounts", percorso, "org.freedesktop.DBus.Properties", "Get",
+                              GLib.Variant("(ss)", ("org.freedesktop.Accounts.User", "IconFile")),
+                              GLib.VariantType("(v)"), Gio.DBusCallFlags.NONE, 3000, None).unpack()[0]
+            if v and os.path.isfile(v):
+                return v
+        except GLib.Error:
+            pass
+    casa = os.path.expanduser(f"~{nome}")
+    f = os.path.join(casa, ".face")
+    return f if os.access(f, os.R_OK) else None
+
+
+def foto_quadrata(origine, destinazione, lato=256):
+    """Ritaglia al centro un quadrato e lo salva in PNG (per la foto dell'account)."""
+    pix = GdkPixbuf.Pixbuf.new_from_file(origine)
+    pix = pix.apply_embedded_orientation() or pix
+    q = min(pix.get_width(), pix.get_height())
+    pix = pix.new_subpixbuf((pix.get_width() - q) // 2, (pix.get_height() - q) // 2, q, q)
+    pix.scale_simple(lato, lato, GdkPixbuf.InterpType.HYPER).savev(destinazione, "png", [], [])
+
+
+class FotoTonda(Gtk.DrawingArea):
+    def __init__(self, lato):
+        super().__init__()
+        self.lato, self.immagine, self.iniziale = lato, None, "?"
+        self.set_size_request(lato, lato)
+        self.set_valign(Gtk.Align.CENTER)
+        self.connect("draw", self._disegna)
+
+    def imposta(self, nome, percorso):
+        self.iniziale = (nome or "?")[:1].upper()
+        self.immagine = None
+        if percorso:
+            try:
+                self.immagine = GdkPixbuf.Pixbuf.new_from_file_at_scale(percorso, self.lato, self.lato, False)
+            except GLib.Error:
+                pass
+        self.queue_draw()
+
+    def _disegna(self, _w, cr):
+        l = self.lato
+        cr.arc(l / 2, l / 2, l / 2, 0, 2 * math.pi)
+        if self.immagine:
+            cr.save()
+            cr.clip()
+            Gdk.cairo_set_source_pixbuf(cr, self.immagine, 0, 0)
+            cr.paint()
+            cr.restore()
+        else:
+            cr.set_source_rgb(*esadecimale("#f07a1e"))
+            cr.fill()
+            cr.set_source_rgb(1, 1, 1)
+            cr.select_font_face("Inter", 0, 1)
+            cr.set_font_size(l * 0.45)
+            e = cr.text_extents(self.iniziale)
+            cr.move_to(l / 2 - e.width / 2 - e.x_bearing, l / 2 - e.height / 2 - e.y_bearing)
+            cr.show_text(self.iniziale)
+        return False
+
+
+def scegli_immagine(finestra, titolo="Scegli una foto"):
+    d = Gtk.FileChooserDialog(title=titolo, transient_for=finestra, action=Gtk.FileChooserAction.OPEN)
+    d.add_buttons("Annulla", Gtk.ResponseType.CANCEL, "Usa questa foto", Gtk.ResponseType.ACCEPT)
+    f = Gtk.FileFilter()
+    f.set_name("Immagini")
+    f.add_mime_type("image/*")
+    d.add_filter(f)
+    cartella = os.path.expanduser("~/Immagini")
+    d.set_current_folder(cartella if os.path.isdir(cartella) else os.path.expanduser("~"))
+    percorso = d.get_filename() if d.run() == Gtk.ResponseType.ACCEPT else None
+    d.destroy()
+    return percorso
+
+
+def utenti_persone():
+    elenco = []
+    for p in pwd.getpwall():
+        if 1000 <= p.pw_uid < 60000 and p.pw_name not in ("albaoobe", "nobody") and p.pw_shell not in (
+                "/usr/sbin/nologin", "/bin/false"):
+            elenco.append(p)
+    return elenco
+
+
+def nome_account(nome):
+    t = unicodedata.normalize("NFKD", nome).encode("ascii", "ignore").decode().lower()
+    t = re.sub(r"[^a-z0-9]+", "", t.split()[0] if t.split() else t)
+    return (t if t and t[0].isalpha() else "utente" + t)[:30] or "utente"
+
+
+class PaginaAccount(Pagina):
+    nome, titolo, icona = "account", "Account", "avatar-default-symbolic"
+    parole = "account utente foto immagine nome password utenti aggiungi famiglia amministratore"
+
+    def costruisci(self):
+        self.sottotitolo.set_text("La tua foto, il tuo nome, la password e gli altri utenti del computer.")
+        self.io = pwd.getpwuid(os.getuid())
+        testa = Gtk.Box(spacing=18)
+        testa.set_margin_top(6)
+        testa.set_margin_bottom(6)
+        self.foto = FotoTonda(84)
+        testa.pack_start(self.foto, False, False, 0)
+        col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4, valign=Gtk.Align.CENTER)
+        self.e_nome = etichetta("", "titolo-grande")
+        self.e_tipo = etichetta("", "sottotitolo")
+        col.pack_start(self.e_nome, False, False, 0)
+        col.pack_start(self.e_tipo, False, False, 0)
+        testa.pack_start(col, True, True, 0)
+        testa.pack_end(pulsante("Cambia foto…", self._cambia_foto, icona="camera-photo-symbolic"), False, False, 0)
+        self.colonna.pack_start(testa, False, False, 0)
+
+        r = self.sezione("Il tuo account")
+        self.campo_nome = Gtk.Entry()
+        self.campo_nome.set_width_chars(22)
+        riga = Gtk.Box(spacing=8)
+        riga.pack_start(self.campo_nome, False, False, 0)
+        riga.pack_start(pulsante("Salva", self._salva_nome), False, False, 0)
+        r.aggiungi(Riga("Nome", "Come ti saluta Alba alla schermata di accesso", riga))
+        r.aggiungi(Riga("Password", "Serve per accedere e per le modifiche importanti",
+                        pulsante("Cambia password…", self._cambia_password)))
+
+        r = self.sezione("Altri utenti")
+        self.altri = r
+        self.righe_altri = []
+        self.r_aggiungi = r.aggiungi(Riga("Aggiungi un utente", "Un account per un familiare o un collega, con la sua foto",
+                                          pulsante("Aggiungi…", self._aggiungi_utente, icona="list-add-symbolic")))
+
+    def aggiorna(self):
+        nome = (self.io.pw_gecos.split(",")[0] or self.io.pw_name).strip()
+        self.e_nome.set_text(nome)
+        gruppi = [g.gr_name for g in grp.getgrall() if self.io.pw_name in g.gr_mem]
+        self.e_tipo.set_text(("Amministratore" if "sudo" in gruppi else "Utente standard") + f" · {self.io.pw_name}")
+        self.campo_nome.set_text(nome)
+        self.foto.imposta(nome, foto_account(self.io.pw_name))
+        for w in self.righe_altri:
+            w.destroy()
+        self.righe_altri = []
+        for p in utenti_persone():
+            if p.pw_uid == self.io.pw_uid:
+                continue
+            n = (p.pw_gecos.split(",")[0] or p.pw_name).strip()
+            f = FotoTonda(32)
+            f.imposta(n, foto_account(p.pw_name))
+            riga = Riga(n, p.pw_name, f)
+            self.altri.aggiungi(riga)
+            self.righe_altri.append(riga)
+        self.altri.show_all()
+
+    def _cambia_foto(self):
+        origine = scegli_immagine(self.finestra)
+        if not origine:
+            return
+        os.makedirs(os.path.expanduser("~/.cache"), exist_ok=True)
+        tmp = os.path.expanduser("~/.cache/alba-foto-account.png")
+        try:
+            foto_quadrata(origine, tmp)
+        except GLib.Error:
+            messaggio(self.finestra, "Questa immagine non si può usare", "Prova con una foto JPG o PNG.",
+                      Gtk.MessageType.WARNING)
+            return
+        shutil.copy(tmp, os.path.expanduser("~/.face"))
+        accounts_chiama(self.io.pw_name, "SetIconFile", tmp)
+        self.aggiorna()
+
+    def _salva_nome(self):
+        nome = self.campo_nome.get_text().strip()
+        if not nome or any(c in nome for c in ":,=\n"):
+            messaggio(self.finestra, "Nome non valido", "Scrivi il tuo nome senza i segni : , =", Gtk.MessageType.WARNING)
+            return
+        if accounts_chiama(self.io.pw_name, "SetRealName", nome):
+            self.io = pwd.getpwuid(os.getuid())
+            self.e_nome.set_text(nome)
+            self.foto.imposta(nome, foto_account(self.io.pw_name))
+
+    def _dialogo(self, titolo, campi, si):
+        d = Gtk.Dialog(title=titolo, transient_for=self.finestra, modal=True)
+        d.add_buttons("Annulla", Gtk.ResponseType.CANCEL, si, Gtk.ResponseType.OK)
+        d.set_default_response(Gtk.ResponseType.OK)
+        griglia = Gtk.Grid(row_spacing=10, column_spacing=12)
+        griglia.set_margin_top(14)
+        griglia.set_margin_bottom(10)
+        griglia.set_margin_start(16)
+        griglia.set_margin_end(16)
+        valori = {}
+        for i, (chiave, testo, tipo) in enumerate(campi):
+            griglia.attach(etichetta(testo), 0, i, 1, 1)
+            if tipo == "scelta":
+                w = Segmentato([("standard", "Standard"), ("amministratore", "Amministratore")], lambda *_: None)
+                w.imposta("standard")
+            elif tipo == "foto":
+                w = Gtk.FileChooserButton(title="Foto (facoltativa)", action=Gtk.FileChooserAction.OPEN)
+                f = Gtk.FileFilter()
+                f.add_mime_type("image/*")
+                w.set_filter(f)
+            else:
+                w = Gtk.Entry()
+                w.set_width_chars(24)
+                w.set_activates_default(True)
+                if tipo == "password":
+                    w.set_visibility(False)
+                    w.set_input_purpose(Gtk.InputPurpose.PASSWORD)
+            griglia.attach(w, 1, i, 1, 1)
+            valori[chiave] = w
+        d.get_content_area().add(griglia)
+        d.show_all()
+        ok = d.run() == Gtk.ResponseType.OK
+        letti = {}
+        for k, w in valori.items():
+            if isinstance(w, Gtk.Entry):
+                letti[k] = w.get_text()
+            elif isinstance(w, Gtk.FileChooserButton):
+                letti[k] = w.get_filename() or ""
+            else:
+                letti[k] = next((c for c, b in w._pulsanti.items() if b.get_active()), "standard")
+        d.destroy()
+        return letti if ok else None
+
+    def _cambia_password(self):
+        v = self._dialogo("Cambia password", [("vecchia", "Password attuale", "password"),
+                                              ("nuova", "Nuova password", "password"),
+                                              ("ancora", "Ripeti la nuova", "password")], "Cambia")
+        if not v:
+            return
+        if not v["nuova"] or v["nuova"] != v["ancora"]:
+            messaggio(self.finestra, "Le due password nuove non sono uguali", "", Gtk.MessageType.WARNING)
+            return
+        ok = cambia_password(v["vecchia"], v["nuova"])
+        messaggio(self.finestra, "Password cambiata" if ok else "Password non cambiata",
+                  "" if ok else "Controlla la password attuale. La nuova deve essere diversa e non troppo semplice.",
+                  Gtk.MessageType.INFO if ok else Gtk.MessageType.WARNING)
+
+    def _aggiungi_utente(self):
+        v = self._dialogo("Aggiungi un utente", [("nome", "Nome e cognome", "testo"),
+                                                 ("password", "Password", "password"),
+                                                 ("ancora", "Ripeti la password", "password"),
+                                                 ("tipo", "Tipo di account", "scelta"),
+                                                 ("foto", "Foto (facoltativa)", "foto")], "Aggiungi")
+        if not v:
+            return
+        nome = v["nome"].strip()
+        if not nome or any(c in nome for c in ":,=\n") or not v["password"] or v["password"] != v["ancora"] \
+                or "\n" in v["password"]:
+            messaggio(self.finestra, "Controlla i dati", "Serve un nome e due password uguali.", Gtk.MessageType.WARNING)
+            return
+        account = nome_account(nome)
+        esistenti = {p.pw_name for p in pwd.getpwall()}
+        base, n = account, 2
+        while account in esistenti:
+            account, n = f"{base[:28]}{n}", n + 1
+        foto = ""
+        if v["foto"]:
+            foto = os.path.join(tempfile.gettempdir(), f"alba-foto-{account}.png")
+            try:
+                foto_quadrata(v["foto"], foto)
+            except GLib.Error:
+                foto = ""
+        try:
+            r = subprocess.run(["pkexec", ROOT, "utente-nuovo", account, v["tipo"]],
+                               input=f"{nome}\n{v['password']}\n{foto}\n", text=True, capture_output=True)
+            codice = r.returncode
+        except OSError:
+            codice = 127
+        if codice == 0:
+            messaggio(self.finestra, f"Account di {nome} pronto",
+                      f"Alla schermata di accesso troverà il suo nome. Nome account: {account}")
+        elif codice not in (126, 127):
+            messaggio(self.finestra, "Account non creato", "Riprova con un altro nome.", Gtk.MessageType.WARNING)
+        self.aggiorna()
+
+
+def cambia_password(vecchia, nuova):
+    """Cambia la password con "passwd" (come da terminale, ma senza terminale)."""
+    import pty
+    pid, fd = pty.fork()
+    if pid == 0:
+        os.execvpe("passwd", ["passwd"], dict(os.environ, LC_ALL="C"))
+    out = b""
+
+    def leggi(attesa=4.0):
+        nonlocal out
+        import select
+        fine = time.monotonic() + attesa
+        while time.monotonic() < fine:
+            r, _, _ = select.select([fd], [], [], 0.2)
+            if r:
+                try:
+                    pezzo = os.read(fd, 1024)
+                except OSError:
+                    return False
+                if not pezzo:
+                    return False
+                out += pezzo
+                if out.rstrip().endswith(b":"):
+                    return True
+        return False
+    try:
+        for valore in (vecchia, nuova, nuova):
+            if not leggi():
+                break
+            os.write(fd, valore.encode() + b"\n")
+            out = b""
+        leggi(3.0)
+    finally:
+        _, stato = os.waitpid(pid, 0)
+        os.close(fd)
+    return os.WIFEXITED(stato) and os.WEXITSTATUS(stato) == 0
+
+
+# ---------------------------------------------------------------------------
 # Finestra principale
 # ---------------------------------------------------------------------------
-PAGINE = [PaginaWifi, PaginaBluetooth, None, PaginaSchermo, PaginaSuono, PaginaBatteria, PaginaAlimentazione, None,
+PAGINE = [PaginaAccount, None, PaginaWifi, PaginaBluetooth, None, PaginaSchermo, PaginaSuono, PaginaBatteria, PaginaAlimentazione, None,
           PaginaAspetto, PaginaDataOra, PaginaGrafica, PaginaDispositivi, PaginaTastiera, PaginaTelefono, None, PaginaSicurezza, PaginaProblemi, PaginaAggiornamenti, PaginaInfo]
 
 
@@ -2870,6 +3261,9 @@ class Impostazioni(Gtk.Window):
             if classe is None:
                 gruppo += 1
                 continue
+            # computer fisso (es. Mac mini): niente pagina Batteria
+            if classe is PaginaBatteria and not portatile():
+                continue
             p = classe(self)
             self.pagine[p.nome] = p
             self.pila.add_named(p, p.nome)
@@ -2888,6 +3282,8 @@ class Impostazioni(Gtk.Window):
             self.lista.add(riga)
         self.lista.connect("row-selected", self._scelta)
         self.show_all()
+        if pagina_iniziale == "batteria" and "batteria" not in self.pagine:
+            pagina_iniziale = "alimentazione"
         iniziale = pagina_iniziale if pagina_iniziale in self.pagine else "wifi"
         for riga in self.lista.get_children():
             if riga.nome == iniziale:

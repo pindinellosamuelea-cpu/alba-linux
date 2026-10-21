@@ -12,7 +12,6 @@ alba-luminosita tramite $XDG_RUNTIME_DIR/alba-osd, righe del tipo:
 import os
 import stat
 import sys
-import time
 
 import gi
 gi.require_version("Gtk", "3.0")
@@ -105,17 +104,20 @@ class Osd(Gtk.Window):
 
     def _dissolvi(self, verso, durata, poi=None):
         if self.dissolvenza:
-            GLib.source_remove(self.dissolvenza)
+            self.remove_tick_callback(self.dissolvenza)
             self.dissolvenza = None
         if not self.get_screen().is_composited():
             self.opacita = verso
             if poi:
                 poi()
             return
-        partenza, inizio = self.opacita, time.monotonic()
+        partenza, inizio = self.opacita, []
 
-        def tic():
-            t = min(1.0, (time.monotonic() - inizio) * 1000 / durata)
+        def tic(_w, orologio):   # un passo per ogni fotogramma dello schermo
+            ora = orologio.get_frame_time() / 1000.0
+            if not inizio:
+                inizio.append(ora)
+            t = min(1.0, (ora - inizio[0]) / durata)
             self.opacita = partenza + (verso - partenza) * (1 - (1 - t) ** 3)
             self.set_opacity(self.opacita)
             if t >= 1.0:
@@ -124,7 +126,7 @@ class Osd(Gtk.Window):
                     poi()
                 return False
             return True
-        self.dissolvenza = GLib.timeout_add(16, tic)
+        self.dissolvenza = self.add_tick_callback(tic)
 
 
 def main():

@@ -23,7 +23,7 @@ lingua = str(d.get("lingua", "it_IT.UTF-8"))
 layout = str(d.get("layout", "it"))
 variante = str(d.get("variante", ""))
 fuso = str(d.get("fuso", ""))
-tema = str(d.get("tema", "scuro"))
+tema = str(d.get("tema", "chiaro"))
 foto = str(d.get("foto", ""))
 
 LINGUE = {"it_IT.UTF-8", "en_US.UTF-8", "en_GB.UTF-8", "de_DE.UTF-8", "de_CH.UTF-8", "fr_FR.UTF-8", "fr_CH.UTF-8",
@@ -67,6 +67,8 @@ casa = os.path.expanduser(f"~{utente}")
 if foto and os.path.realpath(foto).startswith("/var/lib/alba-oobe/") and os.path.isfile(foto):
     fai("cp", foto, os.path.join(casa, ".face"))
     fai("chown", f"{utente}:{utente}", os.path.join(casa, ".face"))
+    # anche per la schermata di accesso e la griglia delle app (AccountsService)
+    fai("/usr/libexec/alba/alba-root", "utente-foto", utente, foto)
 
 # 2. lingua, tastiera, fuso orario
 fai("localectl", "set-locale", f"LANG={lingua}")

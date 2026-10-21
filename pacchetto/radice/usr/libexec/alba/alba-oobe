@@ -126,7 +126,7 @@ class Configurazione(Gtk.Window):
 
     def __init__(self):
         super().__init__(title="Configurazione di Alba")
-        self.scelte = {"lingua": "it_IT.UTF-8", "layout": 0, "fuso": "Europe/Rome", "tema": "scuro"}
+        self.scelte = {"lingua": "it_IT.UTF-8", "layout": 0, "fuso": "Europe/Rome", "tema": "chiaro"}
         stile = Gtk.CssProvider()
         stile.load_from_data(CSS)
         Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(), stile,
@@ -486,7 +486,7 @@ class Configurazione(Gtk.Window):
             b.connect("toggled", lambda w, k=chiave: self._tema(k, w))
             riga.pack_start(b, True, True, 0)
             self.tessere[chiave] = b
-        self.tessere["scuro"].set_active(True)
+        self.tessere["chiaro"].set_active(True)
         box.pack_start(riga, False, False, 10)
         return box
 

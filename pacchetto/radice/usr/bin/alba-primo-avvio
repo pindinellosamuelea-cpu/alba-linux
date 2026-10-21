@@ -23,11 +23,11 @@ comando() { imposta xfce4-keyboard-shortcuts "/commands/custom/$1" string "$2"; 
 finestra() { imposta xfce4-keyboard-shortcuts "/xfwm4/custom/$1" string "$2"; }
 
 # --- Scorciatoie come su Windows ---------------------------------------
-comando "Super_L"                 "xfce4-popup-whiskermenu"      # tasto Windows = Start
-comando "Super_R"                 "xfce4-popup-whiskermenu"
+comando "Super_L"                 "alba-app"                     # tasto Windows = griglia delle app
+comando "Super_R"                 "alba-app"
 comando "<Super>e"                "thunar"                       # Esplora file
 comando "<Super>r"                "xfce4-appfinder --collapsed"  # Esegui
-comando "<Super>l"                "xflock4"                      # Blocca
+comando "<Super>l"                "alba-blocco --ora"                      # Blocca
 comando "<Super>i"                "alba-impostazioni"            # Impostazioni
 comando "<Primary><Shift>Escape"  "alba-gestione-attivita"       # Gestione attività
 comando "<Primary><Alt>Delete"    "alba-gestione-attivita"

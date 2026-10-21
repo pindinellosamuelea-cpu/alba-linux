@@ -1,0 +1,6 @@
+Command=alba-icona app
+UseLabel=0
+Text=
+UpdatePeriod=30000
+Font=Inter Semi-Bold 10
+EnableSingleRow=1

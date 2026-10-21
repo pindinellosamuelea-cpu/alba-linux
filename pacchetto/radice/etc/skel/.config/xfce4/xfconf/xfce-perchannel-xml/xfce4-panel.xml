@@ -1,68 +1,87 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Alba Linux: una sola barra in basso, pulita.
-     Al centro: Start e app. A destra: Wi-Fi, volume, batteria, orologio.
-     I colori seguono il tema (chiaro o scuro). -->
+<!-- Alba Linux 1.2 (nuova grafica): due barre.
+     panel-1: barra in alto, sottile, di vetro. A sinistra il logo di Alba (apre
+              le app) e il nome del programma; a destra Wi-Fi, suono, batteria e ora.
+     panel-2: Dock fluttuante in basso, al centro, con le app fissate e aperte.
+     Colori e vetro li decide alba-barra (CSS), secondo il tema chiaro o scuro. -->
 <channel name="xfce4-panel" version="1.0">
   <property name="configver" type="int" value="2"/>
   <property name="panels" type="array">
     <value type="int" value="1"/>
-    <property name="dark-mode" type="bool" value="true"/>
+    <value type="int" value="2"/>
+    <property name="dark-mode" type="bool" value="false"/>
     <property name="panel-1" type="empty">
-      <property name="position" type="string" value="p=10;x=0;y=0"/>
+      <property name="position" type="string" value="p=9;x=0;y=0"/>
       <property name="length" type="double" value="100"/>
       <property name="position-locked" type="bool" value="true"/>
-      <property name="size" type="uint" value="54"/>
-      <property name="icon-size" type="uint" value="34"/>
+      <property name="size" type="uint" value="30"/>
+      <property name="icon-size" type="uint" value="16"/>
       <property name="nrows" type="uint" value="1"/>
       <property name="mode" type="uint" value="0"/>
       <property name="autohide-behavior" type="uint" value="0"/>
-      <property name="background-style" type="uint" value="1"/>
-      <property name="background-rgba" type="array">
-        <value type="double" value="0.118"/>
-        <value type="double" value="0.122"/>
-        <value type="double" value="0.169"/>
-        <value type="double" value="1"/>
-      </property>
+      <property name="background-style" type="uint" value="0"/>
       <property name="enter-opacity" type="uint" value="100"/>
       <property name="leave-opacity" type="uint" value="100"/>
       <property name="plugin-ids" type="array">
-        <value type="int" value="1"/>
-        <value type="int" value="2"/>
-        <value type="int" value="3"/>
-        <value type="int" value="4"/>
+        <value type="int" value="20"/>
+        <value type="int" value="21"/>
+        <value type="int" value="22"/>
         <value type="int" value="5"/>
         <value type="int" value="9"/>
-        <value type="int" value="10"/>
         <value type="int" value="12"/>
         <value type="int" value="13"/>
         <value type="int" value="8"/>
-        <value type="int" value="11"/>
+      </property>
+    </property>
+    <property name="panel-2" type="empty">
+      <property name="position" type="string" value="p=10;x=0;y=0"/>
+      <property name="length" type="double" value="1"/>
+      <property name="length-adjust" type="bool" value="true"/>
+      <property name="position-locked" type="bool" value="true"/>
+      <property name="size" type="uint" value="76"/>
+      <property name="icon-size" type="uint" value="44"/>
+      <property name="nrows" type="uint" value="1"/>
+      <property name="mode" type="uint" value="0"/>
+      <property name="autohide-behavior" type="uint" value="0"/>
+      <property name="background-style" type="uint" value="0"/>
+      <property name="enter-opacity" type="uint" value="100"/>
+      <property name="leave-opacity" type="uint" value="100"/>
+      <property name="plugin-ids" type="array">
+        <value type="int" value="30"/>
+        <value type="int" value="3"/>
+        <value type="int" value="31"/>
       </property>
     </property>
   </property>
   <property name="plugins" type="empty">
-    <property name="plugin-1" type="string" value="separator">
-      <property name="expand" type="bool" value="true"/>
-      <property name="style" type="uint" value="0"/>
+    <property name="plugin-20" type="string" value="genmon">
+      <property name="command" type="string" value="alba-icona logo"/>
+      <property name="use-label" type="bool" value="false"/>
+      <property name="text" type="string" value=""/>
+      <property name="update-period" type="int" value="86400000"/>
+      <property name="enable-single-row" type="bool" value="true"/>
     </property>
-    <property name="plugin-2" type="string" value="whiskermenu"/>
-    <property name="plugin-3" type="string" value="docklike"/>
-    <property name="plugin-4" type="string" value="separator">
+    <property name="plugin-21" type="string" value="genmon">
+      <property name="command" type="string" value="alba-icona app"/>
+      <property name="use-label" type="bool" value="false"/>
+      <property name="text" type="string" value=""/>
+      <property name="update-period" type="int" value="30000"/>
+      <property name="enable-single-row" type="bool" value="true"/>
+    </property>
+    <property name="plugin-22" type="string" value="separator">
       <property name="expand" type="bool" value="true"/>
       <property name="style" type="uint" value="0"/>
     </property>
     <property name="plugin-5" type="string" value="systray">
       <property name="square-icons" type="bool" value="true"/>
-      <property name="icon-size" type="int" value="18"/>
+      <property name="icon-size" type="int" value="16"/>
       <property name="hide-new-items" type="bool" value="false"/>
     </property>
     <property name="plugin-8" type="string" value="clock">
       <property name="mode" type="uint" value="2"/>
-      <property name="digital-layout" type="uint" value="0"/>
-      <property name="digital-time-format" type="string" value="%H:%M"/>
-      <property name="digital-date-format" type="string" value="%d/%m/%Y"/>
+      <property name="digital-layout" type="uint" value="3"/>
+      <property name="digital-time-format" type="string" value="%a %-d %b   %H:%M"/>
       <property name="digital-time-font" type="string" value="Inter Semi-Bold 10"/>
-      <property name="digital-date-font" type="string" value="Inter 8"/>
       <property name="tooltip-format" type="string" value="%A %d %B %Y"/>
       <property name="command" type="string" value="alba-rapido notifiche"/>
     </property>
@@ -71,20 +90,6 @@
       <property name="use-label" type="bool" value="false"/>
       <property name="text" type="string" value=""/>
       <property name="update-period" type="int" value="5000"/>
-      <property name="enable-single-row" type="bool" value="true"/>
-    </property>
-    <property name="plugin-10" type="string" value="genmon">
-      <property name="command" type="string" value="alba-icona bluetooth"/>
-      <property name="use-label" type="bool" value="false"/>
-      <property name="text" type="string" value=""/>
-      <property name="update-period" type="int" value="10000"/>
-      <property name="enable-single-row" type="bool" value="true"/>
-    </property>
-    <property name="plugin-11" type="string" value="genmon">
-      <property name="command" type="string" value="alba-icona notifiche"/>
-      <property name="use-label" type="bool" value="false"/>
-      <property name="text" type="string" value=""/>
-      <property name="update-period" type="int" value="3000"/>
       <property name="enable-single-row" type="bool" value="true"/>
     </property>
     <property name="plugin-12" type="string" value="genmon">
@@ -100,6 +105,15 @@
       <property name="text" type="string" value=""/>
       <property name="update-period" type="int" value="20000"/>
       <property name="enable-single-row" type="bool" value="true"/>
+    </property>
+    <property name="plugin-30" type="string" value="separator">
+      <property name="expand" type="bool" value="false"/>
+      <property name="style" type="uint" value="0"/>
+    </property>
+    <property name="plugin-3" type="string" value="docklike"/>
+    <property name="plugin-31" type="string" value="separator">
+      <property name="expand" type="bool" value="false"/>
+      <property name="style" type="uint" value="0"/>
     </property>
   </property>
 </channel>

@@ -121,7 +121,7 @@ done
 cp /etc/xdg/mimeapps.list /etc/xdg/xfce-mimeapps.list
 "$LIB/alba-aggiorna-menu" || true
 update-desktop-database -q /usr/share/applications 2>/dev/null || true
-for d in /usr/share/icons/hicolor /usr/share/icons/Fluent /usr/share/icons/Fluent-dark; do
+for d in /usr/share/icons/hicolor /usr/share/icons/Fluent /usr/share/icons/Fluent-dark /usr/share/icons/Alba /usr/share/icons/Alba-dark; do
   [ -d "$d" ] && gtk-update-icon-cache -qf "$d" 2>/dev/null || true
 done
 

@@ -1,22 +1,49 @@
 #!/bin/bash
-# Alba Linux - barra delle applicazioni fluttuante o attaccata al bordo.
-# Uso: alba-barra fluttuante|bordo
+# Alba Linux - colori della barra in alto e del Dock (vetro chiaro o scuro).
+# Uso: alba-barra [chiaro|scuro] [--vetro on|off]
+# Senza tema usa quello scelto in Impostazioni. "fluttuante"/"bordo" (vecchie
+# versioni) sono accettati e ignorati.
 set -u
 CSS="${XDG_CONFIG_HOME:-$HOME/.config}/gtk-3.0/gtk.css"
 CONF="${XDG_CONFIG_HOME:-$HOME/.config}/alba"
 mkdir -p "$(dirname "$CSS")" "$CONF"
 touch "$CSS"
 
+TEMA="$(cat "$CONF/tema" 2>/dev/null || echo chiaro)"
+VETRO="$(cat "$CONF/vetro" 2>/dev/null || echo on)"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    chiaro|scuro) TEMA="$1" ;;
+    --vetro) shift; VETRO="${1:-on}" ;;
+    fluttuante|bordo) ;;
+    *) echo "Uso: alba-barra [chiaro|scuro] [--vetro on|off]"; exit 1 ;;
+  esac
+  shift
+done
+echo "$VETRO" > "$CONF/vetro"
+
+# trasparenza: con il vetro spento le barre sono piene
+if [ "$VETRO" = off ]; then A_BARRA=1; A_DOCK=1; else A_BARRA=0.72; A_DOCK=0.58; fi
+if [ "$TEMA" = scuro ]; then
+  BARRA="rgba(30,28,36,$A_BARRA)"; DOCK="rgba(34,32,42,$A_DOCK)"; TESTO="#f3eee8"
+  LINEA="rgba(255,255,255,0.08)"; RIFLESSO="rgba(255,255,255,0.12)"
+  SOPRA="rgba(255,255,255,0.10)"; PREMUTO="rgba(255,255,255,0.16)"
+else
+  BARRA="rgba(252,248,244,$A_BARRA)"; DOCK="rgba(255,251,247,$A_DOCK)"; TESTO="#2a2018"
+  LINEA="rgba(120,80,40,0.10)"; RIFLESSO="rgba(255,255,255,0.75)"
+  SOPRA="rgba(60,30,0,0.07)"; PREMUTO="rgba(240,122,30,0.18)"
+fi
+
 # Togli la versione precedente del blocco Alba (lascia intatto il resto)
 sed -i '/ALBA-BARRA-INIZIO/,/ALBA-BARRA-FINE \*\//d' "$CSS"
+sed -e "s/@BARRA@/$BARRA/g; s/@DOCK@/$DOCK/g; s/@TESTO@/$TESTO/g; s/@LINEA@/$LINEA/g" \
+    -e "s/@RIFLESSO@/$RIFLESSO/g; s/@SOPRA@/$SOPRA/g; s/@PREMUTO@/$PREMUTO/g" \
+    /usr/share/alba/css/barre.css >> "$CSS"
 
-case "${1:-}" in
-  fluttuante|bordo)
-    cat /usr/share/alba/css/barra-fluttuante.css >> "$CSS"
-    DIM=54 ;;
-  *) echo "Uso: alba-barra fluttuante|bordo"; exit 1 ;;
-esac
-xfconf-query -c xfce4-panel -p /panels/panel-1/size -s "$DIM" 2>/dev/null
-echo "$1" > "$CONF/barra"
+imposta() { xfconf-query -c xfce4-panel -p "$1" -n -t "$2" -s "$3" 2>/dev/null || xfconf-query -c xfce4-panel -p "$1" -s "$3" 2>/dev/null; }
+# lo sfondo lo disegna il CSS qui sopra (stile "nessuno" = segue il tema)
+imposta /panels/panel-1/background-style uint 0
+imposta /panels/panel-2/background-style uint 0
+imposta /panels/dark-mode bool "$([ "$TEMA" = scuro ] && echo true || echo false)"
 [ -z "${XFCE_PANEL_NO_RESTART:-}" ] && pgrep -u "$(id -u)" -x xfce4-panel >/dev/null && { xfce4-panel -r >/dev/null 2>&1 & }
 exit 0

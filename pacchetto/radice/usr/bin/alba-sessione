@@ -33,9 +33,9 @@ for f in org.gnome.Software.desktop gnome-software-service.desktop; do
   fi
 done
 
-# 2a-bis. Icone Fluent sempre attive (se qualcosa le avesse cambiate)
+# 2a-bis. Icone di Alba sempre attive (se qualcosa le avesse cambiate)
 . /usr/share/alba/tema.conf 2>/dev/null
-case "$(cat "$CONF/tema" 2>/dev/null)" in chiaro) ICONE_GIUSTE="${ICONE_CHIARO:-}" ;; *) ICONE_GIUSTE="${ICONE_SCURO:-}" ;; esac
+case "$(cat "$CONF/tema" 2>/dev/null)" in scuro) ICONE_GIUSTE="${ICONE_SCURO:-}" ;; *) ICONE_GIUSTE="${ICONE_CHIARO:-}" ;; esac
 if [ -n "$ICONE_GIUSTE" ] && [ -d "/usr/share/icons/$ICONE_GIUSTE" ] && \
    [ "$(xfconf-query -c xsettings -p /Net/IconThemeName 2>/dev/null)" != "$ICONE_GIUSTE" ]; then
   xfconf-query -c xsettings -p /Net/IconThemeName -s "$ICONE_GIUSTE" 2>/dev/null
@@ -108,6 +108,10 @@ fi
 # 2g. Indicatore unico di volume e luminosità (tasti Fn): sempre pronto.
 #     La luminosità la gestisce Alba (niente doppio avviso del risparmio energetico).
 pgrep -u "$(id -u)" -f "python3 /usr/bin/alba-osd" >/dev/null || setsid -f /usr/bin/python3 /usr/bin/alba-osd >/dev/null 2>&1
+# Nuova grafica: nome del programma nella barra in alto e griglia delle app
+# pronta in memoria (si apre all'istante col logo o col tasto Windows)
+pgrep -u "$(id -u)" -f "python3 /usr/bin/alba-barra-alta" >/dev/null || setsid -f /usr/bin/python3 /usr/bin/alba-barra-alta >/dev/null 2>&1
+pgrep -u "$(id -u)" -f "python3 /usr/bin/alba-app" >/dev/null || setsid -f /usr/bin/python3 /usr/bin/alba-app --sfondo >/dev/null 2>&1
 for p in handle-brightness-keys show-brightness-popup; do
   xfconf-query -c xfce4-power-manager -p "/xfce4-power-manager/$p" -n -t bool -s false 2>/dev/null || \
     xfconf-query -c xfce4-power-manager -p "/xfce4-power-manager/$p" -s false 2>/dev/null

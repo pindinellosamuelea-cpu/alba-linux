@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=App
+Comment=Tutte le app del computer
+Exec=alba-app
+Icon=alba-app
+NoDisplay=true
+StartupNotify=false

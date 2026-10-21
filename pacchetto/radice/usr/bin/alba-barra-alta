@@ -1,0 +1,113 @@
+#!/usr/bin/python3
+"""Alba Linux - barra in alto: tiene aggiornato il nome del programma in
+primo piano (accanto al logo di Alba).
+
+Non controlla di continuo: aspetta che il sistema segnali un cambio di
+finestra (xprop -spy), scrive il nome e chiede alla barra di ridisegnarlo.
+"""
+import os
+import re
+import subprocess
+import sys
+
+from gi.repository import Gio
+
+FILE = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "alba-app-attiva")
+SCRIVANIA = "Scrivania"
+# finestre che non cambiano il nome (la barra stessa, il Dock, la griglia...)
+IGNORA = {"xfce4-panel", "wrapper-2.0", "plank", "alba-app", "alba-rapido", "alba-osd",
+          "xfce4-notifyd", "alba-menu-x", "xfce4-screenshooter"}
+NOMI_FISSI = {"xfdesktop": SCRIVANIA, "thunar": "File", "alba-impostazioni": "Impostazioni",
+              "alba-gestione-attivita": "Gestione attività"}
+
+
+def nomi_app():
+    d = {}
+    for a in Gio.AppInfo.get_all():
+        if not isinstance(a, Gio.DesktopAppInfo):
+            continue
+        nome = a.get_display_name() or a.get_name()
+        if not nome:
+            continue
+        chiavi = [(a.get_id() or "").removesuffix(".desktop")]
+        wm = a.get_startup_wm_class()
+        if wm:
+            chiavi.append(wm)
+        exe = a.get_executable()
+        if exe:
+            chiavi.append(os.path.basename(exe))
+        for k in chiavi:
+            k = k.lower()
+            if k:
+                d.setdefault(k, nome)
+                d.setdefault(k.split(".")[-1], nome)   # org.gnome.Software -> software
+    return d
+
+
+def xprop(*a):
+    try:
+        return subprocess.run(["xprop", *a], capture_output=True, text=True, timeout=2).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def plugin_genmon():
+    out = subprocess.run(["xfconf-query", "-c", "xfce4-panel", "-l", "-v"], capture_output=True, text=True).stdout
+    for riga in out.splitlines():
+        m = re.match(r"/plugins/(plugin-\d+)/command\s+alba-icona app\s*$", riga)
+        if m:
+            return m.group(1).replace("plugin-", "genmon-")
+    return None
+
+
+def main():
+    app = nomi_app()
+    genmon = plugin_genmon()
+    ultimo = None
+
+    def scrivi(nome):
+        nonlocal ultimo
+        if nome == ultimo:
+            return
+        ultimo = nome
+        with open(FILE + ".tmp", "w") as f:
+            f.write(nome)
+        os.replace(FILE + ".tmp", FILE)
+        if genmon:
+            subprocess.Popen(["xfce4-panel", f"--plugin-event={genmon}:refresh:bool:true"],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    def nome_finestra(wid):
+        if wid in ("0x0", ""):
+            return SCRIVANIA
+        classe = re.findall(r'"([^"]*)"', xprop("-id", wid, "WM_CLASS"))
+        if not classe:
+            return SCRIVANIA
+        candidati = [c.lower() for c in reversed(classe)]
+        if any(c in IGNORA for c in candidati):
+            return None
+        for c in candidati:
+            if c in NOMI_FISSI:
+                return NOMI_FISSI[c]
+        for c in candidati:
+            if c in app:
+                return app[c]
+            if c.endswith(".exe"):          # programmi Windows
+                return c[:-4].capitalize()
+        titolo = re.findall(r'= "(.*)"', xprop("-id", wid, "_NET_WM_NAME"))
+        nome = classe[-1] or (titolo[0] if titolo else SCRIVANIA)
+        return nome[:1].upper() + nome[1:]
+
+    scrivi(SCRIVANIA)
+    spia = subprocess.Popen(["xprop", "-spy", "-root", "_NET_ACTIVE_WINDOW"],
+                            stdout=subprocess.PIPE, text=True)
+    for riga in spia.stdout:
+        m = re.search(r"window id # (0x[0-9a-f]+)", riga)
+        nome = nome_finestra(m.group(1) if m else "0x0")
+        if nome:
+            scrivi(nome)
+    return spia.wait()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

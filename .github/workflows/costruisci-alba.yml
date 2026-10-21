@@ -72,7 +72,7 @@ jobs:
           apt-get install -y xvfb xauth dbus-x11 x11-utils x11-xserver-utils imagemagick xdotool \
             xfwm4 xfce4-panel xfdesktop4 xfce4-settings xfce4-whiskermenu-plugin xfce4-docklike-plugin \
             xfce4-pulseaudio-plugin xfce4-power-manager xfce4-genmon-plugin papirus-icon-theme fonts-inter fonts-noto-core \
-            adwaita-icon-theme librsvg2-common locales-all shellcheck slick-greeter python3-cairo gir1.2-gdkpixbuf-2.0 >> registro/installazione.log 2>&1 || true
+            adwaita-icon-theme librsvg2-common locales-all shellcheck slick-greeter libglib2.0-bin python3-cairo gir1.2-gdkpixbuf-2.0 >> registro/installazione.log 2>&1 || true
 
           {
             echo "== temi"; cat /usr/share/alba/tema.conf; ls /usr/share/themes

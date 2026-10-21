@@ -14,10 +14,10 @@ Fino ad allora i commit portano "(in corso)": vengono provati ma non pubblicati.
 | Colore principale | Arancio alba (quello attuale) |
 | Tema predefinito | Chiaro con vetro: trasparenze e sfocature leggere |
 | Pulsanti delle finestre | A destra, a pallini |
-| Icone delle app | Da decidere: preparare 2-3 anteprime e farle scegliere |
+| Icone delle app | Stile B "Alba vetro": tessera di vetro chiaro, simbolo colorato (scelta del 22 ottobre) |
 
 ## Da preparare prima dell'uscita
-1. Anteprime delle icone (2-3 stili) da far scegliere.
+1. ~~Anteprime delle icone~~ fatto: scelto lo stile B.
 2. Un'anteprima d'insieme del desktop nuovo da far approvare prima di sabato.
 3. Realizzazione:
    - tema chiaro con vetro;
@@ -25,3 +25,13 @@ Fino ad allora i commit portano "(in corso)": vengono provati ma non pubblicati.
    - menu delle app a griglia;
    - pulsanti delle finestre a destra.
 4. Controllo con le foto di prova, poi pubblicazione sabato alle 06:00.
+
+## Altre richieste per la 1.2 (messaggio del 22 ottobre, 01:28)
+Anche queste escono sabato alle 06:00, insieme alla nuova grafica.
+1. Dopo il restyling: controllo completo del sistema (volume su/giù, luminosità, Wi-Fi, ecc.) e correzione di ogni imperfezione.
+2. Foto dell'account: scelta alla configurazione iniziale e in Impostazioni (anche per un nuovo utente). Mai il logo di Debian accanto al nome.
+3. Impostazioni > Schermo: scelta della frequenza (Hz), per esempio 74 Hz, oltre a risoluzione e scala.
+4. Sistema più semplice: togliere le app che un utente medio non usa. Uno stile originale, a metà tra macOS e Windows, il più intuitivo possibile.
+5. Programmi .exe: tutto come prima, migliorando dove possibile perché si aprano in modo più naturale.
+6. Fisso o portatile: su un computer fisso (es. Mac mini) niente pagina Batteria né icona della batteria.
+7. Driver: includere tutti i driver e firmware possibili, installati da soli.

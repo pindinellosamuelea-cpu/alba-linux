@@ -55,9 +55,7 @@ def xfconf(canale, prop, valore):
 
 
 def tema(scuro):
-    xfconf("xsettings", "/Net/ThemeName", "Arc-Dark" if scuro else "Arc")
-    xfconf("xsettings", "/Net/IconThemeName", "Papirus-Dark" if scuro else "Papirus")
-    xfconf("xfwm4", "/general/theme", "Arc-Dark" if scuro else "Arc")
+    subprocess.run(["/usr/bin/alba-tema", "scuro" if scuro else "chiaro"], check=False)
 
 
 def info_windows():

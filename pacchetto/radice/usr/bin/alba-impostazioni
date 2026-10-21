@@ -1302,27 +1302,41 @@ class AnteprimaTema(Gtk.DrawingArea):
         self.connect("draw", self._disegna)
 
     def _disegna(self, w, cr):
-        sf, fin, barra, testo = (("#1b1d2e", "#2a2c3f", "#22243a", "#8a8ca8") if self.scuro else
-                                 ("#dfe3ec", "#ffffff", "#f2f3f7", "#c3c7d3"))
+        # anteprima della nuova grafica: barra in alto, finestra, Dock fluttuante
+        sf, fin, barra, testo = (("#1b1d2e", "#2a2c3f", "#34313f", "#8a8ca8") if self.scuro else
+                                 ("#dfe3ec", "#ffffff", "#fbf7f3", "#c3c7d3"))
         cr.set_source_rgb(*esadecimale(sf))
         rettangolo_arrotondato(cr, 0, 0, 180, 110, 10)
         cr.fill()
-        cr.set_source_rgb(*esadecimale(fin))
-        rettangolo_arrotondato(cr, 18, 14, 144, 70, 7)
-        cr.fill()
         cr.set_source_rgb(*esadecimale(barra))
-        rettangolo_arrotondato(cr, 18, 14, 40, 70, 7)
+        rettangolo_arrotondato(cr, 0, 0, 180, 9, 0)
+        cr.fill()
+        cr.set_source_rgb(*esadecimale("#f07a1e"))
+        cr.arc(8, 4.5, 2.6, 0, 6.2832)
         cr.fill()
         cr.set_source_rgb(*esadecimale(testo))
-        for i in range(3):
-            rettangolo_arrotondato(cr, 66, 26 + i * 14, 70 - i * 18, 6, 3)
+        rettangolo_arrotondato(cr, 14, 3, 22, 3, 1.5)
+        cr.fill()
+        rettangolo_arrotondato(cr, 150, 3, 22, 3, 1.5)
+        cr.fill()
+        cr.set_source_rgb(*esadecimale(fin))
+        rettangolo_arrotondato(cr, 26, 18, 128, 64, 7)
+        cr.fill()
+        for i, c in enumerate(("#f5c04a", "#5cc46e", "#f0603e")):
+            cr.set_source_rgb(*esadecimale(c))
+            cr.arc(132 + i * 7, 24, 2.2, 0, 6.2832)
             cr.fill()
-        cr.set_source_rgb(*esadecimale("#ff8a4c"))
-        rettangolo_arrotondato(cr, 24, 22, 28, 7, 3)
-        cr.fill()
+        cr.set_source_rgb(*esadecimale(testo))
+        for i in range(3):
+            rettangolo_arrotondato(cr, 36, 34 + i * 12, 80 - i * 20, 5, 2.5)
+            cr.fill()
         cr.set_source_rgb(*esadecimale(barra))
-        rettangolo_arrotondato(cr, 50, 92, 80, 12, 6)
+        rettangolo_arrotondato(cr, 52, 90, 76, 14, 7)
         cr.fill()
+        for i, c in enumerate(("#f07a1e", "#1f6fe0", "#1f9a54", "#e0315a", "#4d5668")):
+            cr.set_source_rgb(*esadecimale(c))
+            rettangolo_arrotondato(cr, 58 + i * 13.5, 93, 9, 8, 2.5)
+            cr.fill()
 
 
 class PaginaAspetto(Pagina):
@@ -1330,7 +1344,7 @@ class PaginaAspetto(Pagina):
     parole = "aspetto tema chiaro scuro sfondo colori barra icone desktop"
 
     def costruisci(self):
-        self.sottotitolo.set_text("Tema, sfondo e barra delle applicazioni.")
+        self.sottotitolo.set_text("Tema, sfondo, barra in alto e Dock.")
         r = self.sezione("Tema")
         riga = Gtk.Box(spacing=18, halign=Gtk.Align.CENTER)
         riga.set_margin_top(14)
@@ -1364,11 +1378,13 @@ class PaginaAspetto(Pagina):
         scegli.set_margin_bottom(14)
         r.pack_start(scegli, False, False, 0)
 
-        r = self.sezione("Barra delle applicazioni")
-        self.posizione = Segmentato([("centro", "Al centro"), ("sinistra", "A sinistra")], self._posizione)
-        r.aggiungi(Riga("Icone della barra", None, self.posizione))
-        self.nascondi = Interruttore(lambda v: xfconf_scrivi("xfce4-panel", "/panels/panel-1/autohide-behavior", "uint", 2 if v else 0))
-        r.aggiungi(Riga("Nascondi automaticamente la barra", "Compare quando porti il mouse in basso", self.nascondi))
+        r = self.sezione("Barra in alto e Dock")
+        self.vetro = Interruttore(lambda v: esegui(["/usr/bin/alba-barra", "--vetro", "on" if v else "off"]))
+        r.aggiungi(Riga("Effetto vetro", "Barra in alto e Dock trasparenti", self.vetro))
+        self.grandezza = Segmentato([("piccolo", "Piccolo"), ("medio", "Medio"), ("grande", "Grande")], self._grandezza)
+        r.aggiungi(Riga("Grandezza del Dock", None, self.grandezza))
+        self.nascondi = Interruttore(lambda v: xfconf_scrivi("xfce4-panel", "/panels/panel-2/autohide-behavior", "uint", 1 if v else 0))
+        r.aggiungi(Riga("Nascondi il Dock quando una finestra lo copre", "Riappare portando il mouse in basso", self.nascondi))
         self._muto = False
         self._carica_sfondi()
 
@@ -1416,8 +1432,12 @@ class PaginaAspetto(Pagina):
         self._muto = False
         esegui(["/usr/bin/alba-tema", chiave])
 
-    def _posizione(self, chiave):
-        xfconf_scrivi("xfce4-panel", "/plugins/plugin-1/expand", "bool", chiave == "centro")
+    DOCK = {"piccolo": (60, 34), "medio": (76, 44), "grande": (90, 56)}
+
+    def _grandezza(self, chiave):
+        dim, icone = self.DOCK.get(chiave, self.DOCK["medio"])
+        xfconf_scrivi("xfce4-panel", "/panels/panel-2/size", "uint", dim)
+        xfconf_scrivi("xfce4-panel", "/panels/panel-2/icon-size", "uint", icone)
 
     def aggiorna(self):
         self._muto = True
@@ -1427,8 +1447,10 @@ class PaginaAspetto(Pagina):
         for k, t in self.tessere.items():
             t.set_active(k == tema)
         self._muto = False
-        self.posizione.imposta("centro" if xfconf_leggi("xfce4-panel", "/plugins/plugin-1/expand") != "false" else "sinistra")
-        self.nascondi.imposta(xfconf_leggi("xfce4-panel", "/panels/panel-1/autohide-behavior") not in ("", "0"))
+        self.vetro.imposta(leggi_file(os.path.join(CONF, "vetro")) != "off")
+        dim = xfconf_leggi("xfce4-panel", "/panels/panel-2/size")
+        self.grandezza.imposta({"60": "piccolo", "90": "grande"}.get(dim, "medio"))
+        self.nascondi.imposta(xfconf_leggi("xfce4-panel", "/panels/panel-2/autohide-behavior") not in ("", "0"))
 
 
 def imposta_sfondo(percorso):

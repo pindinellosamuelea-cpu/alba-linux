@@ -101,7 +101,10 @@ class Rapido(Gtk.Window):
         self.indietro = None
         # Animazione di apertura: il pannello sale dal basso
         self.rivela = Gtk.Revealer()
-        self.rivela.set_transition_type(Gtk.RevealerTransitionType.SLIDE_UP)
+        # barra in alto (nuova grafica): il pannello scende dall'alto
+        self.in_alto = self._puntatore_in_alto()
+        self.rivela.set_transition_type(Gtk.RevealerTransitionType.SLIDE_DOWN if self.in_alto
+                                        else Gtk.RevealerTransitionType.SLIDE_UP)
         self.rivela.set_transition_duration(240)
         self.rivela.add(self.scatola)
         self.add(self.rivela)
@@ -146,6 +149,13 @@ class Rapido(Gtk.Window):
 
     _dialogo = False
 
+    @staticmethod
+    def _puntatore_in_alto():
+        display = Gdk.Display.get_default()
+        _, px, py = display.get_default_seat().get_pointer().get_position()
+        g = display.get_monitor_at_point(px, py).get_geometry()
+        return py < g.y + g.height // 2
+
     def _posiziona(self):
         display = Gdk.Display.get_default()
         _, px, py = display.get_default_seat().get_pointer().get_position()
@@ -155,7 +165,7 @@ class Rapido(Gtk.Window):
         l = max(self.get_size()[0], self.scatola.get_preferred_width()[1])
         a = self.scatola.get_preferred_height_for_width(l)[1]
         x = min(max(px - l // 2, area.x + 10), area.x + area.width - l - 10)
-        y = area.y + area.height - a - 10
+        y = area.y + 8 if self.in_alto else area.y + area.height - a - 10
         self.move(x, y)
 
     def intestazione(self, titolo, controllo=None):

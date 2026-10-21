@@ -1,0 +1,58 @@
+/* ALBA-BARRA-INIZIO
+   Alba Linux 1.2 - barra in alto e Dock fluttuante, di vetro.
+   I valori @...@ li sostituisce alba-barra secondo il tema (chiaro/scuro). */
+
+/* ---- Barra in alto ---------------------------------------------------- */
+.xfce4-panel.background.panel-1 {
+  background-color: @BARRA@;
+  background-image: none;
+  border-style: none none solid none;
+  border-width: 0 0 1px 0;
+  border-color: @LINEA@;
+  color: @TESTO@;
+}
+.xfce4-panel.panel-1 label,
+.xfce4-panel.panel-1 image,
+.xfce4-panel.panel-1 button {
+  color: @TESTO@;
+  text-shadow: none;
+  -gtk-icon-shadow: none;
+}
+.xfce4-panel.panel-1 button {
+  min-height: 0;
+  padding: 0 7px;
+  margin: 3px 1px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  box-shadow: none;
+  transition: background-color 160ms ease-out;
+}
+.xfce4-panel.panel-1 button:hover { background-color: @SOPRA@; }
+.xfce4-panel.panel-1 button:active,
+.xfce4-panel.panel-1 button:checked { background-color: @PREMUTO@; }
+
+/* ---- Dock fluttuante ---------------------------------------------------- */
+/* Il bordo trasparente è lo spazio che fa "galleggiare" il Dock sopra lo
+   schermo; lo sfondo di vetro si ferma dentro il bordo (padding-box). */
+.xfce4-panel.background.panel-2 {
+  background-color: @DOCK@;
+  background-image: none;
+  background-clip: padding-box;
+  border: 9px solid transparent;
+  border-radius: 31px;
+  box-shadow: inset 0 0 0 1px @RIFLESSO@;
+}
+.xfce4-panel.panel-2 button {
+  border: none;
+  border-radius: 14px;
+  background: transparent;
+  box-shadow: none;
+  transition: background-color 180ms ease-out, -gtk-icon-transform 200ms cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+.xfce4-panel.panel-2 button:hover {
+  background-color: @SOPRA@;
+  -gtk-icon-transform: scale(1.12) translateY(-2px);
+}
+.xfce4-panel.panel-2 button:active { -gtk-icon-transform: scale(0.92); }
+/* ALBA-BARRA-FINE */

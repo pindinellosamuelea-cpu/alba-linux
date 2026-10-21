@@ -1,0 +1,359 @@
+#!/usr/bin/python3
+"""Alba Linux - griglia delle app a tutto schermo (logo di Alba o tasto Windows).
+
+Sfondo del desktop sfocato, ricerca in alto, tutte le app in una griglia.
+Resta pronta in memoria dopo il primo avvio, così si apre all'istante:
+  alba-app            apre (o chiude, se è già aperta) la griglia
+  alba-app --sfondo   si prepara senza mostrarsi (all'avvio della sessione)
+"""
+import locale
+import os
+import re
+import subprocess
+import sys
+import time
+import unicodedata
+
+import gi
+gi.require_version("Gtk", "3.0")
+gi.require_version("Gdk", "3.0")
+gi.require_version("GdkPixbuf", "2.0")
+from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk  # noqa: E402
+
+CONF = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")), "alba")
+SFONDO_ALBA = "/usr/share/backgrounds/alba/alba.png"
+COLONNE = 7
+NASCOSTE = {"alba-app.desktop", "alba-oobe.desktop", "xfce4-panel.desktop", "panel-preferences.desktop",
+            "xfce4-about.desktop", "debian-uxterm.desktop", "debian-xterm.desktop"}
+
+CSS = """
+#alba-app { background: transparent; }
+#alba-app .cerca {
+  min-height: 42px; border-radius: 21px; padding: 0 16px; font-size: 15px;
+  border: 1px solid @bordo; background: @campo; color: @testo; box-shadow: 0 6px 20px rgba(60,30,0,0.12);
+}
+#alba-app .cerca image { color: @tenue; }
+#alba-app flowboxchild { padding: 0; border-radius: 18px; background: transparent; outline: none; }
+#alba-app flowboxchild:selected, #alba-app flowboxchild:focus { background: @sopra; }
+#alba-app .app {
+  border: none; background: transparent; box-shadow: none; padding: 12px 6px 10px 6px; border-radius: 18px;
+  transition: background-color 150ms ease-out, -gtk-icon-transform 200ms cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+#alba-app .app:hover { background-color: @sopra; -gtk-icon-transform: scale(1.06); }
+#alba-app .app:active { -gtk-icon-transform: scale(0.94); }
+#alba-app .app label { color: @testo; font-size: 13px; text-shadow: none; }
+#alba-app .vuoto { color: @tenue; font-size: 16px; }
+#alba-app scrollbar { background: transparent; border: none; }
+"""
+COLORI = {
+    "chiaro": dict(testo="#2a2018", tenue="#7a6a5c", campo="rgba(255,255,255,0.78)", bordo="rgba(255,255,255,0.95)",
+                   sopra="rgba(255,255,255,0.45)", velo=(1.0, 0.973, 0.949, 0.55)),
+    "scuro": dict(testo="#f5efe8", tenue="#b8aea4", campo="rgba(40,36,48,0.78)", bordo="rgba(255,255,255,0.12)",
+                  sopra="rgba(255,255,255,0.10)", velo=(0.10, 0.09, 0.13, 0.55)),
+}
+
+
+def tema():
+    try:
+        with open(os.path.join(CONF, "tema")) as f:
+            return "scuro" if f.read().strip() == "scuro" else "chiaro"
+    except OSError:
+        return "chiaro"
+
+
+def sfondo_desktop():
+    try:
+        out = subprocess.run(["xfconf-query", "-c", "xfce4-desktop", "-l", "-v"],
+                             capture_output=True, text=True, timeout=3).stdout
+        for riga in out.splitlines():
+            m = re.match(r"\S+/last-image\s+(.+)$", riga)
+            if m and os.path.isfile(m.group(1).strip()):
+                return m.group(1).strip()
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return SFONDO_ALBA
+
+
+def sfoca(percorso, l, a):
+    """Sfocatura veloce: rimpicciolisce molto e poi riallarga (due passaggi morbidi)."""
+    try:
+        pix = GdkPixbuf.Pixbuf.new_from_file(percorso)
+    except GLib.Error:
+        return None
+    # ritaglia come "riempi lo schermo"
+    sx, sy = l / pix.get_width(), a / pix.get_height()
+    s = max(sx, sy)
+    w, h = max(1, int(pix.get_width() * s)), max(1, int(pix.get_height() * s))
+    pix = pix.scale_simple(w, h, GdkPixbuf.InterpType.BILINEAR)
+    pix = pix.new_subpixbuf((w - l) // 2, (h - a) // 2, l, a)
+    piccolo = pix.scale_simple(max(1, l // 28), max(1, a // 28), GdkPixbuf.InterpType.HYPER)
+    medio = piccolo.scale_simple(max(1, l // 7), max(1, a // 7), GdkPixbuf.InterpType.BILINEAR)
+    return medio.scale_simple(l, a, GdkPixbuf.InterpType.BILINEAR)
+
+
+def normalizza(t):
+    t = unicodedata.normalize("NFKD", t or "").encode("ascii", "ignore").decode().lower()
+    return t
+
+
+class Griglia(Gtk.Window):
+    def __init__(self, app):
+        super().__init__(application=app, title="App")
+        self.set_name("alba-app")
+        self.set_decorated(False)
+        self.set_skip_taskbar_hint(True)
+        self.set_skip_pager_hint(True)
+        self.set_keep_above(True)
+        self.set_type_hint(Gdk.WindowTypeHint.NORMAL)
+        visual = self.get_screen().get_rgba_visual()
+        if visual:
+            self.set_visual(visual)
+        self.set_app_paintable(True)
+        self.connect("draw", self._disegna)
+        self.connect("key-press-event", self._tasto)
+        self.add_events(Gdk.EventMask.BUTTON_PRESS_MASK)
+        self.connect("button-press-event", self._clic_sfondo)
+        self.connect("delete-event", lambda *_: (self.chiudi(), True)[1])
+        self.connect("focus-out-event", lambda *_: GLib.timeout_add(120, self._chiudi_se_fuori))
+        self.sfondo = None
+        self.sfondo_chiave = None
+        self.tema = None
+        self.stile = Gtk.CssProvider()
+        Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(), self.stile,
+                                                 Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION + 1)
+
+        self.colonna = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=30)
+        self.colonna.set_margin_top(70)
+        self.colonna.set_margin_bottom(40)
+        self.cerca = Gtk.SearchEntry(placeholder_text="Cerca app")
+        self.cerca.get_style_context().add_class("cerca")
+        self.cerca.set_size_request(520, -1)
+        self.cerca.set_halign(Gtk.Align.CENTER)
+        self.cerca.connect("search-changed", lambda *_: self._filtra())
+        self.cerca.connect("activate", lambda *_: self._avvia_primo())
+        self.colonna.pack_start(self.cerca, False, False, 0)
+
+        self.scorri = Gtk.ScrolledWindow()
+        self.scorri.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self.griglia = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, homogeneous=True,
+                                   max_children_per_line=COLONNE, min_children_per_line=3,
+                                   column_spacing=18, row_spacing=14, valign=Gtk.Align.START,
+                                   halign=Gtk.Align.CENTER)
+        self.griglia.set_filter_func(self._visibile)
+        self.griglia.set_activate_on_single_click(True)
+        self.scorri.add(self.griglia)
+        self.colonna.pack_start(self.scorri, True, True, 0)
+        self.vuoto = Gtk.Label(label="Nessuna app trovata")
+        self.vuoto.get_style_context().add_class("vuoto")
+        self.vuoto.set_no_show_all(True)
+        self.colonna.pack_start(self.vuoto, False, False, 0)
+        self.add(self.colonna)
+
+        self.app_info = []
+        self.ricerca = ""
+        self.firma_app = None
+        self.monitor = Gio.AppInfoMonitor.get()
+        self.monitor.connect("changed", lambda *_: self.carica_app())
+        self.carica_app()
+        self.colonna.show_all()
+        self._anim = None
+
+    # --------------------------------------------------------------- app
+    def carica_app(self):
+        try:
+            locale.setlocale(locale.LC_COLLATE, "")
+        except locale.Error:
+            pass
+        elenco = [a for a in Gio.AppInfo.get_all()
+                  if a.should_show() and (a.get_id() or "") not in NASCOSTE]
+        elenco.sort(key=lambda a: locale.strxfrm((a.get_display_name() or a.get_name() or "").lower()))
+        for c in self.griglia.get_children():
+            self.griglia.remove(c)
+        self.app_info = elenco
+        for a in elenco:
+            b = Gtk.Button()
+            b.get_style_context().add_class("app")
+            b.set_relief(Gtk.ReliefStyle.NONE)
+            box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+            icona = Gtk.Image.new_from_gicon(a.get_icon() or Gio.ThemedIcon.new("application-x-executable"),
+                                             Gtk.IconSize.DIALOG)
+            icona.set_pixel_size(72)
+            box.pack_start(icona, False, False, 0)
+            nome = Gtk.Label(label=a.get_display_name() or a.get_name())
+            nome.set_ellipsize(3)  # Pango.EllipsizeMode.END
+            nome.set_max_width_chars(14)
+            nome.set_width_chars(14)
+            nome.set_justify(Gtk.Justification.CENTER)
+            box.pack_start(nome, False, False, 0)
+            b.add(box)
+            b.set_tooltip_text(a.get_description() or None)
+            b.connect("clicked", lambda _b, info=a: self.avvia(info))
+            figlio = Gtk.FlowBoxChild()
+            figlio.add(b)
+            figlio.info = a
+            figlio.testo = normalizza(" ".join(filter(None, [
+                a.get_display_name(), a.get_name(), getattr(a, "get_generic_name", lambda: "")(),
+                " ".join(a.get_keywords() if hasattr(a, "get_keywords") else []), a.get_executable()])))
+            self.griglia.add(figlio)
+        self.griglia.show_all()
+
+    def _visibile(self, figlio):
+        return not self.ricerca or self.ricerca in figlio.testo
+
+    def _filtra(self):
+        self.ricerca = normalizza(self.cerca.get_text().strip())
+        self.griglia.invalidate_filter()
+        visibili = [c for c in self.griglia.get_children() if self._visibile(c)]
+        self.vuoto.set_visible(not visibili)
+        self.scorri.get_vadjustment().set_value(0)
+
+    def _avvia_primo(self):
+        for c in self.griglia.get_children():
+            if self._visibile(c):
+                self.avvia(c.info)
+                return
+
+    def avvia(self, info):
+        ctx = Gdk.Display.get_default().get_app_launch_context()
+        ctx.set_timestamp(Gtk.get_current_event_time())
+        try:
+            info.launch([], ctx)
+        except GLib.Error as e:
+            print("alba-app:", e.message, file=sys.stderr)
+        self.chiudi()
+
+    # ------------------------------------------------------------ aspetto
+    def _prepara_aspetto(self):
+        t = tema()
+        if t != self.tema:
+            self.tema = t
+            c = COLORI[t]
+            css = CSS
+            for k, v in c.items():
+                if isinstance(v, str):
+                    css = css.replace("@" + k, v)
+            self.stile.load_from_data(css.encode())
+        schermo = self.get_screen()
+        disp = Gdk.Display.get_default()
+        _, px, py = disp.get_default_seat().get_pointer().get_position()
+        monitor = disp.get_monitor_at_point(px, py)
+        g = monitor.get_geometry()
+        self.move(g.x, g.y)
+        self.resize(g.width, g.height)
+        # a tutto schermo: copre anche la barra in alto e il Dock
+        n = next((i for i in range(disp.get_n_monitors()) if disp.get_monitor(i) == monitor), 0)
+        self.fullscreen_on_monitor(schermo, n)
+        percorso = sfondo_desktop()
+        try:
+            mt = os.path.getmtime(percorso)
+        except OSError:
+            mt = 0
+        chiave = (percorso, mt, g.width, g.height)
+        if chiave != self.sfondo_chiave:
+            self.sfondo = sfoca(percorso, g.width, g.height)
+            self.sfondo_chiave = chiave
+        larghezza = min(g.width - 120, COLONNE * 150)
+        self.griglia.set_max_children_per_line(max(3, larghezza // 150))
+        del schermo
+
+    def _disegna(self, _w, cr):
+        if self.sfondo is not None:
+            Gdk.cairo_set_source_pixbuf(cr, self.sfondo, 0, 0)
+            cr.paint()
+        cr.set_source_rgba(*COLORI[self.tema or "chiaro"]["velo"])
+        cr.paint()
+        return False
+
+    # ---------------------------------------------------- apri / chiudi
+    def _dissolvi(self, da, a, durata, poi=None):
+        inizio = time.monotonic()
+        if self._anim:
+            GLib.source_remove(self._anim)
+
+        def tic():
+            t = min(1.0, (time.monotonic() - inizio) * 1000 / durata)
+            e = 1 - (1 - t) ** 3
+            v = da + (a - da) * e
+            self.set_opacity(v)
+            # la griglia "si posa": parte un po' più in basso e sale al suo posto
+            self.colonna.set_margin_top(int(70 + (1 - v) * 24))
+            if t >= 1.0:
+                self._anim = None
+                if poi:
+                    poi()
+                return False
+            return True
+        self._anim = GLib.timeout_add(15, tic)
+
+    def apri(self):
+        self._prepara_aspetto()
+        self.cerca.set_text("")
+        self._filtra()
+        self.set_opacity(0)
+        self.show()
+        self.present_with_time(Gtk.get_current_event_time() or GLib.get_monotonic_time() // 1000)
+        self.get_window().focus(Gdk.CURRENT_TIME) if self.get_window() else None
+        self.cerca.grab_focus()
+        self._dissolvi(0, 1, 200)
+
+    def chiudi(self):
+        if not self.get_visible() or getattr(self, "_in_chiusura", False):
+            return
+        self._in_chiusura = True
+
+        def fine():
+            self.hide()
+            self._in_chiusura = False
+        self._dissolvi(self.get_opacity(), 0, 150, fine)
+
+    def _chiudi_se_fuori(self):
+        if self.get_visible() and not self.is_active():
+            self.chiudi()
+        return False
+
+    def _tasto(self, _w, e):
+        if e.keyval == Gdk.KEY_Escape:
+            if self.cerca.get_text():
+                self.cerca.set_text("")
+            else:
+                self.chiudi()
+            return True
+        if e.keyval in (Gdk.KEY_Super_L, Gdk.KEY_Super_R):
+            self.chiudi()
+            return True
+        if not self.cerca.has_focus() and Gdk.keyval_to_unicode(e.keyval):
+            self.cerca.grab_focus_without_selecting()
+            return self.cerca.event(e)
+        return False
+
+    def _clic_sfondo(self, _w, e):
+        # clic sullo sfondo (non su un'app): chiude
+        if e.button == 1:
+            self.chiudi()
+        return False
+
+
+class App(Gtk.Application):
+    def __init__(self):
+        super().__init__(application_id="it.alba.App", flags=Gio.ApplicationFlags.HANDLES_COMMAND_LINE)
+        self.finestra = None
+
+    def do_startup(self):
+        Gtk.Application.do_startup(self)
+        self.hold()   # resta pronta anche quando la griglia è chiusa
+
+    def do_command_line(self, riga):
+        argomenti = riga.get_arguments()[1:]
+        if self.finestra is None:
+            self.finestra = Griglia(self)
+        if "--sfondo" in argomenti:
+            return 0
+        if self.finestra.get_visible() and not getattr(self.finestra, "_in_chiusura", False):
+            self.finestra.chiudi()
+        else:
+            self.finestra.apri()
+        return 0
+
+
+if __name__ == "__main__":
+    sys.exit(App().run(sys.argv))

@@ -38,13 +38,20 @@ if [ "${TEMA_FLUENT:-0}" = 1 ]; then
   mkdir -p "$P/usr/share/doc/alba-sistema"
   echo ">> Integro il tema WhiteSur (stile macOS)"
   if git clone --depth 1 https://github.com/vinceliuice/WhiteSur-gtk-theme.git "$LAVORO/whitesur-gtk"; then
-    # Pacchetti già pronti del tema (cartella release/): niente compilazione
-    for v in Light Dark; do
-      tar -xJf "$LAVORO/whitesur-gtk/release/WhiteSur-$v.tar.xz" -C "$T" || echo "ATTENZIONE: WhiteSur-$v non estratto"
-    done
+    # Nuova grafica 1.2: tema costruito con l'accento arancio di Alba e le
+    # trasparenze (variante "normal"). Se non riesce: pacchetti già pronti.
+    if ( cd "$LAVORO/whitesur-gtk" && timeout 900 ./install.sh -d "$T" -c light -c dark -o normal -t orange --silent-mode ) \
+         > "$LAVORO/whitesur.log" 2>&1 && [ -d "$T/WhiteSur-Light-orange/gtk-3.0" ]; then
+      echo ">> WhiteSur costruito con l'accento arancio"
+    else
+      echo "ATTENZIONE: WhiteSur arancio non costruito, uso i pacchetti pronti"; tail -15 "$LAVORO/whitesur.log"
+      for v in Light Dark; do
+        tar -xJf "$LAVORO/whitesur-gtk/release/WhiteSur-$v.tar.xz" -C "$T" || echo "ATTENZIONE: WhiteSur-$v non estratto"
+      done
+    fi
     cp "$LAVORO/whitesur-gtk/COPYING" "$P/usr/share/doc/alba-sistema/LICENZA-tema-WhiteSur" 2>/dev/null || true
   fi
-  if ! scegli_tema 'WhiteSur*Light*' 'WhiteSur*Dark*'; then
+  if ! scegli_tema 'WhiteSur-Light-orange' 'WhiteSur-Dark-orange' && ! scegli_tema 'WhiteSur*Light*' 'WhiteSur*Dark*'; then
     echo ">> WhiteSur non disponibile, provo Fluent"
     find "$T" -mindepth 1 -maxdepth 1 ! -name Alba -exec rm -rf {} +
     if git clone --depth 1 https://github.com/vinceliuice/Fluent-gtk-theme.git "$LAVORO/fluent"; then
@@ -102,6 +109,12 @@ if [ "${TEMA_FLUENT:-0}" = 1 ]; then
       copia alba-bluetooth-connesso-symbolic bluetooth-active-symbolic
       copia alba-bluetooth-spento-symbolic bluetooth-disabled-symbolic
       copia alba-ingranaggio-symbolic emblem-system-symbolic
+      # Nuova grafica 1.2: icone delle app su tessere di vetro (stile "Alba vetro")
+      if python3 strumenti/genera-icone-alba.py "$P/usr/share/icons" && [ -f "$P/usr/share/icons/Alba/index.theme" ]; then
+        ICONE_CHIARO="Alba"; ICONE_SCURO="Alba-dark"
+      else
+        echo "ATTENZIONE: icone Alba non create, resto su Fluent"
+      fi
     fi
   fi
 fi
@@ -113,11 +126,12 @@ TEMA_SCURO="$TEMA_SCURO"
 ICONE_CHIARO="$ICONE_CHIARO"
 ICONE_SCURO="$ICONE_SCURO"
 EOF
-XFWM_SCURO="$TEMA_SCURO"
-[ -d "$P/usr/share/themes/$TEMA_SCURO/xfwm4" ] || XFWM_SCURO="Arc-Dark"
-sed -i "s/@TEMA_SCURO@/$TEMA_SCURO/; s/@ICONE_SCURO@/$ICONE_SCURO/" "$P/etc/skel/.config/xfce4/xfconf/xfce-perchannel-xml/xsettings.xml"
+# Nuova grafica 1.2: tema predefinito chiaro con vetro
+XFWM_CHIARO="$TEMA_CHIARO"
+[ -d "$P/usr/share/themes/$TEMA_CHIARO/xfwm4" ] || XFWM_CHIARO="Arc"
+sed -i "s/@TEMA_CHIARO@/$TEMA_CHIARO/; s/@ICONE_CHIARO@/$ICONE_CHIARO/" "$P/etc/skel/.config/xfce4/xfconf/xfce-perchannel-xml/xsettings.xml"
 sed -i "s/@ICONE_SCURO@/$ICONE_SCURO/" "$P/usr/share/alba/slick-greeter.conf.in"
-sed -i "s/@TEMA_SCURO_XFWM@/$XFWM_SCURO/" "$P/etc/skel/.config/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml"
+sed -i "s/@TEMA_CHIARO_XFWM@/$XFWM_CHIARO/" "$P/etc/skel/.config/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml"
 
 # --- Canale aggiornamenti: firmato (se c'è la chiave) o solo HTTPS ----------------
 CANALE="https://raw.githubusercontent.com/pindinellosamuelea-cpu/alba-linux/apt ./"

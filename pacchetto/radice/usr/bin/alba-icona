@@ -61,4 +61,13 @@ case "${1:-}" in
       echo "<icon>alba-campanella-symbolic</icon><iconclick>alba-rapido notifiche</iconclick><tool>Notifiche e calendario</tool>"
     fi
     ;;
+  logo)  # barra in alto: il logo di Alba apre la griglia delle app
+    echo "<img>/usr/share/alba/logo-barra.png</img><click>alba-app</click><tool>App (tasto Windows)</tool>"
+    ;;
+  app)   # barra in alto: nome del programma in primo piano (lo scrive alba-barra-alta)
+    N="$(cat "${XDG_RUNTIME_DIR:-/tmp}/alba-app-attiva" 2>/dev/null)"
+    N="${N:-Scrivania}"
+    N="${N//&/&amp;}"; N="${N//</&lt;}"; N="${N//>/&gt;}"
+    echo "<txt><span weight='bold'>$N</span></txt><txtclick>alba-app</txtclick><tool>$N</tool>"
+    ;;
 esac

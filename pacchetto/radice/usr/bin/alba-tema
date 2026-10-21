@@ -20,17 +20,11 @@ fi
 
 imposta() { xfconf-query -c "$1" -p "$2" -n -t "$3" -s "$4" 2>/dev/null || xfconf-query -c "$1" -p "$2" -s "$4" 2>/dev/null; }
 
+# Barra in alto e Dock: vetro chiaro o scuro come il tema. Prima del cambio
+# di tema, così le app (barra compresa) ricaricano i colori nuovi da sole.
+XFCE_PANEL_NO_RESTART=1 /usr/bin/alba-barra "$1"
 imposta xsettings /Net/ThemeName string "$T"
 imposta xsettings /Net/IconThemeName string "$ICONE"
-# La barra resta sempre scura (come il Dock del Mac): leggibile con entrambi i temi
-imposta xfce4-panel /panels/dark-mode bool true
-# Colore della barra (lo usa anche per le icone di sistema, così è uniforme)
-RGBA="0.118 0.122 0.169 1"
-xfconf-query -c xfce4-panel -p /panels/panel-1/background-style -n -t uint -s 1 2>/dev/null || \
-  xfconf-query -c xfce4-panel -p /panels/panel-1/background-style -s 1 2>/dev/null
-set -- $RGBA
-xfconf-query -c xfce4-panel -p /panels/panel-1/background-rgba -n -t double -s "$1" -t double -s "$2" -t double -s "$3" -t double -s "$4" 2>/dev/null || \
-  xfconf-query -c xfce4-panel -p /panels/panel-1/background-rgba -t double -s "$1" -t double -s "$2" -t double -s "$3" -t double -s "$4" 2>/dev/null
 if [ -d "/usr/share/themes/$T/xfwm4" ]; then
   imposta xfwm4 /general/theme string "$T"
 elif [ "$SCURO" = true ] && [ -d /usr/share/themes/Arc-Dark/xfwm4 ]; then

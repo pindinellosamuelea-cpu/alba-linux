@@ -1,0 +1,6 @@
+Command=alba-icona logo
+UseLabel=0
+Text=
+UpdatePeriod=86400000
+Font=Inter 10
+EnableSingleRow=1

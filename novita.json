@@ -2,6 +2,15 @@
   "nota": "Novità di Alba mostrate in Impostazioni → Aggiornamenti. 'data' = quando la novità è entrata in Alba (UTC). Le più recenti in alto.",
   "versioni": [
     {
+      "data": "2026-10-24T12:30",
+      "titolo": "Accensione e accesso con la nuova grafica",
+      "novita": [
+        "Schermata di accensione e di spegnimento con lo sfondo sfocato chiaro, il logo e i punti arancioni, come il desktop",
+        "Schermata di accesso (anche al risveglio e quando blocchi il computer) in vetro chiaro, coerente con la griglia delle app e il Dock",
+        "Anche la schermata «Sto applicando l'aggiornamento» ha la nuova grafica"
+      ]
+    },
+    {
       "data": "2026-10-24T04:00",
       "titolo": "Alba 1.2: la nuova grafica",
       "novita": [

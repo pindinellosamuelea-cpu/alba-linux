@@ -1,14 +1,19 @@
 #!/usr/bin/python3
-"""Alba Linux - crea il tema di icone "Alba" (stile B, "Alba vetro").
+"""Alba Linux - tema di icone "Alba" (stile B, "Alba vetro").
 
 Ogni icona di app sta su una tessera di vetro chiaro arrotondata:
  - le app di sistema più comuni hanno un simbolo Alba disegnato a linee, colorato;
  - tutte le altre icone (Fluent) vengono messe, rimpicciolite, sulla stessa tessera.
 Tutto il resto (cartelle, file, simboli della barra) arriva da Fluent.
 
-Uso: genera-icone-alba.py CARTELLA_ICONE   (contiene già Fluent e Fluent-dark)
-Crea CARTELLA_ICONE/Alba e CARTELLA_ICONE/Alba-dark.
+Uso:
+  alba-icone tema CARTELLA_ICONE   crea Alba e Alba-dark (alla costruzione del pacchetto)
+  alba-icone app                   mette sulla tessera anche le icone delle app
+                                   installate dopo (in /usr/local/share/icons)
 """
+import base64
+import configparser
+import glob
 import os
 import re
 import sys
@@ -225,7 +230,84 @@ def crea(base, nome, sorgente, scuro):
     print(f"{nome}: {len(fatti)} simboli Alba, {avvolte} icone su tessera, {collegamenti} collegamenti, {saltate} lasciate a Fluent")
 
 
+LOCALE = "/usr/local/share/icons"
+CERCA_PNG = ["512x512", "256x256", "192x192", "128x128", "96x96", "64x64", "48x48"]
+BASI = ["/usr/share/icons/hicolor", "/var/lib/flatpak/exports/share/icons/hicolor", "/usr/local/share/icons/hicolor"]
+
+
+def sorgente(nome):
+    for b in BASI:
+        f = os.path.join(b, "scalable", "apps", nome + ".svg")
+        if os.path.isfile(f):
+            return f
+    for b in BASI:
+        for d in CERCA_PNG:
+            f = os.path.join(b, d, "apps", nome + ".png")
+            if os.path.isfile(f):
+                return f
+    for est in (".svg", ".png"):
+        f = os.path.join("/usr/share/pixmaps", nome + est)
+        if os.path.isfile(f):
+            return f
+    return None
+
+
+def icona_png(percorso, scuro):
+    dati = base64.b64encode(open(percorso, "rb").read()).decode()
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="64" height="64" viewBox="0 0 64 64">'
+            f'{tessera(scuro)}<image x="11" y="11" width="42" height="42" xlink:href="data:image/png;base64,{dati}"/></svg>\n')
+
+
+def nomi_icone_app():
+    nomi = set()
+    cartelle = ["/usr/share/applications", "/usr/local/share/applications", "/var/lib/flatpak/exports/share/applications"]
+    for c in cartelle:
+        for f in glob.glob(os.path.join(c, "*.desktop")):
+            cp = configparser.RawConfigParser(strict=False, interpolation=None)
+            try:
+                cp.read(f, encoding="utf-8")
+                v = cp.get("Desktop Entry", "Icon", fallback="").strip()
+            except (configparser.Error, UnicodeDecodeError):
+                continue
+            if v and "/" not in v:
+                nomi.add(v[:-4] if v.endswith((".png", ".svg")) else v)
+    return nomi
+
+
+def app():
+    fatte = 0
+    for tema, scuro in (("Alba", False), ("Alba-dark", True)):
+        if not os.path.isdir(os.path.join("/usr/share/icons", tema)):
+            continue
+        dest = os.path.join(LOCALE, tema, "scalable", "apps")
+        os.makedirs(dest, exist_ok=True)
+        for nome in sorted(nomi_icone_app()):
+            if os.path.exists(os.path.join("/usr/share/icons", tema, "scalable", "apps", nome + ".svg")):
+                continue
+            uscita = os.path.join(dest, nome + ".svg")
+            src = sorgente(nome)
+            if not src or (os.path.exists(uscita) and os.path.getmtime(uscita) >= os.path.getmtime(src)):
+                continue
+            try:
+                if src.endswith(".svg"):
+                    nuovo = icona_avvolta(open(src, encoding="utf-8").read(), scuro)
+                else:
+                    nuovo = icona_png(src, scuro)
+            except (OSError, UnicodeDecodeError):
+                nuovo = None
+            if nuovo:
+                with open(uscita, "w", encoding="utf-8") as f:
+                    f.write(nuovo)
+                fatte += 1
+    print(f"alba-icone: {fatte} icone di app messe sulla tessera")
+
+
 if __name__ == "__main__":
-    base = sys.argv[1]
-    crea(base, "Alba", "Fluent", False)
-    crea(base, "Alba-dark", "Fluent-dark" if os.path.isdir(os.path.join(base, "Fluent-dark")) else "Fluent", True)
+    if len(sys.argv) >= 3 and sys.argv[1] == "tema":
+        base = sys.argv[2]
+        crea(base, "Alba", "Fluent", False)
+        crea(base, "Alba-dark", "Fluent-dark" if os.path.isdir(os.path.join(base, "Fluent-dark")) else "Fluent", True)
+    elif len(sys.argv) >= 2 and sys.argv[1] == "app":
+        app()
+    else:
+        sys.exit(__doc__)

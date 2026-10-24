@@ -8,7 +8,7 @@ FATTO="$CONF/primo-avvio-v1"
 mkdir -p "$CONF"
 
 # La compatibilità Windows si prepara in background (anche se il resto è già fatto)
-[ -f "$CONF/windows-pronto" ] || nice -n 10 /usr/bin/alba-prepara-windows &
+{ [ -f "$CONF/windows-pronto" ] && [ -f "$CONF/windows-aspetto-v1" ]; } || nice -n 10 /usr/bin/alba-prepara-windows &
 
 [ -f "$FATTO" ] && exit 0
 

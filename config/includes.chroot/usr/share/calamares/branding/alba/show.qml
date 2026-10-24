@@ -1,43 +1,38 @@
-/* Alba Linux - presentazione durante l'installazione */
+/* Alba Linux 1.2 - diapositive durante l'installazione (stile chiaro, nuova grafica).
+   Le immagini scorrono con una dissolvenza morbida; sotto, Calamares mostra
+   la barra di avanzamento. */
 import QtQuick 2.0;
 import calamares.slideshow 1.0;
 
 Presentation
 {
     id: presentation
+    property int attuale: 0
+    property var immagini: ["diapositiva1.jpg", "diapositiva2.jpg", "diapositiva3.jpg", "diapositiva4.jpg", "diapositiva5.jpg"]
 
     Timer {
-        id: avanza
-        interval: 7000
+        interval: 8000
         running: presentation.activatedInCalamares
         repeat: true
-        onTriggered: presentation.goToNextSlide()
+        onTriggered: presentation.attuale = (presentation.attuale + 1) % presentation.immagini.length
     }
 
-    function onActivate() { presentation.currentSlide = 0; }
+    function onActivate() { presentation.attuale = 0; }
     function onLeave() { }
 
     Slide {
-        Rectangle { anchors.fill: parent; color: "#14162a" }
-        Image { id: logo1; source: "logo.png"; width: 120; height: 120; fillMode: Image.PreserveAspectFit
-                anchors.horizontalCenter: parent.horizontalCenter; anchors.top: parent.top; anchors.topMargin: parent.height * 0.18 }
-        Text { anchors.top: logo1.bottom; anchors.topMargin: 28; anchors.horizontalCenter: parent.horizontalCenter
-               color: "#ffffff"; font.pixelSize: 26; font.bold: true; text: "Sto installando Alba" }
-        Text { anchors.top: logo1.bottom; anchors.topMargin: 72; anchors.horizontalCenter: parent.horizontalCenter
-               width: parent.width * 0.7; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap
-               color: "#c9cbe0"; font.pixelSize: 16
-               text: "Ci vuole qualche minuto. Al termine togli la chiavetta: al primo avvio scegli il tuo nome e la password." }
-    }
-    Slide {
-        Rectangle { anchors.fill: parent; color: "#14162a" }
-        Text { anchors.centerIn: parent; width: parent.width * 0.7; horizontalAlignment: Text.AlignHCenter
-               wrapMode: Text.WordWrap; color: "#ffffff"; font.pixelSize: 22
-               text: "I programmi Windows (.exe) si aprono con un doppio clic.\nSteam e i giochi usano da soli la scheda grafica più potente." }
-    }
-    Slide {
-        Rectangle { anchors.fill: parent; color: "#14162a" }
-        Text { anchors.centerIn: parent; width: parent.width * 0.7; horizontalAlignment: Text.AlignHCenter
-               wrapMode: Text.WordWrap; color: "#ffffff"; font.pixelSize: 22
-               text: "Gli aggiornamenti arrivano da soli e si installano al riavvio.\nTutto si regola da Impostazioni, senza terminale." }
+        Rectangle { anchors.fill: parent; color: "#fbf7f3" }
+        Repeater {
+            model: presentation.immagini.length
+            Image {
+                anchors.fill: parent
+                source: presentation.immagini[index]
+                fillMode: Image.PreserveAspectFit
+                smooth: true
+                asynchronous: true
+                opacity: index === presentation.attuale ? 1 : 0
+                Behavior on opacity { NumberAnimation { duration: 700; easing.type: Easing.InOutQuad } }
+            }
+        }
     }
 }

@@ -229,4 +229,9 @@ VERSION="$VERSIONE"
 BASE="Debian 13 trixie"
 EOF
 
+# 1.2: niente logo di Debian come foto predefinita dei nuovi account
+for f in /etc/skel/.face /etc/skel/.face.icon; do
+  case "$(readlink -f "$f" 2>/dev/null)" in */desktop-base/*|*debian*) rm -f "$f" ;; esac
+done
+
 exit 0

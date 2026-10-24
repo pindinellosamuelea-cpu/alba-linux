@@ -30,6 +30,14 @@ prova firmware-nvidia-graphics firmware-intel-graphics \
 prova firmware-mediatek firmware-qcom-soc firmware-intel-misc \
       realtek-rtl88xxau-dkms
 
+# 1.2 - più driver, tutti automatici: audio di Mac/Surface/portatili recenti
+# (Cirrus, Intel), stampanti e scanner senza driver (AirPrint/eSCL) e HP,
+# Thunderbolt, sensori (rotazione schermo dei tablet), aggiornamento del
+# firmware dei dispositivi (BIOS, dock, mouse) da Impostazioni.
+prova firmware-cirrus firmware-intel-sound firmware-linux-free \
+      hplip printer-driver-all sane-airscan ipp-usb \
+      bolt iio-sensor-proxy fwupd
+
 # Editing: OpenCL per Intel, componenti extra per app Windows di grafica
 # (autenticazione di rete usata da alcuni installer, codec, DirectX 12)
 prova intel-opencl-icd winbind gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \

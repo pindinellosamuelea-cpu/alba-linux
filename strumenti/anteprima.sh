@@ -66,7 +66,7 @@ done
 PID=$!; foto "08-indicatore-volume" 1; kill $PID 2>/dev/null
 /usr/bin/alba-menu-x >/dev/null 2>&1 &
 PID=$!; foto "07-menu-super-x" 3; kill $PID 2>/dev/null
-/usr/bin/alba-tema scuro; sleep 2
+/usr/bin/alba-tema scuro; sleep 5
 foto 01-desktop-scuro 3
 /usr/bin/alba-rapido controlli >/dev/null 2>&1 &
 PID=$!; foto "06-menu-rapido-scuro" 4; kill $PID 2>/dev/null; rm -f /tmp/alba-rapido.pid

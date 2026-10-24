@@ -13,5 +13,10 @@ if [ "${AVVIO_AGG:-}" != "$(cat /proc/sys/kernel/random/boot_id)" ]; then
   exit 0
 fi
 fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 && exit 0     # sta ancora installando
-pgrep -u "$(id -u)" -f "alba-impostazioni --riavvio-aggiornamento" >/dev/null && exit 0
-exec /usr/bin/alba-impostazioni --riavvio-aggiornamento
+pgrep -u "$(id -u)" -f "notify-send -a Alba-riavvio" >/dev/null && exit 0
+# un solo avviso pulito (niente finestre in più); una volta per aggiornamento
+mkdir -p "$CONF"; cat "$M" > "$CONF/riavvio-visto"
+R="$(notify-send -a Alba-riavvio -i system-software-update -A riavvia="Riavvia ora" \
+      "Alba è stata aggiornata" "Riavvia quando vuoi per completare." 2>/dev/null)"
+[ "$R" = "riavvia" ] && systemctl reboot
+exit 0

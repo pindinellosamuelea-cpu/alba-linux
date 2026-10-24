@@ -37,6 +37,20 @@ fun aggiorna() {
 }
 Plymouth.SetRefreshFunction(aggiorna);
 
+# --- Spegnimento e riavvio: stesso logo, con una scritta sobria ------------
+modo = Plymouth.GetMode();
+stato.sprite = Sprite();
+stato.sprite.SetZ(15);
+if (modo == "shutdown" || modo == "reboot") {
+  if (modo == "shutdown") stato.testo = "Spegnimento in corso";
+  else stato.testo = "Riavvio in corso";
+  st = Image.Text(stato.testo, 0.93, 0.9, 0.95, 1, "Sans 12");
+  stato.sprite.SetImage(st);
+  stato.sprite.SetX(cx - st.GetWidth() / 2);
+  stato.sprite.SetY(base_y + 34);
+  stato.sprite.SetOpacity(0.85);
+}
+
 # --- Richiesta password (es. disco cifrato) -------------------------------
 messaggio.sprite = Sprite();
 messaggio.sprite.SetZ(20);

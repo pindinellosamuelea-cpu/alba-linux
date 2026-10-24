@@ -13,7 +13,8 @@ mkdir -p "$CONF" "$(dirname "$LOG")"
 
 exec 9>"$LOCK"
 flock 9
-[ -f "$PRONTO" ] && exit 0
+ASPETTO="$CONF/windows-aspetto-v1"
+[ -f "$PRONTO" ] && [ -f "$ASPETTO" ] && exit 0
 
 {
   echo "== Preparazione ambiente Windows $(date)"
@@ -34,3 +35,31 @@ flock 9
 } >>"$LOG" 2>&1
 
 touch "$PRONTO"
+
+# 1.2 - programmi Windows più "nativi": testo nitido come su Windows
+# (ClearType), colori chiari moderni al posto del grigio anni '90, grandezza
+# del testo uguale al resto di Alba. Anche per gli ambienti già creati.
+if [ ! -f "$ASPETTO" ]; then
+  DPI="$(xfconf-query -c xsettings -p /Xft/DPI 2>/dev/null)"
+  case "$DPI" in ''|-1|*[!0-9]*) DPI=96 ;; esac
+  R="$(mktemp --suffix=.reg)"
+  {
+    printf 'REGEDIT4\n\n[HKEY_CURRENT_USER\\Control Panel\\Desktop]\n'
+    printf '"FontSmoothing"="2"\n"FontSmoothingType"=dword:00000002\n"FontSmoothingGradientOrientation"=dword:00000001\n"FontSmoothingOrientation"=dword:00000001\n'
+    printf '"LogPixels"=dword:%08x\n\n' "$DPI"
+    printf '[HKEY_CURRENT_USER\\Control Panel\\Colors]\n'
+    for c in "ActiveBorder=251 247 243" "ActiveTitle=251 247 243" "AppWorkSpace=243 235 227" "Background=251 247 243" \
+             "ButtonAlternateFace=243 235 227" "ButtonDkShadow=180 168 156" "ButtonFace=246 240 234" "ButtonHilight=255 255 255" \
+             "ButtonLight=251 247 243" "ButtonShadow=214 202 190" "ButtonText=42 32 24" "GradientActiveTitle=251 247 243" \
+             "GradientInactiveTitle=243 235 227" "GrayText=150 140 130" "Hilight=240 122 30" "HilightText=255 255 255" \
+             "HotTrackingColor=224 106 16" "InactiveBorder=243 235 227" "InactiveTitle=243 235 227" "InactiveTitleText=120 110 100" \
+             "InfoText=42 32 24" "InfoWindow=255 251 247" "Menu=255 255 255" "MenuBar=251 247 243" "MenuHilight=240 122 30" \
+             "MenuText=42 32 24" "Scrollbar=243 235 227" "TitleText=42 32 24" "Window=255 255 255" "WindowFrame=214 202 190" \
+             "WindowText=42 32 24"; do
+      printf '"%s"="%s"\n' "${c%%=*}" "${c#*=}"
+    done
+  } > "$R"
+  { echo "== Aspetto Windows (1.2)"; wine regedit "$R"; wineserver -w; } >>"$LOG" 2>&1
+  rm -f "$R"
+  touch "$ASPETTO"
+fi

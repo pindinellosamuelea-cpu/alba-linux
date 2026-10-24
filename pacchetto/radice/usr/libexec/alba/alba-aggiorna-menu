@@ -50,6 +50,7 @@ AVANZATI = [
     "org.kde.kdeconnect-settings", "org.kde.kdeconnect.handler", "org.kde.kdeconnect.nonplasma",
     "kdeconnect-*", "jstest-gtk", "pcsc_scan", "PeaZip*.desktop", "peazip-*", "org.gnome.Devhelp",
     "lightdm-settings", "slick-greeter*", "mission-center-*", "vim-*",
+    "zutty", "gscriptor", "org.gnome.Characters", "gnome-system-log", "xfce4-power-information",
 ]
 SEMPRE_VISIBILI = set()
 
@@ -99,6 +100,7 @@ RINOMINA = {
     "libreoffice-calc": ("Excel · Fogli di calcolo", None),
     "libreoffice-impress": ("PowerPoint · Presentazioni", None),
     "alba-apple-music": ("Apple Music", None),
+    "guvcview": ("Fotocamera", None),
 }
 
 
@@ -174,3 +176,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+    # icone delle app installate dopo: anche loro sulla tessera di vetro di Alba
+    if os.path.exists("/usr/libexec/alba/alba-icone"):
+        import subprocess
+        subprocess.run(["/usr/bin/python3", "/usr/libexec/alba/alba-icone", "app"], check=False)

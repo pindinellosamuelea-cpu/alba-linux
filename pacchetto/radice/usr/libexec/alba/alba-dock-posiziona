@@ -1,0 +1,33 @@
+#!/bin/bash
+# Alba Linux - mette il Dock "sospeso" poco sopra il bordo in basso, al
+# centro dello schermo principale, e fa in modo che le finestre ingrandite
+# non ci finiscano sotto (come il Dock del Mac).
+# Va rieseguito quando cambiano lo schermo, la grandezza del Dock o
+# l'opzione "nascondi": lo fanno da soli la sessione e le Impostazioni.
+set -u
+export LC_ALL=C
+SPAZIO=8   # distanza dal bordo dello schermo, in pixel
+
+imposta() { xfconf-query -c "$1" -p "$2" -n -t "$3" -s "$4" 2>/dev/null || xfconf-query -c "$1" -p "$2" -s "$4" 2>/dev/null; }
+
+# schermo principale: "LARGHEZZAxALTEZZA+X+Y"
+G="$(xrandr --query 2>/dev/null | awk '/ connected primary/ {for (i=1;i<=NF;i++) if ($i ~ /^[0-9]+x[0-9]+\+[0-9]+\+[0-9]+$/) {print $i; exit}}')"
+[ -n "$G" ] || G="$(xrandr --query 2>/dev/null | awk '/ connected/ {for (i=1;i<=NF;i++) if ($i ~ /^[0-9]+x[0-9]+\+[0-9]+\+[0-9]+$/) {print $i; exit}}')"
+if [ -z "$G" ]; then
+  D="$(xrandr --query 2>/dev/null | sed -n 's/.*current \([0-9]*\) x \([0-9]*\).*/\1x\2+0+0/p' | head -1)"
+  G="${D:-}"
+fi
+[[ "$G" =~ ^([0-9]+)x([0-9]+)\+([0-9]+)\+([0-9]+)$ ]] || exit 0
+L="${BASH_REMATCH[1]}"; A="${BASH_REMATCH[2]}"; X="${BASH_REMATCH[3]}"; Y="${BASH_REMATCH[4]}"
+
+DIM="$(xfconf-query -c xfce4-panel -p /panels/panel-2/size 2>/dev/null)"
+case "$DIM" in ''|*[!0-9]*) DIM=62 ;; esac
+CX=$(( X + L / 2 ))
+CY=$(( Y + A - SPAZIO - DIM / 2 ))
+imposta xfce4-panel /panels/panel-2/position string "p=0;x=$CX;y=$CY"
+
+# finestre ingrandite: si fermano sopra il Dock (se il Dock non si nasconde)
+NASCONDI="$(xfconf-query -c xfce4-panel -p /panels/panel-2/autohide-behavior 2>/dev/null)"
+if [ "${NASCONDI:-0}" = 0 ]; then MARGINE=$(( DIM + SPAZIO * 2 )); else MARGINE=0; fi
+imposta xfwm4 /general/margin_bottom int "$MARGINE"
+exit 0

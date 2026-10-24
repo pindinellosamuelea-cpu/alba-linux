@@ -43,6 +43,13 @@ apt_extra() {
 apt_extra archivi 7zip 7zip-rar unrar unar
 apt_extra barra xfce4-genmon-plugin
 apt_extra accesso gir1.2-lightdm-1
+# 1.2: componenti della nuova grafica (Dock, barra in alto) e foto account
+apt_extra grafica12 xfce4-docklike-plugin xfce4-genmon-plugin x11-utils file
+# 1.2: più driver automatici (ognuno da solo: se uno manca, gli altri ci sono)
+for d in firmware-cirrus firmware-intel-sound firmware-mediatek firmware-intel-graphics firmware-intel-misc \
+         firmware-nvidia-graphics sane-airscan ipp-usb hplip bolt fwupd; do
+  apt_extra "driver12-$d" "$d"
+done
 # Processori Intel: thermald tiene la temperatura stabile (meno picchi di
 # calore = ventole che salgono gradualmente invece che di colpo)
 grep -qi "GenuineIntel" /proc/cpuinfo && apt_extra termico thermald

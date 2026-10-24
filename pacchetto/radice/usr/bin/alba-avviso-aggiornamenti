@@ -68,34 +68,17 @@ elif [ -f /var/lib/alba/driver-secure-boot ] && [ ! -e /proc/driver/nvidia/versi
   [ "$R" = "installa" ] && setsid -f /usr/bin/alba-driver-grafici >/dev/null 2>&1
 fi
 
-# Aggiornamento già scaricato: si installa al prossimo riavvio
+# Aggiornamento già scaricato: UN solo avviso, pulito, al massimo una volta
+# al giorno. Si installa da solo al prossimo riavvio; nessun'altra finestra.
+# (Gli aggiornamenti si scaricano da soli: niente avviso "disponibili".)
 if [ "$(/usr/libexec/alba/alba-aggiornamento stato 2>/dev/null)" = pronto ]; then
   OGGI="$(date +%F)"
   [ "$(cat "$CONF/ultimo-avviso" 2>/dev/null)" = "$OGGI" ] && exit 0
   echo "$OGGI" > "$CONF/ultimo-avviso"
   NUOVA="$(cat /var/lib/alba/aggiornamento/versione 2>/dev/null)"
-  TITOLO="$(cat /var/lib/alba/aggiornamento/titolo 2>/dev/null)"
   if [ -n "$NUOVA" ]; then INTEST="Alba $NUOVA è pronta"; else INTEST="Aggiornamento pronto"; fi
-  TESTO="${TITOLO:+$TITOLO. }Si installa al prossimo riavvio, prima della schermata di accesso. Puoi continuare a lavorare."
-  R="$(notify-send -a "Alba" -i system-software-update -A novita="Cosa c'è di nuovo" -A riavvia="Riavvia e aggiorna" \
-        "$INTEST" "$TESTO" 2>/dev/null)"
+  R="$(notify-send -a "Alba" -i system-software-update -A riavvia="Riavvia ora" \
+        "$INTEST" "Si installa da sola al prossimo riavvio. Puoi continuare a lavorare." 2>/dev/null)"
   [ "$R" = "riavvia" ] && systemctl reboot
-  [ "$R" = "novita" ] && setsid -f /usr/bin/alba-impostazioni --pagina aggiornamenti >/dev/null 2>&1
-  exit 0
 fi
-
-N="$(apt list --upgradable 2>/dev/null | grep -c 'upgradable')"
-[ "${N:-0}" -gt 0 ] || exit 0
-
-# Al massimo un avviso al giorno
-OGGI="$(date +%F)"
-[ "$(cat "$CONF/ultimo-avviso" 2>/dev/null)" = "$OGGI" ] && exit 0
-echo "$OGGI" > "$CONF/ultimo-avviso"
-
-if [ "$N" -eq 1 ]; then TESTO="C'è 1 aggiornamento pronto da installare."
-else TESTO="Ci sono $N aggiornamenti pronti da installare."; fi
-
-R="$(notify-send -a "Alba" -i system-software-update -A apri="Aggiorna ora" \
-      "Aggiornamenti disponibili" "$TESTO" 2>/dev/null)"
-[ "$R" = "apri" ] && setsid -f /usr/bin/alba-impostazioni --pagina aggiornamenti >/dev/null 2>&1
 exit 0

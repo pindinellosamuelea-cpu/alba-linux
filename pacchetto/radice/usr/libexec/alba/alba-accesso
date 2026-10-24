@@ -186,6 +186,8 @@ class Foto(Gtk.DrawingArea):
         self.iniziale = (utente.get_display_name() or utente.get_name() or "?")[:1].upper()
         percorso = utente.get_image() if hasattr(utente, "get_image") else ""
         for p in (percorso, os.path.expanduser(f"~{utente.get_name()}/.face")):
+            if p and ("debian" in os.path.realpath(p) or "desktop-base" in os.path.realpath(p)):
+                continue   # niente logo di Debian come foto
             if p and os.path.isfile(p):
                 try:
                     self.immagine = GdkPixbuf.Pixbuf.new_from_file_at_scale(p, lato, lato, False)

@@ -728,7 +728,7 @@ class PaginaSchermo(Pagina):
 
     def _riempi_hz(self, ris, hz_attuale=None):
         self.combo_hz.remove_all()
-        freq = sorted(self.modi.get(ris, []), reverse=True)
+        freq = sorted((f for f in self.modi.get(ris, []) if f > 1), reverse=True)
         tonde = [round(f) for f in freq]
         for f in freq:
             testo = f"{round(f)} Hz" if tonde.count(round(f)) == 1 else f"{f:.2f} Hz".replace(".", ",")
@@ -737,9 +737,9 @@ class PaginaSchermo(Pagina):
             self.combo_hz.append(f"{f:.2f}", testo)
         if hz_attuale:
             self.combo_hz.set_active_id(f"{hz_attuale:.2f}")
-        elif self.modi.get(ris):
+        elif freq:
             self.combo_hz.set_active(0)
-        self.combo_hz.set_sensitive(bool(self.modi.get(ris)))
+        self.combo_hz.set_sensitive(bool(freq))
 
     def _applica_modo(self, ris, hz):
         if not self.uscita or not ris:
@@ -749,6 +749,7 @@ class PaginaSchermo(Pagina):
         if hz:
             cmd += ["--rate", hz]
         esegui(cmd)
+        avvia(["/usr/libexec/alba/alba-dock-posiziona"])
         if domanda(self.finestra, "Mantenere queste impostazioni?",
                    "Se lo schermo non si vede bene premi Annulla: tra pochi secondi tornerà come prima.",
                    si="Mantieni", no="Annulla", scadenza=15):
@@ -1434,7 +1435,8 @@ class PaginaAspetto(Pagina):
         r.aggiungi(Riga("Effetto vetro", "Barra in alto e Dock trasparenti", self.vetro))
         self.grandezza = Segmentato([("piccolo", "Piccolo"), ("medio", "Medio"), ("grande", "Grande")], self._grandezza)
         r.aggiungi(Riga("Grandezza del Dock", None, self.grandezza))
-        self.nascondi = Interruttore(lambda v: xfconf_scrivi("xfce4-panel", "/panels/panel-2/autohide-behavior", "uint", 1 if v else 0))
+        self.nascondi = Interruttore(lambda v: (xfconf_scrivi("xfce4-panel", "/panels/panel-2/autohide-behavior", "uint", 1 if v else 0),
+                                                avvia(["/usr/libexec/alba/alba-dock-posiziona"])))
         r.aggiungi(Riga("Nascondi il Dock quando una finestra lo copre", "Riappare portando il mouse in basso", self.nascondi))
         self._muto = False
         self._carica_sfondi()
@@ -1483,12 +1485,13 @@ class PaginaAspetto(Pagina):
         self._muto = False
         esegui(["/usr/bin/alba-tema", chiave])
 
-    DOCK = {"piccolo": (60, 34), "medio": (76, 44), "grande": (90, 56)}
+    DOCK = {"piccolo": (52, 34), "medio": (62, 44), "grande": (74, 56)}
 
     def _grandezza(self, chiave):
         dim, icone = self.DOCK.get(chiave, self.DOCK["medio"])
         xfconf_scrivi("xfce4-panel", "/panels/panel-2/size", "uint", dim)
         xfconf_scrivi("xfce4-panel", "/panels/panel-2/icon-size", "uint", icone)
+        avvia(["/usr/libexec/alba/alba-dock-posiziona"])
 
     def aggiorna(self):
         self._muto = True
@@ -1500,7 +1503,7 @@ class PaginaAspetto(Pagina):
         self._muto = False
         self.vetro.imposta(leggi_file(os.path.join(CONF, "vetro")) != "off")
         dim = xfconf_leggi("xfce4-panel", "/panels/panel-2/size")
-        self.grandezza.imposta({"60": "piccolo", "90": "grande"}.get(dim, "medio"))
+        self.grandezza.imposta({"52": "piccolo", "74": "grande"}.get(dim, "medio"))
         self.nascondi.imposta(xfconf_leggi("xfce4-panel", "/panels/panel-2/autohide-behavior") not in ("", "0"))
 
 
@@ -2914,6 +2917,8 @@ def foto_account(nome):
             pass
     casa = os.path.expanduser(f"~{nome}")
     f = os.path.join(casa, ".face")
+    if "debian" in os.path.realpath(f) or "desktop-base" in os.path.realpath(f):
+        return None   # niente logo di Debian come foto
     return f if os.access(f, os.R_OK) else None
 
 

@@ -119,8 +119,10 @@ def utente_corrente():
             foto = v
     except GLib.Error:
         pass
-    if not foto and os.path.isfile(os.path.expanduser("~/.face")):
-        foto = os.path.expanduser("~/.face")
+    faccia = os.path.expanduser("~/.face")
+    if not foto and os.path.isfile(faccia) and "debian" not in os.path.realpath(faccia) \
+            and "desktop-base" not in os.path.realpath(faccia):
+        foto = faccia
     return nome, foto
 
 

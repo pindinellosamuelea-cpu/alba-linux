@@ -25,11 +25,13 @@ echo "$VETRO" > "$CONF/vetro"
 # trasparenza: con il vetro spento le barre sono piene
 if [ "$VETRO" = off ]; then A_BARRA=1; A_DOCK=1; else A_BARRA=0.72; A_DOCK=0.58; fi
 if [ "$TEMA" = scuro ]; then
+  RGB_BARRA="30 28 36"; RGB_DOCK="34 32 42"
   BARRA="rgba(30,28,36,$A_BARRA)"; DOCK="rgba(34,32,42,$A_DOCK)"; TESTO="#f3eee8"
   LINEA="rgba(255,255,255,0.08)"; RIFLESSO="rgba(255,255,255,0.12)"
   SOPRA="rgba(255,255,255,0.10)"; PREMUTO="rgba(255,255,255,0.16)"
 else
-  BARRA="rgba(252,248,244,$A_BARRA)"; DOCK="rgba(255,251,247,$A_DOCK)"; TESTO="#2a2018"
+  RGB_BARRA="250 246 242"; RGB_DOCK="255 251 247"
+  BARRA="rgba(250,246,242,$A_BARRA)"; DOCK="rgba(255,251,247,$A_DOCK)"; TESTO="#2a2018"
   LINEA="rgba(120,80,40,0.10)"; RIFLESSO="rgba(255,255,255,0.75)"
   SOPRA="rgba(60,30,0,0.07)"; PREMUTO="rgba(240,122,30,0.18)"
 fi
@@ -40,10 +42,21 @@ sed -e "s/@BARRA@/$BARRA/g; s/@DOCK@/$DOCK/g; s/@TESTO@/$TESTO/g; s/@LINEA@/$LIN
     -e "s/@RIFLESSO@/$RIFLESSO/g; s/@SOPRA@/$SOPRA/g; s/@PREMUTO@/$PREMUTO/g" \
     /usr/share/alba/css/barre.css >> "$CSS"
 
-imposta() { xfconf-query -c xfce4-panel -p "$1" -n -t "$2" -s "$3" 2>/dev/null || xfconf-query -c xfce4-panel -p "$1" -s "$3" 2>/dev/null; }
-# lo sfondo lo disegna il CSS qui sopra (stile "nessuno" = segue il tema)
-imposta /panels/panel-1/background-style uint 0
-imposta /panels/panel-2/background-style uint 0
-imposta /panels/dark-mode bool "$([ "$TEMA" = scuro ] && echo true || echo false)"
+imposta() { xfconf-query -c "$1" -p "$2" -n -t "$3" -s "$4" 2>/dev/null || xfconf-query -c "$1" -p "$2" -s "$4" 2>/dev/null; }
+# Colore di vetro anche via xfconf: così le icone della barra e del Dock (che
+# girano in finestre a parte) ricevono esattamente lo stesso sfondo.
+colore() {  # pannello "r g b" alfa
+  set -- "$1" $2 "$3"
+  local r g b
+  r="$(awk "BEGIN{printf \"%.3f\", $2/255}")"; g="$(awk "BEGIN{printf \"%.3f\", $3/255}")"; b="$(awk "BEGIN{printf \"%.3f\", $4/255}")"
+  imposta xfce4-panel "/panels/$1/background-style" uint 1
+  xfconf-query -c xfce4-panel -p "/panels/$1/background-rgba" -n -t double -s "$r" -t double -s "$g" -t double -s "$b" -t double -s "$5" 2>/dev/null || \
+    xfconf-query -c xfce4-panel -p "/panels/$1/background-rgba" -t double -s "$r" -t double -s "$g" -t double -s "$b" -t double -s "$5" 2>/dev/null
+}
+colore panel-1 "$RGB_BARRA" "$A_BARRA"
+colore panel-2 "$RGB_DOCK" "$A_DOCK"
+imposta xfce4-panel /panels/dark-mode bool "$([ "$TEMA" = scuro ] && echo true || echo false)"
+
+/usr/libexec/alba/alba-dock-posiziona >/dev/null 2>&1
 [ -z "${XFCE_PANEL_NO_RESTART:-}" ] && pgrep -u "$(id -u)" -x xfce4-panel >/dev/null && { xfce4-panel -r >/dev/null 2>&1 & }
 exit 0

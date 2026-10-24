@@ -19,13 +19,20 @@ orig = s
 # 1. niente pagina "Utenti" né creazione utente (la fa la Configurazione iniziale)
 s = re.sub(r"(?m)^[ \t]*-[ \t]*users[ \t]*\n", "", s)
 s = re.sub(r"(\[[^\]\n]*?)\busers\b,?\s*", r"\1", s)
+# 1-bis. Meno passaggi (1.2): niente fuso orario né tastiera nell'installer.
+# La lingua si sceglie nella prima pagina; fuso, tastiera, account e foto
+# arrivano dopo, nella Configurazione iniziale con la grafica di Alba.
+for m in ("locale", "keyboard", "localecfg"):
+    s = re.sub(rf"(?m)^[ \t]*-[ \t]*{m}[ \t]*\n", "", s)
+    s = re.sub(rf"(\[[^\]\n]*?)\b{m}\b,?\s*", r"\1", s)
 # 2. marchio Alba
 if re.search(r"(?m)^branding:", s):
     s = re.sub(r"(?m)^branding:.*$", "branding: alba", s)
 else:
     s += "\nbranding: alba\n"
 open(p, "w").write(s)
-print("settings.conf: utenti tolti" if s != orig else "settings.conf: nessuna modifica")
+print("settings.conf: utenti, fuso e tastiera tolti" if s != orig else "settings.conf: nessuna modifica")
+print(s)
 PY
 grep -n "users\|branding" "$S" || true
 

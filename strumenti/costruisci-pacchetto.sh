@@ -40,11 +40,11 @@ if [ "${TEMA_FLUENT:-0}" = 1 ]; then
   if git clone --depth 1 https://github.com/vinceliuice/WhiteSur-gtk-theme.git "$LAVORO/whitesur-gtk"; then
     # Nuova grafica 1.2: tema costruito con l'accento arancio di Alba e le
     # trasparenze (variante "normal"). Se non riesce: pacchetti già pronti.
-    if ( cd "$LAVORO/whitesur-gtk" && timeout 900 ./install.sh -d "$T" -c light -c dark -o normal -t orange --silent-mode ) \
+    if ( cd "$LAVORO/whitesur-gtk" && timeout 900 ./install.sh -d "$T" -c light -c dark -o normal -t orange ) \
          > "$LAVORO/whitesur.log" 2>&1 && [ -d "$T/WhiteSur-Light-orange/gtk-3.0" ]; then
       echo ">> WhiteSur costruito con l'accento arancio"
     else
-      echo "ATTENZIONE: WhiteSur arancio non costruito, uso i pacchetti pronti"; tail -15 "$LAVORO/whitesur.log"
+      echo "ATTENZIONE: WhiteSur arancio non costruito, uso i pacchetti pronti"; tail -30 "$LAVORO/whitesur.log"; ls "$T"
       for v in Light Dark; do
         tar -xJf "$LAVORO/whitesur-gtk/release/WhiteSur-$v.tar.xz" -C "$T" || echo "ATTENZIONE: WhiteSur-$v non estratto"
       done
@@ -110,7 +110,7 @@ if [ "${TEMA_FLUENT:-0}" = 1 ]; then
       copia alba-bluetooth-spento-symbolic bluetooth-disabled-symbolic
       copia alba-ingranaggio-symbolic emblem-system-symbolic
       # Nuova grafica 1.2: icone delle app su tessere di vetro (stile "Alba vetro")
-      if python3 strumenti/genera-icone-alba.py "$P/usr/share/icons" && [ -f "$P/usr/share/icons/Alba/index.theme" ]; then
+      if python3 pacchetto/radice/usr/libexec/alba/alba-icone tema "$P/usr/share/icons" && [ -f "$P/usr/share/icons/Alba/index.theme" ]; then
         ICONE_CHIARO="Alba"; ICONE_SCURO="Alba-dark"
       else
         echo "ATTENZIONE: icone Alba non create, resto su Fluent"

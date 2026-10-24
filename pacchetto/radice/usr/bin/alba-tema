@@ -20,9 +20,6 @@ fi
 
 imposta() { xfconf-query -c "$1" -p "$2" -n -t "$3" -s "$4" 2>/dev/null || xfconf-query -c "$1" -p "$2" -s "$4" 2>/dev/null; }
 
-# Barra in alto e Dock: vetro chiaro o scuro come il tema. Prima del cambio
-# di tema, così le app (barra compresa) ricaricano i colori nuovi da sole.
-XFCE_PANEL_NO_RESTART=1 /usr/bin/alba-barra "$1"
 imposta xsettings /Net/ThemeName string "$T"
 imposta xsettings /Net/IconThemeName string "$ICONE"
 if [ -d "/usr/share/themes/$T/xfwm4" ]; then
@@ -40,3 +37,6 @@ if command -v gsettings >/dev/null 2>&1; then
   gsettings set org.gnome.desktop.interface icon-theme "$ICONE" 2>/dev/null
 fi
 echo "$1" > "$CONF/tema"
+# Barra in alto e Dock: vetro chiaro o scuro come il tema (la barra si
+# ricarica un attimo per prendere i colori nuovi)
+/usr/bin/alba-barra "$1"

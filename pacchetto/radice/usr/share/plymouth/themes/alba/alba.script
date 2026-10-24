@@ -1,54 +1,84 @@
-# Alba Linux - schermata di avvio
-# Sfondo notturno, logo al centro e cinque punti che "respirano" sotto.
+# Alba Linux 1.2 - schermata di avvio, spegnimento e aggiornamento.
+# Stessa grafica del desktop: lo sfondo di Alba sfocato con un velo chiaro
+# (come la griglia delle app), il logo, cinque punti arancioni su una
+# "pillola" di vetro. Tutto compare con una dissolvenza morbida.
 
-Window.SetBackgroundTopColor(0.043, 0.059, 0.161);
-Window.SetBackgroundBottomColor(0.114, 0.090, 0.231);
+Window.SetBackgroundTopColor(0.98, 0.95, 0.92);
+Window.SetBackgroundBottomColor(0.96, 0.90, 0.86);
 
-cx = Window.GetX() + Window.GetWidth() / 2;
-cy = Window.GetY() + Window.GetHeight() / 2;
+L = Window.GetWidth();
+A = Window.GetHeight();
+cx = Window.GetX() + L / 2;
+cy = Window.GetY() + A / 2;
 
+# --- Sfondo sfocato a tutto schermo -----------------------------------------
+sfondo.image = Image("sfondo.png");
+scala = L / sfondo.image.GetWidth();
+if (A / sfondo.image.GetHeight() > scala) scala = A / sfondo.image.GetHeight();
+sfondo.scalato = sfondo.image.Scale(Math.Int(sfondo.image.GetWidth() * scala) + 2,
+                                    Math.Int(sfondo.image.GetHeight() * scala) + 2);
+sfondo.sprite = Sprite(sfondo.scalato);
+sfondo.sprite.SetX(Window.GetX() + (L - sfondo.scalato.GetWidth()) / 2);
+sfondo.sprite.SetY(Window.GetY() + (A - sfondo.scalato.GetHeight()) / 2);
+sfondo.sprite.SetZ(-10);
+
+# --- Logo ---------------------------------------------------------------------
 logo.image = Image("logo.png");
 logo.sprite = Sprite(logo.image);
 logo.sprite.SetX(cx - logo.image.GetWidth() / 2);
-logo.sprite.SetY(cy - logo.image.GetHeight() / 2 - 30);
+logo.sprite.SetY(cy - logo.image.GetHeight() / 2 - 40);
 logo.sprite.SetZ(10);
+logo.sprite.SetOpacity(0);
+
+# --- Punti di caricamento sulla pillola di vetro --------------------------
+base_y = cy + logo.image.GetHeight() / 2 + 6;
+pillola.image = Image("pillola.png");
+pillola.sprite = Sprite(pillola.image);
+pillola.sprite.SetX(cx - pillola.image.GetWidth() / 2);
+pillola.sprite.SetY(base_y);
+pillola.sprite.SetZ(9);
+pillola.sprite.SetOpacity(0);
 
 punto.image = Image("punto.png");
 spazio = 26;
-base_y = cy + logo.image.GetHeight() / 2 + 20;
+punti_y = base_y + (pillola.image.GetHeight() - punto.image.GetHeight()) / 2;
 for (i = 0; i < 5; i++) {
   punti[i] = Sprite(punto.image);
   punti[i].SetX(cx + (i - 2) * spazio - punto.image.GetWidth() / 2);
-  punti[i].SetY(base_y);
+  punti[i].SetY(punti_y);
   punti[i].SetZ(10);
-  punti[i].SetOpacity(0.25);
+  punti[i].SetOpacity(0);
 }
 
 tempo = 0;
-logo.sprite.SetOpacity(0);
 fun aggiorna() {
   tempo++;
-  # il logo compare dolcemente (circa mezzo secondo)
-  if (tempo <= 25) logo.sprite.SetOpacity(tempo / 25);
+  # tutto compare dolcemente (mezzo secondo), poi i punti "respirano"
+  if (tempo <= 25) {
+    logo.sprite.SetOpacity(tempo / 25);
+    pillola.sprite.SetOpacity(tempo / 25);
+  }
+  entrata = 1;
+  if (tempo < 25) entrata = tempo / 25;
   for (i = 0; i < 5; i++) {
     o = 0.5 + 0.5 * Math.Sin(tempo * 0.09 - i * 0.8);
-    punti[i].SetOpacity(0.2 + 0.8 * o * o);
+    punti[i].SetOpacity(entrata * (0.25 + 0.75 * o * o));
   }
 }
 Plymouth.SetRefreshFunction(aggiorna);
 
-# --- Spegnimento e riavvio: stesso logo, con una scritta sobria ------------
+# --- Spegnimento e riavvio: stessa grafica, con una scritta sobria --------
 modo = Plymouth.GetMode();
 stato.sprite = Sprite();
 stato.sprite.SetZ(15);
 if (modo == "shutdown" || modo == "reboot") {
   if (modo == "shutdown") stato.testo = "Spegnimento in corso";
   else stato.testo = "Riavvio in corso";
-  st = Image.Text(stato.testo, 0.93, 0.9, 0.95, 1, "Sans 12");
+  st = Image.Text(stato.testo, 0.35, 0.27, 0.2, 1, "Sans 12");
   stato.sprite.SetImage(st);
   stato.sprite.SetX(cx - st.GetWidth() / 2);
-  stato.sprite.SetY(base_y + 34);
-  stato.sprite.SetOpacity(0.85);
+  stato.sprite.SetY(base_y + 48);
+  stato.sprite.SetOpacity(1);
 }
 
 # --- Richiesta password (es. disco cifrato) -------------------------------
@@ -58,10 +88,10 @@ messaggio.sprite.SetZ(20);
 fun mostra_password(prompt, simboli) {
   testo = prompt + "  ";
   for (i = 0; i < simboli; i++) testo = testo + "•";
-  img = Image.Text(testo, 1, 0.94, 0.9);
+  img = Image.Text(testo, 0.16, 0.12, 0.09, 1, "Sans 12");
   messaggio.sprite.SetImage(img);
   messaggio.sprite.SetX(cx - img.GetWidth() / 2);
-  messaggio.sprite.SetY(base_y + 50);
+  messaggio.sprite.SetY(base_y + 52);
   messaggio.sprite.SetOpacity(1);
 }
 Plymouth.SetDisplayPasswordFunction(mostra_password);
@@ -72,17 +102,20 @@ fun nascondi_messaggio() {
 Plymouth.SetDisplayNormalFunction(nascondi_messaggio);
 
 fun mostra_messaggio(testo) {
-  img = Image.Text(testo, 1, 0.94, 0.9);
+  img = Image.Text(testo, 0.35, 0.27, 0.2, 1, "Sans 11");
   messaggio.sprite.SetImage(img);
   messaggio.sprite.SetX(cx - img.GetWidth() / 2);
-  if (agg.attivo) messaggio.sprite.SetY(base_y + 132);
-  else messaggio.sprite.SetY(base_y + 50);
+  if (agg.attivo) messaggio.sprite.SetY(agg.y + 112);
+  else messaggio.sprite.SetY(base_y + 52);
   messaggio.sprite.SetOpacity(1);
 }
 Plymouth.SetMessageFunction(mostra_messaggio);
 
-# --- Aggiornamento al riavvio ("Sto applicando l'aggiornamento") -----------
+# --- Aggiornamento al riavvio: scheda di vetro con la barra -----------------
 agg.attivo = 0;
+agg.scheda = Sprite(Image("scheda.png"));
+agg.scheda.SetZ(18);
+agg.scheda.SetOpacity(0);
 agg.titolo = Sprite();
 agg.titolo.SetZ(20);
 agg.vuota = Sprite(Image("barra-vuota.png"));
@@ -97,24 +130,30 @@ agg.perc.SetZ(20);
 fun mostra_aggiornamento(progresso) {
   if (!agg.attivo) {
     agg.attivo = 1;
-    t = Image.Text("Sto applicando l'aggiornamento", 1, 1, 1, 1, "Sans Bold 15");
+    # al posto dei punti compare la scheda con la barra
+    pillola.sprite.SetOpacity(0);
+    for (i = 0; i < 5; i++) punti[i].SetX(-100);
+    agg.y = base_y - 4;
+    agg.scheda.SetX(cx - 220);
+    agg.scheda.SetY(agg.y);
+    agg.scheda.SetOpacity(1);
+    t = Image.Text("Sto applicando l'aggiornamento", 0.16, 0.12, 0.09, 1, "Sans Bold 14");
     agg.titolo.SetImage(t);
     agg.titolo.SetX(cx - t.GetWidth() / 2);
-    agg.titolo.SetY(base_y + 48);
+    agg.titolo.SetY(agg.y + 26);
     agg.vuota.SetX(cx - 160);
-    agg.vuota.SetY(base_y + 88);
+    agg.vuota.SetY(agg.y + 66);
     agg.vuota.SetOpacity(1);
   }
   larghezza = Math.Int(320 * progresso / 100);
   if (larghezza < 6) larghezza = 6;
   agg.piena.SetImage(barra_piena_img.Scale(larghezza, 6));
   agg.piena.SetX(cx - 160);
-  agg.piena.SetY(base_y + 88);
-  p = Image.Text("" + Math.Int(progresso) + "%  ·  non spegnere il computer", 0.85, 0.85, 0.9, 1, "Sans 11");
+  agg.piena.SetY(agg.y + 66);
+  p = Image.Text("" + Math.Int(progresso) + "%  ·  non spegnere il computer", 0.42, 0.35, 0.3, 1, "Sans 11");
   agg.perc.SetImage(p);
   agg.perc.SetX(cx - p.GetWidth() / 2);
-  agg.perc.SetY(base_y + 104);
-  # i messaggi (es. "Tolgo i file della versione vecchia") vanno sotto la barra
-  messaggio.sprite.SetY(base_y + 132);
+  agg.perc.SetY(agg.y + 86);
+  messaggio.sprite.SetY(agg.y + 112);
 }
 Plymouth.SetSystemUpdateFunction(mostra_aggiornamento);

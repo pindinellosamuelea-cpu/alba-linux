@@ -9,6 +9,7 @@ Animazioni morbide all'apertura, all'errore e all'ingresso.
   alba-accesso --prova   finta, per vedere com'è (nessun accesso vero)
 """
 import math
+import glob
 import os
 import sys
 import time
@@ -175,6 +176,27 @@ class UtenteFinto:
         return None
 
 
+def foto_debian(percorso):
+    """Vero se la "foto" è il logo di Debian messo di serie (non una foto vera)."""
+    try:
+        vero = os.path.realpath(percorso)
+        if "desktop-base" in vero or "debian" in vero.lower():
+            return True
+        dim = os.path.getsize(vero)
+        candidati = ["/etc/skel/.face"] + glob.glob("/usr/share/desktop-base/**/*.png", recursive=True) + \
+            glob.glob("/usr/share/desktop-base/**/*.svg", recursive=True)
+        dati = None
+        for c in candidati:
+            if os.path.isfile(c) and os.path.getsize(c) == dim and os.path.realpath(c) != vero:
+                if dati is None:
+                    dati = open(vero, "rb").read()
+                if open(c, "rb").read() == dati:
+                    return True
+    except OSError:
+        return False
+    return False
+
+
 class Foto(Gtk.DrawingArea):
     """Foto dell'utente in un cerchio (o l'iniziale su un cerchio arancione)."""
 
@@ -186,7 +208,7 @@ class Foto(Gtk.DrawingArea):
         self.iniziale = (utente.get_display_name() or utente.get_name() or "?")[:1].upper()
         percorso = utente.get_image() if hasattr(utente, "get_image") else ""
         for p in (percorso, os.path.expanduser(f"~{utente.get_name()}/.face")):
-            if p and ("debian" in os.path.realpath(p) or "desktop-base" in os.path.realpath(p)):
+            if p and os.path.isfile(p) and foto_debian(p):
                 continue   # niente logo di Debian come foto
             if p and os.path.isfile(p):
                 try:

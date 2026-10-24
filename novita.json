@@ -2,6 +2,25 @@
   "nota": "Novità di Alba mostrate in Impostazioni → Aggiornamenti. 'data' = quando la novità è entrata in Alba (UTC). Le più recenti in alto.",
   "versioni": [
     {
+      "data": "2026-10-24T04:00",
+      "titolo": "Alba 1.2: la nuova grafica",
+      "novita": [
+        "Tutto nuovo: tema chiaro con effetto vetro e l'arancio di Alba (il tema scuro resta in Impostazioni → Aspetto)",
+        "Barra in alto: logo di Alba, nome del programma aperto, Wi-Fi, suono, batteria e ora",
+        "Dock sospeso in basso con le tue app; puoi cambiarne la grandezza o farlo nascondere",
+        "Tutte le app in una griglia a tutto schermo: clic sul logo di Alba o tasto Windows, con la ricerca; in basso la tua foto e i pulsanti per bloccare, sospendere, riavviare e spegnere",
+        "Icone nuove su tessere di vetro, uguali per tutte le app",
+        "Nuova pagina Impostazioni → Account: foto, nome, password e nuovi utenti con la loro foto (niente più logo di Debian)",
+        "Impostazioni → Schermo: scegli il monitor, la risoluzione e i Hz (es. 74 Hz)",
+        "Sui computer fissi spariscono la pagina e l'icona della batteria",
+        "Animazioni più fluide, a 60 fotogrammi al secondo",
+        "Aggiornamenti: un solo avviso pulito, si installano al riavvio",
+        "Più driver automatici: audio di Mac e Surface, stampanti e scanner senza driver, HP, Thunderbolt, aggiornamento firmware",
+        "Programmi Windows (.exe) con testo più nitido e colori moderni",
+        "Installazione più semplice e più bella; il sistema è più leggero (gli strumenti da esperti si installano da Programmi)"
+      ]
+    },
+    {
       "data": "2026-10-20T22:40",
       "titolo": "Supporto per i Mac Intel con chip T2",
       "novita": [

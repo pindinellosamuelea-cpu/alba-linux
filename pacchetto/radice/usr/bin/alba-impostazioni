@@ -2917,9 +2917,30 @@ def foto_account(nome):
             pass
     casa = os.path.expanduser(f"~{nome}")
     f = os.path.join(casa, ".face")
-    if "debian" in os.path.realpath(f) or "desktop-base" in os.path.realpath(f):
+    if os.path.isfile(f) and foto_debian(f):
         return None   # niente logo di Debian come foto
     return f if os.access(f, os.R_OK) else None
+
+
+def foto_debian(percorso):
+    """Vero se la "foto" è il logo di Debian messo di serie (non una foto vera)."""
+    try:
+        vero = os.path.realpath(percorso)
+        if "desktop-base" in vero or "debian" in vero.lower():
+            return True
+        dim = os.path.getsize(vero)
+        candidati = ["/etc/skel/.face"] + glob.glob("/usr/share/desktop-base/**/*.png", recursive=True) + \
+            glob.glob("/usr/share/desktop-base/**/*.svg", recursive=True)
+        dati = None
+        for c in candidati:
+            if os.path.isfile(c) and os.path.getsize(c) == dim and os.path.realpath(c) != vero:
+                if dati is None:
+                    dati = open(vero, "rb").read()
+                if open(c, "rb").read() == dati:
+                    return True
+    except OSError:
+        return False
+    return False
 
 
 def foto_quadrata(origine, destinazione, lato=256):

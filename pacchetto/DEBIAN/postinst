@@ -231,7 +231,9 @@ EOF
 
 # 1.2: niente logo di Debian come foto predefinita dei nuovi account
 for f in /etc/skel/.face /etc/skel/.face.icon; do
-  case "$(readlink -f "$f" 2>/dev/null)" in */desktop-base/*|*debian*) rm -f "$f" ;; esac
+  [ -e "$f" ] || continue
+  case "$(readlink -f "$f" 2>/dev/null)" in */desktop-base/*|*debian*) rm -f "$f"; continue ;; esac
+  dpkg -S "$f" 2>/dev/null | grep -q desktop-base && rm -f "$f"
 done
 
 exit 0

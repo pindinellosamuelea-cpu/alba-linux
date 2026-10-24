@@ -2,13 +2,18 @@
 # Alba Linux - tasti del volume (anche Fn): cambia il volume e aggiorna
 # l'indicatore unico in basso al centro (niente notifiche a raffica).
 # Uso: alba-volume su|giu|muto
+export LC_ALL=C
+leggi() { pactl get-sink-volume @DEFAULT_SINK@ 2>/dev/null | grep -o '[0-9]*%' | head -1 | tr -d %; }
+V="$(leggi)"; V="${V:-0}"
+# passi da 5, arrotondati e mai oltre il 100% (niente salti né distorsione)
 case "${1:-}" in
-  su)   pactl set-sink-mute @DEFAULT_SINK@ 0; pactl set-sink-volume @DEFAULT_SINK@ +5% ;;
-  giu)  pactl set-sink-volume @DEFAULT_SINK@ -5% ;;
+  su)   V=$(( (V + 5) / 5 * 5 )); [ "$V" -gt 100 ] && V=100
+        pactl set-sink-mute @DEFAULT_SINK@ 0; pactl set-sink-volume @DEFAULT_SINK@ "$V%" ;;
+  giu)  V=$(( (V + 4) / 5 * 5 - 5 )); [ "$V" -lt 0 ] && V=0
+        pactl set-sink-volume @DEFAULT_SINK@ "$V%" ;;
   muto) pactl set-sink-mute @DEFAULT_SINK@ toggle ;;
   *) exit 1 ;;
 esac
-V="$(pactl get-sink-volume @DEFAULT_SINK@ | grep -o '[0-9]*%' | head -1 | tr -d %)"
-[ "${V:-0}" -gt 100 ] && { pactl set-sink-volume @DEFAULT_SINK@ 100%; V=100; }
+V="$(leggi)"
 M=""; pactl get-sink-mute @DEFAULT_SINK@ | grep -q yes && M=muto
 exec /usr/libexec/alba/alba-osd-invia volume "${V:-0}" $M

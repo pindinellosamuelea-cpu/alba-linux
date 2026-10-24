@@ -4,6 +4,7 @@
 # Senza tema usa quello scelto in Impostazioni. "fluttuante"/"bordo" (vecchie
 # versioni) sono accettati e ignorati.
 set -u
+export LC_ALL=C   # numeri con il punto (xfconf non capisce "0,980")
 CSS="${XDG_CONFIG_HOME:-$HOME/.config}/gtk-3.0/gtk.css"
 CONF="${XDG_CONFIG_HOME:-$HOME/.config}/alba"
 mkdir -p "$(dirname "$CSS")" "$CONF"

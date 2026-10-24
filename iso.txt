@@ -1,0 +1,1 @@
+-rw-r--r-- 1 root root 5202247680 Oct 24 12:39 /home/runner/work/alba-linux/alba-linux/alba-linux-amd64.hybrid.iso

@@ -23,7 +23,8 @@ gi.require_version("Gdk", "3.0")
 from gi.repository import Gdk, GdkPixbuf, GLib, Gtk, Pango  # noqa: E402
 
 PROVA = "--prova" in sys.argv
-SFONDO = "/usr/share/backgrounds/alba/accesso.png"
+SFONDO = "/usr/share/backgrounds/alba/alba.png"
+AVATAR = "/usr/share/alba/avatar"
 LOGO = "/usr/share/alba/logo.png"
 
 LINGUE = [("it_IT.UTF-8", "Italiano"), ("en_US.UTF-8", "English (US)"), ("en_GB.UTF-8", "English (UK)"),
@@ -50,40 +51,44 @@ LAYOUT_DA_LINGUA = {"de_CH.UTF-8": 3, "fr_CH.UTF-8": 4, "en_US.UTF-8": 5, "en_GB
                     "fr_FR.UTF-8": 9, "es_ES.UTF-8": 10, "pt_PT.UTF-8": 11, "pt_BR.UTF-8": 12, "ro_RO.UTF-8": 13,
                     "pl_PL.UTF-8": 14, "ru_RU.UTF-8": 15, "uk_UA.UTF-8": 16}
 
-CSS = b"""
+CSS = """
 * { font-family: "Inter", "Noto Sans", sans-serif; }
-window { background-color: #0b0f29; }
-.scheda { background-color: rgba(24, 26, 44, 0.92); border-radius: 26px; border: 1px solid alpha(#ffffff, 0.12); }
-.lato { background-image: linear-gradient(160deg, #ff9a5c, #e2566a 55%, #7b3fa0); border-radius: 25px 0 0 25px;
+window { background-color: #f3ebe3; }
+.scheda { background-color: rgba(255, 252, 249, 0.88); border-radius: 26px; border: 1px solid rgba(255, 255, 255, 0.95);
+          box-shadow: 0 24px 60px rgba(70, 30, 0, 0.22); }
+.lato { background-image: linear-gradient(160deg, #ffc27a, #f07a1e 60%, #d9541a); border-radius: 25px 0 0 25px;
         padding: 36px 30px 30px 32px; }
 .lato label { color: #ffffff; }
 .passo { font-size: 13px; font-weight: 600; opacity: 0.9; }
 .titolo-lato { font-size: 30px; font-weight: 800; }
 .spiega-lato { font-size: 15px; }
-.titolo { color: #ffffff; font-size: 24px; font-weight: 700; }
-.testo { color: alpha(#ffffff, 0.72); font-size: 14px; }
-.campo label, label.campo { color: alpha(#ffffff, 0.85); font-size: 13px; font-weight: 600; }
-entry { min-height: 40px; border-radius: 10px; padding: 0 12px; color: #ffffff; font-size: 14px;
-        background-color: alpha(#ffffff, 0.08); border: 1px solid alpha(#ffffff, 0.16); box-shadow: none; }
-entry:focus { border-color: #ff8a4c; }
+.titolo { color: #2a2018; font-size: 24px; font-weight: 700; }
+.testo { color: #6a5a4c; font-size: 14px; }
+.campo label, label.campo { color: #4a3a2c; font-size: 13px; font-weight: 600; }
+entry { min-height: 40px; border-radius: 10px; padding: 0 12px; color: #2a2018; font-size: 14px;
+        background-color: #ffffff; border: 1px solid #e6d9cd; box-shadow: none; }
+entry:focus { border-color: #f07a1e; }
 combobox button, combobox box { min-height: 38px; border-radius: 10px; }
-list, row { background-color: transparent; color: #ffffff; }
+list, row { background-color: transparent; color: #2a2018; }
 row { border-radius: 10px; padding: 9px 12px; }
-row:hover { background-color: alpha(#ffffff, 0.07); }
-row:selected { background-color: alpha(#ff8a4c, 0.25); }
-button.avanti { background-image: none; background-color: #ff8a4c; color: #ffffff; border: none; box-shadow: none;
+row:hover { background-color: rgba(240, 122, 30, 0.08); }
+row:selected { background-color: rgba(240, 122, 30, 0.18); color: #2a2018; }
+button.avanti { background-image: none; background-color: #f07a1e; color: #ffffff; border: none; box-shadow: none;
                 border-radius: 10px; padding: 8px 26px; font-weight: 700; }
-button.avanti:hover { background-color: #ff9d66; }
-button.avanti:disabled { background-color: alpha(#ff8a4c, 0.35); }
-button.indietro { background: none; border: none; box-shadow: none; color: alpha(#ffffff, 0.8); padding: 8px 18px; }
-button.indietro:hover { background-color: alpha(#ffffff, 0.08); border-radius: 10px; }
-button.tessera { background-image: none; background-color: alpha(#ffffff, 0.06); border: 2px solid transparent;
-                 border-radius: 16px; padding: 14px; color: #ffffff; }
-button.tessera:checked { border-color: #ff8a4c; background-color: alpha(#ff8a4c, 0.12); }
-.errore { color: #ffb4a0; font-size: 13px; }
-.puntino { min-width: 8px; min-height: 8px; border-radius: 4px; background-color: alpha(#ffffff, 0.35); }
+button.avanti:hover { background-color: #e06a10; }
+button.avanti:disabled { background-color: rgba(240, 122, 30, 0.35); }
+button.indietro { background: none; border: none; box-shadow: none; color: #6a5a4c; padding: 8px 18px; }
+button.indietro:hover { background-color: rgba(60, 30, 0, 0.06); border-radius: 10px; }
+button.tessera { background-image: none; background-color: #ffffff; border: 2px solid #efe4da;
+                 border-radius: 16px; padding: 14px; color: #2a2018; }
+button.tessera:checked { border-color: #f07a1e; background-color: rgba(240, 122, 30, 0.06); }
+button.foto { padding: 2px; border-radius: 26px; border: 2px solid transparent; background: none; box-shadow: none; }
+button.foto:checked, button.foto:hover { border-color: #f07a1e; }
+button.file { border-radius: 10px; }
+.errore { color: #c0392b; font-size: 13px; }
+.puntino { min-width: 8px; min-height: 8px; border-radius: 4px; background-color: rgba(255, 255, 255, 0.45); }
 .puntino.attivo { background-color: #ffffff; min-width: 22px; }
-"""
+""".encode()
 
 
 def esegui(cmd, **kw):
@@ -102,6 +107,27 @@ def etichetta(testo, classe=None, wrap=False, xalign=0.0):
         e.set_line_wrap(True)
         e.set_max_width_chars(48)
     return e
+
+
+def quadrata(pix, lato):
+    """Ritaglio quadrato al centro, alla grandezza richiesta."""
+    pix = pix.apply_embedded_orientation() or pix
+    q = min(pix.get_width(), pix.get_height())
+    pix = pix.new_subpixbuf((pix.get_width() - q) // 2, (pix.get_height() - q) // 2, q, q)
+    return pix.scale_simple(lato, lato, GdkPixbuf.InterpType.HYPER)
+
+
+def tondo(pix):
+    """Immagine tonda (per le foto da scegliere)."""
+    import cairo
+    l = pix.get_width()
+    sup = cairo.ImageSurface(cairo.FORMAT_ARGB32, l, l)
+    cr = cairo.Context(sup)
+    cr.arc(l / 2, l / 2, l / 2, 0, 6.2832)
+    cr.clip()
+    Gdk.cairo_set_source_pixbuf(cr, pix, 0, 0)
+    cr.paint()
+    return Gdk.pixbuf_get_from_surface(sup, 0, 0, l, l)
 
 
 def nome_utente_da(nome):
@@ -131,7 +157,7 @@ class Configurazione(Gtk.Window):
         stile.load_from_data(CSS)
         Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(), stile,
                                                  Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION + 10)
-        Gtk.Settings.get_default().set_property("gtk-application-prefer-dark-theme", True)
+        Gtk.Settings.get_default().set_property("gtk-application-prefer-dark-theme", False)
         schermo = Gdk.Screen.get_default()
         self.L, self.A = schermo.get_width(), schermo.get_height()
         self.set_default_size(self.L, self.A)
@@ -142,7 +168,12 @@ class Configurazione(Gtk.Window):
         sovrapposto = Gtk.Overlay()
         sfondo = Gtk.DrawingArea()
         try:
-            self.sfondo = GdkPixbuf.Pixbuf.new_from_file(SFONDO)
+            # sfondo di Alba sfocato (rimpicciolito e riallargato), come la griglia delle app
+            orig = GdkPixbuf.Pixbuf.new_from_file(SFONDO)
+            piccolo = orig.scale_simple(max(1, orig.get_width() // 28), max(1, orig.get_height() // 28),
+                                        GdkPixbuf.InterpType.HYPER)
+            self.sfondo = piccolo.scale_simple(max(1, orig.get_width() // 7), max(1, orig.get_height() // 7),
+                                               GdkPixbuf.InterpType.BILINEAR)
         except GLib.Error:
             self.sfondo = None
         sfondo.connect("draw", self._disegna_sfondo)
@@ -227,7 +258,7 @@ class Configurazione(Gtk.Window):
             Gdk.cairo_set_source_pixbuf(cr, self._scalato, (L - self._scalato.get_width()) / 2,
                                         (A - self._scalato.get_height()) / 2)
             cr.paint()
-        cr.set_source_rgba(0.02, 0.03, 0.08, 0.35)
+        cr.set_source_rgba(1.0, 0.973, 0.949, 0.45)
         cr.paint()
 
     def mostra(self, i):
@@ -429,14 +460,49 @@ class Configurazione(Gtk.Window):
 
     def pagina_account(self):
         box = self.contenitore("Chi userà questo computer?")
+        # foto dell'account: una delle immagini di Alba o una tua foto
+        self.foto_scelta = None
+        riga_foto = Gtk.Box(spacing=14)
+        self.anteprima_foto = Gtk.DrawingArea()
+        self.anteprima_foto.set_size_request(64, 64)
+        self.anteprima_foto.connect("draw", self._disegna_foto)
+        riga_foto.pack_start(self.anteprima_foto, False, False, 0)
+        scelte = Gtk.Box(spacing=4)
+        primo = None
+        for f in sorted(os.listdir(AVATAR)) if os.path.isdir(AVATAR) else []:
+            if not f.endswith(".png"):
+                continue
+            percorso = os.path.join(AVATAR, f)
+            try:
+                pix = GdkPixbuf.Pixbuf.new_from_file_at_scale(percorso, 40, 40, True)
+            except GLib.Error:
+                continue
+            b = Gtk.RadioButton.new_from_widget(primo) if primo else Gtk.RadioButton()
+            primo = primo or b
+            b.set_mode(False)
+            b.get_style_context().add_class("foto")
+            b.add(Gtk.Image.new_from_pixbuf(tondo(pix)))
+            b.connect("toggled", lambda w, p=percorso: w.get_active() and self._scegli_foto(p))
+            scelte.pack_start(b, False, False, 0)
+        if primo:
+            # nessuna scelta all'inizio: un pulsante nascosto "vuoto" del gruppo
+            self._nessuna = Gtk.RadioButton.new_from_widget(primo)
+            self._nessuna.set_active(True)
+        riga_foto.pack_start(scelte, False, False, 0)
+        tua = Gtk.Button(label="Una tua foto…")
+        tua.get_style_context().add_class("file")
+        tua.connect("clicked", lambda *_: self._foto_da_file())
+        riga_foto.pack_start(tua, False, False, 6)
+        box.pack_start(riga_foto, False, False, 2)
         griglia = Gtk.Grid(row_spacing=8, column_spacing=12)
         self.nome = Gtk.Entry(placeholder_text="es. Alessandro Rossi")
         self.utente = Gtk.Entry(placeholder_text="es. alessandro")
         self.password = Gtk.Entry(visibility=False, placeholder_text="Password")
         self.conferma = Gtk.Entry(visibility=False, placeholder_text="Ripeti la password")
         self._utente_toccato = False
-        self.nome.connect("changed", lambda e: None if self._utente_toccato else
-                          self.utente.set_text(nome_utente_da(e.get_text())))
+        self.nome.connect("changed", lambda e: (None if self._utente_toccato else
+                                                self.utente.set_text(nome_utente_da(e.get_text())),
+                                                self.anteprima_foto.queue_draw()))
         self.utente.connect("key-press-event", lambda *_: setattr(self, "_utente_toccato", True))
         self.conferma.connect("activate", lambda *_: self.vai(+1))
         for i, (testo, campo) in enumerate((("Il tuo nome", self.nome), ("Nome utente", self.utente),
@@ -448,6 +514,50 @@ class Configurazione(Gtk.Window):
         box.pack_start(etichetta("La password serve solo per entrare e per i cambi importanti: Alba non la "
                                  "chiede per aprire i programmi.", "testo", wrap=True), False, False, 4)
         return box
+
+    def _scegli_foto(self, percorso):
+        self.foto_scelta = percorso
+        self.anteprima_foto.queue_draw()
+
+    def _foto_da_file(self):
+        d = Gtk.FileChooserDialog(title="Scegli una foto", transient_for=self, action=Gtk.FileChooserAction.OPEN)
+        d.add_buttons("Annulla", Gtk.ResponseType.CANCEL, "Usa questa foto", Gtk.ResponseType.ACCEPT)
+        f = Gtk.FileFilter()
+        f.set_name("Immagini")
+        f.add_mime_type("image/*")
+        d.add_filter(f)
+        if d.run() == Gtk.ResponseType.ACCEPT:
+            self._scegli_foto(d.get_filename())
+            if hasattr(self, "_nessuna"):
+                self._nessuna.set_active(True)
+        d.destroy()
+
+    def _disegna_foto(self, w, cr):
+        l = w.get_allocated_width()
+        cr.arc(l / 2, l / 2, l / 2, 0, 6.2832)
+        pix = None
+        if self.foto_scelta:
+            try:
+                pix = quadrata(GdkPixbuf.Pixbuf.new_from_file(self.foto_scelta), l)
+            except GLib.Error:
+                pix = None
+        if pix:
+            cr.save()
+            cr.clip()
+            Gdk.cairo_set_source_pixbuf(cr, pix, 0, 0)
+            cr.paint()
+            cr.restore()
+        else:
+            cr.set_source_rgb(0.94, 0.48, 0.12)
+            cr.fill()
+            iniziale = (self.nome.get_text().strip()[:1] if hasattr(self, "nome") else "") or "?"
+            cr.set_source_rgb(1, 1, 1)
+            cr.select_font_face("Inter", 0, 1)
+            cr.set_font_size(l * 0.45)
+            e = cr.text_extents(iniziale.upper())
+            cr.move_to(l / 2 - e.width / 2 - e.x_bearing, l / 2 - e.height / 2 - e.y_bearing)
+            cr.show_text(iniziale.upper())
+        return False
 
     def pagina_fuso(self):
         box = self.contenitore("Dove ti trovi?")
@@ -554,6 +664,14 @@ class Configurazione(Gtk.Window):
         dati = {"utente": self.utente.get_text().strip(), "nome": self.nome.get_text().strip(),
                 "password": self.password.get_text(), "lingua": self.scelte["lingua"], "layout": l,
                 "variante": v, "fuso": self.scelte["fuso"], "tema": self.scelte["tema"]}
+        if self.foto_scelta and not PROVA:
+            try:
+                dest = os.path.join(os.path.expanduser("~"), "foto-account.png")
+                quadrata(GdkPixbuf.Pixbuf.new_from_file(self.foto_scelta), 256).savev(dest, "png", [], [])
+                os.chmod(dest, 0o644)
+                dati["foto"] = dest
+            except (GLib.Error, OSError):
+                pass
 
         def lavoro():
             if PROVA:

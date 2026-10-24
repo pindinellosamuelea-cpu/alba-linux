@@ -51,6 +51,7 @@ AVANZATI = [
     "kdeconnect-*", "jstest-gtk", "pcsc_scan", "PeaZip*.desktop", "peazip-*", "org.gnome.Devhelp",
     "lightdm-settings", "slick-greeter*", "mission-center-*", "vim-*",
     "zutty", "gscriptor", "org.gnome.Characters", "gnome-system-log", "xfce4-power-information",
+    "org.gnome.GTK4ThemeSwitcher",
 ]
 SEMPRE_VISIBILI = set()
 

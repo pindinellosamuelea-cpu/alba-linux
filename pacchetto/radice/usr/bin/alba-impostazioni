@@ -3078,8 +3078,40 @@ class PaginaAccount(Pagina):
             self.righe_altri.append(riga)
         self.altri.show_all()
 
+    def _scegli_tra_foto(self):
+        """Finestrella con le immagini di Alba e il pulsante per una tua foto."""
+        d = Gtk.Dialog(title="Foto dell'account", transient_for=self.finestra, modal=True)
+        d.add_button("Annulla", Gtk.ResponseType.CANCEL)
+        scelta = {"p": None}
+        corpo = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        for m in ("set_margin_top", "set_margin_bottom", "set_margin_start", "set_margin_end"):
+            getattr(corpo, m)(16)
+        griglia = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, max_children_per_line=4, column_spacing=10,
+                              row_spacing=10)
+        cartella = "/usr/share/alba/avatar"
+        for f in sorted(os.listdir(cartella)) if os.path.isdir(cartella) else []:
+            if not f.endswith(".png"):
+                continue
+            percorso = os.path.join(cartella, f)
+            foto = FotoTonda(64)
+            foto.imposta("", percorso)
+            b = Gtk.Button()
+            b.set_relief(Gtk.ReliefStyle.NONE)
+            b.add(foto)
+            b.connect("clicked", lambda _b, p=percorso: (scelta.__setitem__("p", p), d.response(Gtk.ResponseType.OK)))
+            griglia.add(b)
+        corpo.pack_start(griglia, False, False, 0)
+        corpo.pack_start(pulsante("Scegli una tua foto…", lambda: (scelta.__setitem__("p", scegli_immagine(self.finestra)),
+                                                                   d.response(Gtk.ResponseType.OK)),
+                                  icona="document-open-symbolic"), False, False, 0)
+        d.get_content_area().add(corpo)
+        d.show_all()
+        d.run()
+        d.destroy()
+        return scelta["p"]
+
     def _cambia_foto(self):
-        origine = scegli_immagine(self.finestra)
+        origine = self._scegli_tra_foto()
         if not origine:
             return
         os.makedirs(os.path.expanduser("~/.cache"), exist_ok=True)

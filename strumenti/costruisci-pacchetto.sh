@@ -40,7 +40,7 @@ if [ "${TEMA_FLUENT:-0}" = 1 ]; then
   if git clone --depth 1 https://github.com/vinceliuice/WhiteSur-gtk-theme.git "$LAVORO/whitesur-gtk"; then
     # Nuova grafica 1.2: tema costruito con l'accento arancio di Alba e le
     # trasparenze (variante "normal"). Se non riesce: pacchetti già pronti.
-    if ( cd "$LAVORO/whitesur-gtk" && SUDO_USER="$(id -un)" USER="$(id -un)" timeout 900 ./install.sh -d "$T" -c light -c dark -o normal -t orange ) \
+    if ( cd "$LAVORO/whitesur-gtk" && TERM=dumb SUDO_USER="$(id -un)" USER="$(id -un)" timeout 900 ./install.sh -d "$T" -c light -c dark -o normal -t orange --silent-mode ) \
          > "$LAVORO/whitesur.log" 2>&1 && [ -d "$T/WhiteSur-Light-orange/gtk-3.0" ]; then
       echo ">> WhiteSur costruito con l'accento arancio"
     else

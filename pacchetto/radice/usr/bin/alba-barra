@@ -24,7 +24,7 @@ done
 echo "$VETRO" > "$CONF/vetro"
 
 # trasparenza: con il vetro spento le barre sono piene
-if [ "$VETRO" = off ]; then A_BARRA=1; A_DOCK=1; else A_BARRA=0.72; A_DOCK=0.58; fi
+if [ "$VETRO" = off ]; then A_BARRA=1; A_DOCK=1; else A_BARRA=0.80; A_DOCK=0.68; fi
 if [ "$TEMA" = scuro ]; then
   RGB_BARRA="30 28 36"; RGB_DOCK="34 32 42"
   BARRA="rgba(30,28,36,$A_BARRA)"; DOCK="rgba(34,32,42,$A_DOCK)"; TESTO="#f3eee8"

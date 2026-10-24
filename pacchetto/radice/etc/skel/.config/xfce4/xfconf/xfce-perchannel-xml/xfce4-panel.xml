@@ -24,7 +24,7 @@
         <value type="double" value="0.980"/>
         <value type="double" value="0.965"/>
         <value type="double" value="0.949"/>
-        <value type="double" value="0.72"/>
+        <value type="double" value="0.80"/>
       </property>
       <property name="enter-opacity" type="uint" value="100"/>
       <property name="leave-opacity" type="uint" value="100"/>
@@ -54,7 +54,7 @@
         <value type="double" value="1.000"/>
         <value type="double" value="0.984"/>
         <value type="double" value="0.969"/>
-        <value type="double" value="0.58"/>
+        <value type="double" value="0.68"/>
       </property>
       <property name="enter-opacity" type="uint" value="100"/>
       <property name="leave-opacity" type="uint" value="100"/>
@@ -121,13 +121,13 @@
     <property name="plugin-30" type="string" value="separator">
       <property name="expand" type="bool" value="false"/>
       <property name="style" type="uint" value="0"/>
-      <property name="size" type="uint" value="10"/>
+      <property name="size" type="uint" value="16"/>
     </property>
     <property name="plugin-3" type="string" value="docklike"/>
     <property name="plugin-31" type="string" value="separator">
       <property name="expand" type="bool" value="false"/>
       <property name="style" type="uint" value="0"/>
-      <property name="size" type="uint" value="10"/>
+      <property name="size" type="uint" value="16"/>
     </property>
   </property>
 </channel>

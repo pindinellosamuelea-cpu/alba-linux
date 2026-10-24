@@ -10,4 +10,4 @@ indicatorStyle=1
 indicatorColorFromTheme=false
 indicatorColor=rgb(255,138,76)
 inactiveColor=rgb(150,150,170)
-pinned=/usr/share/applications/alba-app.desktop;/usr/share/applications/thunar.desktop;/usr/share/applications/firefox-esr.desktop;/usr/share/applications/org.gnome.Software.desktop;/usr/share/applications/alba-impostazioni.desktop;/usr/share/applications/steam.desktop;
+pinned=/usr/share/applications/alba-app.desktop;/usr/share/applications/thunar.desktop;/usr/share/applications/firefox-esr.desktop;/usr/share/applications/libreoffice-writer.desktop;/usr/share/applications/libreoffice-calc.desktop;/usr/share/applications/alba-apple-music.desktop;/usr/share/applications/org.gnome.Software.desktop;/usr/share/applications/alba-impostazioni.desktop;/usr/share/applications/steam.desktop;

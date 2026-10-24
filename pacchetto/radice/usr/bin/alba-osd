@@ -95,7 +95,8 @@ class Osd(Gtk.Window):
         m = d.get_monitor_at_point(px, py) or d.get_primary_monitor() or d.get_monitor(0)
         area = m.get_workarea()
         l, a = self.get_size()
-        self.move(area.x + (area.width - l) // 2, area.y + area.height - a - 28)
+        # sopra il Dock (che sta sospeso in basso e lascia libero questo spazio)
+        self.move(area.x + (area.width - l) // 2, area.y + area.height - a - 28 - spazio_dock())
 
     def _nascondi(self):
         self.timer = None
@@ -127,6 +128,24 @@ class Osd(Gtk.Window):
                 return False
             return True
         self.dissolvenza = self.add_tick_callback(tic)
+
+
+_DOCK = {"t": 0.0, "v": 0}
+
+
+def spazio_dock():
+    """Altezza lasciata al Dock in basso (letta al massimo ogni 30 secondi)."""
+    import subprocess
+    import time as _t
+    if _t.monotonic() - _DOCK["t"] > 30:
+        try:
+            v = subprocess.run(["xfconf-query", "-c", "xfwm4", "-p", "/general/margin_bottom"],
+                               capture_output=True, text=True, timeout=2).stdout.strip()
+            _DOCK["v"] = int(v) if v.isdigit() else 0
+        except (OSError, subprocess.SubprocessError):
+            _DOCK["v"] = 0
+        _DOCK["t"] = _t.monotonic()
+    return _DOCK["v"]
 
 
 def main():

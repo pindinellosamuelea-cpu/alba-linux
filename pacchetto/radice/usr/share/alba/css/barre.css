@@ -40,7 +40,7 @@
   background-color: @DOCK@;
   background-image: none;
   border: 1px solid @RIFLESSO@;
-  border-radius: 18px;
+  border-radius: 16px;
 }
 .xfce4-panel.panel-2 button {
   border: none;

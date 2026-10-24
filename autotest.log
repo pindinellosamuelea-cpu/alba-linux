@@ -1,0 +1,3 @@
+
+(alba-impostazioni:18708): dbind-WARNING **: 12:33:47.222: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+AUTOTEST OK: tutte le pagine si aprono senza errori

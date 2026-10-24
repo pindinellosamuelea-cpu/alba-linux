@@ -1,0 +1,20 @@
+>> Integro il tema WhiteSur (stile macOS)
+Cloning into '/tmp/tmp.YPw5nu2xk7/whitesur-gtk'...
+>> WhiteSur costruito con l'accento arancio
+>> Integro le icone Fluent
+Cloning into '/tmp/tmp.YPw5nu2xk7/fluent-icone'...
+Updating files:  83% (22226/26520)Updating files:  84% (22277/26520)Updating files:  85% (22542/26520)Updating files:  86% (22808/26520)Updating files:  87% (23073/26520)Updating files:  88% (23338/26520)Updating files:  89% (23603/26520)Updating files:  90% (23868/26520)Updating files:  91% (24134/26520)Updating files:  92% (24399/26520)Updating files:  93% (24664/26520)Updating files:  94% (24929/26520)Updating files:  95% (25194/26520)Updating files:  96% (25460/26520)Updating files:  97% (25725/26520)Updating files:  98% (25990/26520)Updating files:  99% (26255/26520)Updating files: 100% (26520/26520)Updating files: 100% (26520/26520), done.
+Preparing shared base: /tmp/tmp.YPw5nu2xk7/alba-sistema/usr/share/icons/.Fluent-base
+Preparing shared light base: /tmp/tmp.YPw5nu2xk7/alba-sistema/usr/share/icons/.Fluent-light-base
+Preparing shared dark base: /tmp/tmp.YPw5nu2xk7/alba-sistema/usr/share/icons/.Fluent-dark-base
+Installing 'Fluent'...
+Installing 'Fluent-light'...
+Installing 'Fluent-dark'...
+Done.
+Alba: 125 simboli Alba, 1277 icone su tessera, 5056 collegamenti, 0 lasciate a Fluent
+Alba-dark: 125 simboli Alba, 1277 icone su tessera, 5056 collegamenti, 0 lasciate a Fluent
+>> Icone: chiaro=Alba scuro=Alba-dark
+>> Temi: chiaro=WhiteSur-Light-orange scuro=WhiteSur-Dark-orange
+>> Canale aggiornamenti: non firmato (manca la chiave)
+dpkg-deb: building package 'alba-sistema' in '/__w/alba-linux/alba-linux/dist/alba-sistema_1.2.67_all.deb'.
+>> Pacchetto pronto: /__w/alba-linux/alba-linux/dist/alba-sistema_1.2.67_all.deb

@@ -1,0 +1,113 @@
+/backdrop/screen0/monitor0/brightness
+/backdrop/screen0/monitor0/color1
+/backdrop/screen0/monitor0/color2
+/backdrop/screen0/monitor0/color-style
+/backdrop/screen0/monitor0/image-path
+/backdrop/screen0/monitor0/image-show
+/backdrop/screen0/monitor0/last-image
+/backdrop/screen0/monitor0/last-single-image
+/backdrop/screen0/monitor1/brightness
+/backdrop/screen0/monitor1/color1
+/backdrop/screen0/monitor1/color2
+/backdrop/screen0/monitor1/color-style
+/backdrop/screen0/monitor1/image-path
+/backdrop/screen0/monitor1/image-show
+/backdrop/screen0/monitor1/last-image
+/backdrop/screen0/monitor1/last-single-image
+/desktop-icons/file-icons/show-filesystem
+/desktop-icons/file-icons/show-home
+/desktop-icons/file-icons/show-removable
+/desktop-icons/file-icons/show-trash
+/desktop-icons/icon-size
+/desktop-icons/single-click
+/desktop-icons/style
+/desktop-menu/show
+/last-settings-migration-version
+foto: 01-desktop-chiaro
+foto: 01-desktop-finestra
+app attiva: Impostazioni
+foto: 02-griglia-app
+foto: 02-griglia-ricerca
+(alba-app:19268): dbind-WARNING **: 12:34:09.574: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+/usr/bin/alba-app:439: DeprecationWarning: Gtk.Window.set_opacity is deprecated
+  self.set_opacity(0)
+/usr/bin/alba-app:454: DeprecationWarning: Gtk.Window.get_opacity is deprecated
+  self._dissolvi(self.get_opacity(), 0, 150, fine)
+foto: 05-menu-rapido-controlli
+foto: 05-menu-rapido-notifiche
+foto: 08-indicatore-volume
+foto: 07-menu-super-x
+foto: 01-desktop-scuro
+foto: 06-menu-rapido-scuro
+foto: 10-impostazioni-account
+foto: 10-impostazioni-schermo
+foto: 10-impostazioni-batteria
+foto: 10-impostazioni-aspetto
+foto: 10-impostazioni-wifi
+foto: 10-impostazioni-scheda-grafica
+foto: 10-impostazioni-aggiornamenti
+foto: 10-impostazioni-data-ora
+foto: 10-impostazioni-problemi
+foto: 10-impostazioni-telefono
+foto: 10-impostazioni-dispositivi
+foto: 10-impostazioni-tastiera
+foto: 10-impostazioni-suono
+foto: 10-impostazioni-alimentazione
+foto: 20-impostazioni-scuro
+foto: 50-configurazione-0
+foto: 50-configurazione-2
+foto: 50-configurazione-3
+foto: 50-configurazione-5
+(alba-oobe:21065): dbind-WARNING **: 12:36:26.639: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+/usr/libexec/alba/alba-oobe:164: DeprecationWarning: Gdk.Screen.get_width is deprecated
+  self.L, self.A = schermo.get_width(), schermo.get_height()
+/usr/libexec/alba/alba-oobe:164: DeprecationWarning: Gdk.Screen.get_height is deprecated
+  self.L, self.A = schermo.get_width(), schermo.get_height()
+foto: 35-aggiornamento-al-riavvio
+== plymouth
+00:10:37.351 ../src/libply/ply-key-file.c:83:ply_key_file_open_file        : Failed to open key file /run/plymouth/plymouthd.defaults: File o directory non esistente
+00:10:37.351 ../src/main.c:439:find_distribution_default_splash            : failed to load /run/plymouth/plymouthd.defaults, trying /usr/share/plymouth/
+00:10:37.354 ../src/libply-splash-core/ply-device-manager.c:1097:create_dev: creating devices for  (renderer type: 4294967295) (terminal: /dev/ttyS0)
+00:10:37.354 ../src/libply-splash-core/ply-device-manager.c:1097:create_dev: creating devices for  (renderer type: 4294967295) (terminal: /dev/tty1)
+foto: 30-schermata-accesso
+foto: 31-accesso-benvenuto
+foto: 32-accesso-dopo
+(alba-accesso:21157): dbind-WARNING **: 12:36:36.056: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+
+(alba-accesso:21167): dbind-WARNING **: 12:36:40.416: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+/usr/libexec/alba/alba-accesso:732: DeprecationWarning: Gdk.Window.set_background_pattern is deprecated
+  radice.set_background_pattern(__import__("cairo").SurfacePattern(superficie))
+== Avvisi del tema/CSS della barra ==
+      1 (wrapper-2.0:19121): dbind-WARNING **: 12:33:56.046: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+      1 (wrapper-2.0:19122): dbind-WARNING **: 12:33:56.061: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+      1 (wrapper-2.0:19123): dbind-WARNING **: 12:33:56.065: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+      1 (wrapper-2.0:19124): dbind-WARNING **: 12:33:56.074: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+      1 (wrapper-2.0:19125): dbind-WARNING **: 12:33:56.076: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+      1 (wrapper-2.0:19126): dbind-WARNING **: 12:33:56.077: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+      1 (wrapper-2.0:19146): dbind-WARNING **: 12:33:56.158: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+      1 (wrapper-2.0:19666): dbind-WARNING **: 12:34:45.731: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+      1 (wrapper-2.0:19667): dbind-WARNING **: 12:34:45.737: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+      1 (wrapper-2.0:19674): dbind-WARNING **: 12:34:45.795: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+      1 (wrapper-2.0:19675): dbind-WARNING **: 12:34:45.796: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+      1 (wrapper-2.0:19676): dbind-WARNING **: 12:34:45.799: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+      1 (wrapper-2.0:19677): dbind-WARNING **: 12:34:45.809: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+      1 (wrapper-2.0:19691): dbind-WARNING **: 12:34:45.965: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+      1 (wrapper-2.0:19918): dbind-WARNING **: 12:35:01.612: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+      1 (wrapper-2.0:19919): dbind-WARNING **: 12:35:01.609: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+      1 (wrapper-2.0:19920): dbind-WARNING **: 12:35:01.622: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+      1 (wrapper-2.0:19921): dbind-WARNING **: 12:35:01.623: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+      1 (wrapper-2.0:19922): dbind-WARNING **: 12:35:01.629: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+      1 (wrapper-2.0:19923): dbind-WARNING **: 12:35:01.630: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+      1 (wrapper-2.0:19943): dbind-WARNING **: 12:35:01.725: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+      1 (wrapper-2.0:20871): dbind-WARNING **: 12:36:09.379: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+      1 (wrapper-2.0:20872): dbind-WARNING **: 12:36:09.391: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+      1 (wrapper-2.0:20879): dbind-WARNING **: 12:36:09.453: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+      1 (wrapper-2.0:20880): dbind-WARNING **: 12:36:09.461: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+      1 (wrapper-2.0:20881): dbind-WARNING **: 12:36:09.461: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+      1 (wrapper-2.0:20882): dbind-WARNING **: 12:36:09.466: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+      1 (wrapper-2.0:20896): dbind-WARNING **: 12:36:09.632: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+      1 (xfce4-panel:19103): dbind-WARNING **: 12:33:55.852: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+      1 (xfce4-panel:19103): xfce4-panel-WARNING **: 12:33:55.855: Failed to connect to session manager: Impossibile connettersi al gestore della sessione: SESSION_MANAGER environment variable not defined
+
+(galleria-icone.py:21201): dbind-WARNING **: 12:36:47.073: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+galleria: registro/anteprime/40-galleria-icone.png

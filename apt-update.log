@@ -1,0 +1,14 @@
+Hit:1 http://deb.debian.org/debian trixie InRelease
+Hit:2 http://deb.debian.org/debian trixie-updates InRelease
+Hit:3 http://deb.debian.org/debian-security trixie-security InRelease
+Get:4 http://deb.debian.org/debian trixie/non-free-firmware amd64 Packages [6884 B]
+Get:5 http://deb.debian.org/debian trixie/contrib amd64 Packages [53.9 kB]
+Get:7 http://deb.debian.org/debian trixie/non-free amd64 Packages [100 kB]
+Get:8 http://deb.debian.org/debian-security trixie-security/contrib amd64 Packages [3152 B]
+Get:9 http://deb.debian.org/debian-security trixie-security/non-free-firmware amd64 Packages [544 B]
+Ign:6 https://raw.githubusercontent.com/pindinellosamuelea-cpu/alba-linux/apt ./ InRelease
+Get:10 https://raw.githubusercontent.com/pindinellosamuelea-cpu/alba-linux/apt ./ Release [1256 B]
+Ign:11 https://raw.githubusercontent.com/pindinellosamuelea-cpu/alba-linux/apt ./ Release.gpg
+Get:12 https://raw.githubusercontent.com/pindinellosamuelea-cpu/alba-linux/apt ./ Packages [1052 B]
+Fetched 167 kB in 2s (107 kB/s)
+Reading package lists...

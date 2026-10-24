@@ -1,0 +1,67 @@
+== temi
+TEMA_CHIARO="WhiteSur-Light-orange"
+TEMA_SCURO="WhiteSur-Dark-orange"
+ICONE_CHIARO="Alba"
+ICONE_SCURO="Alba-dark"
+Adwaita
+Adwaita-dark
+Alba
+Arc
+Arc-Dark
+Arc-Darker
+Arc-Lighter
+Daloa
+Default
+Default-hdpi
+Default-xhdpi
+Emacs
+HighContrast
+Kokodi
+Moheli
+Raleigh
+WhiteSur-Dark-orange
+WhiteSur-Light-orange
+== menu riordinato
+alba-apple-music.desktop
+alba-impostazioni-windows.desktop
+alba-programmi-windows-installati.desktop
+blueman-adapters.desktop
+blueman-manager.desktop
+display-im7.q16.desktop
+gscriptor.desktop
+guvcview.desktop
+libreoffice-startcenter.desktop
+lightdm-settings.desktop
+mimeinfo.cache
+org.corectrl.CoreCtrl.desktop
+org.gnome.GTK4ThemeSwitcher.desktop
+org.pulseaudio.pavucontrol.desktop
+panel-preferences.desktop
+xfce-backdrop-settings.desktop
+xfce-display-settings.desktop
+xfce-keyboard-settings.desktop
+xfce-mouse-settings.desktop
+xfce-settings-manager.desktop
+xfce-ui-settings.desktop
+xfce-wm-settings.desktop
+xfce-wmtweaks-settings.desktop
+xfce-workspaces-settings.desktop
+xfce4-accessibility-settings.desktop
+xfce4-color-settings.desktop
+xfce4-file-manager.desktop
+xfce4-mail-reader.desktop
+xfce4-mime-settings.desktop
+xfce4-power-manager-settings.desktop
+xfce4-settings-editor.desktop
+xfce4-terminal-emulator.desktop
+xfce4-web-browser.desktop
+zutty.desktop
+== shellcheck
+== alba-aggiornamento
+pronto
+esito 0
+pronto
+annullato
+ls: cannot access '/system-update': No such file or directory
+Warning: failed to launch javaldx - java may not function correctly
+convert /tmp/lo/prova.txt as a Writer document -> /tmp/lo/prova.docx using filter : Office Open XML Text

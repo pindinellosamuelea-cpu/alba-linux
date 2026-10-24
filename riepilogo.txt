@@ -1,0 +1,10 @@
+Versione 1.2.67 - Sat Oct 24 12:31:23 UTC 2026
+OK  installazione del pacchetto
+OK  apt funziona dopo l'installazione
+OK  shellcheck
+OK  programmi Python senza errori
+OK  aggiornamento al riavvio (prepara/annulla)
+OK  Office (LibreOffice parte e salva in .docx)
+OK  schermata di accesso: componenti presenti
+OK  Impostazioni: tutte le pagine si aprono
+Foto: 41

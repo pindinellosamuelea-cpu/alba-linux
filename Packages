@@ -1,0 +1,20 @@
+Package: alba-sistema
+Architecture: all
+Version: 1.2.67
+Priority: optional
+Section: misc
+Maintainer: Alba Linux <noreply@anthropic.com>
+Depends: python3, python3-gi, python3-gi-cairo, gir1.2-gtk-3.0, zenity, xfconf, libnotify-bin, policykit-1 | polkitd, pkexec | policykit-1
+Recommends: file, libreoffice-style-colibre, x11-utils, xfce4-whiskermenu-plugin, xfce4-docklike-plugin, xfce4-genmon-plugin, xfce4-pulseaudio-plugin, xfce4-power-manager, papirus-icon-theme, fonts-inter, materia-gtk-theme, gtk2-engines-murrine, gnome-themes-extra, arc-theme, plymouth, plymouth-themes, systemd-timesyncd, power-profiles-daemon, upower, brightnessctl, pulseaudio-utils, x11-xserver-utils, network-manager, bluez, blueman, os-prober, corectrl, mangohud, mesa-utils, v4l-utils, guvcview, libcanberra-gtk3-module, gnome-session-canberra, mokutil, pciutils, flatpak, ufw, clamav, unattended-upgrades, policykit-1-gnome | mate-polkit | lxpolkit, gir1.2-lightdm-1, slick-greeter, gnome-keyring, libpam-gnome-keyring, pcscd, libccid, libacsccid1, opensc, opensc-pkcs11, pcsc-tools, game-devices-udev, steam-devices, curl
+Filename: ./alba-sistema_1.2.67_all.deb
+Size: 12111616
+MD5sum: bf50593dd36cdecb17cf6d5999e7f343
+SHA1: 887614a35f00a64444024d2a7c17165da70ac6ba
+SHA256: a1fc2e1ca24793ab6d5e1b4f16bd3d01610ef1643ebb11639d774d952438d04a
+SHA512: de78de5a5034cd5a078a17d859f2bf86375c0e16c6254cb37d0aee3319f9cf6c69cb44f75a8cac327f3682f5b580bd8f91762530bc9427d5b3cab81649abb1d4
+Description: Alba Linux - aspetto, impostazioni e strumenti di sistema
+ Contiene l'aspetto di Alba, l'app Impostazioni, la compatibilità con i
+ programmi Windows, l'avvio con il logo Alba e il canale degli
+ aggiornamenti. Aggiornando questo pacchetto arrivano le novità di Alba
+ senza reinstallare il sistema.
+

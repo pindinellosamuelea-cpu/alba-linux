@@ -1,6 +1,6 @@
 # Alba Linux: nuova grafica (scelte di Alessandro, 22 ottobre 2026)
 
-**Uscita:** sabato 24 ottobre 2026 alle 06:00, ora di Zurigo.
+**Uscita:** sabato 24 ottobre 2026 alle 06:00, ora di Zurigo. Pubblicata il 24 ottobre.
 Fino ad allora i commit portano "(in corso)": vengono provati ma non pubblicati.
 
 ## Scelte

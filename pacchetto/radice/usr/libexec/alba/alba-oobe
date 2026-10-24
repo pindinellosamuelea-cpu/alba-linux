@@ -84,7 +84,9 @@ button.tessera { background-image: none; background-color: #ffffff; border: 2px 
 button.tessera:checked { border-color: #f07a1e; background-color: rgba(240, 122, 30, 0.06); }
 button.foto { padding: 2px; border-radius: 26px; border: 2px solid transparent; background: none; box-shadow: none; }
 button.foto:checked, button.foto:hover { border-color: #f07a1e; }
-button.file { border-radius: 10px; }
+button.file { border-radius: 10px; background-image: none; background-color: #ffffff; color: #2a2018;
+              border: 1px solid #e6d9cd; box-shadow: none; padding: 8px 14px; }
+button.file:hover { background-color: #fff3e8; border-color: #f0b07a; }
 .errore { color: #c0392b; font-size: 13px; }
 .puntino { min-width: 8px; min-height: 8px; border-radius: 4px; background-color: rgba(255, 255, 255, 0.45); }
 .puntino.attivo { background-color: #ffffff; min-width: 22px; }

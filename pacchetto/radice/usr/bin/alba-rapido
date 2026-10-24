@@ -560,7 +560,7 @@ class Rapido(Gtk.Window):
             st = {}
             if DEMO:
                 return dict(wifi=(True, "CasaMia"), bluetooth=(True, "AirPods"), risparmio=False, dnd=False,
-                            aereo=False, scuro=True, luce=70, volume=45, muto=False,
+                            aereo=False, scuro=False, luce=70, volume=45, muto=False,
                             batteria=(76, "Discharging", "3 h 40 min"))
             if esiste("nmcli"):
                 on = uscita(["nmcli", "radio", "wifi"]) == "enabled"
@@ -582,7 +582,7 @@ class Rapido(Gtk.Window):
             st["dnd"] = A.xfconf_leggi("xfce4-notifyd", "/do-not-disturb") == "true"
             rf = uscita(["rfkill", "list"])
             st["aereo"] = bool(rf) and "Soft blocked: no" not in rf
-            st["scuro"] = A.leggi_file(os.path.join(A.CONF, "tema"), "scuro") != "chiaro"
+            st["scuro"] = A.leggi_file(os.path.join(A.CONF, "tema"), "chiaro") == "scuro"
             b = uscita(["brightnessctl", "-m", "-c", "backlight"]) if esiste("brightnessctl") else ""
             try:
                 st["luce"] = int(b.split(",")[3].rstrip("%"))

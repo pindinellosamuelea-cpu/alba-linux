@@ -2,6 +2,15 @@
   "nota": "Novità di Alba mostrate in Impostazioni → Aggiornamenti. 'data' = quando la novità è entrata in Alba (UTC). Le più recenti in alto.",
   "versioni": [
     {
+      "data": "2026-11-22T21:30",
+      "titolo": "Icone perfettamente arrotondate",
+      "novita": [
+        "Tutte le icone delle app hanno una nuova tessera arrotondata in modo continuo (come su iPhone e Mac), senza spigoli né scalini",
+        "Bordo più pulito e riflesso più morbido, sia col tema chiaro sia con quello scuro",
+        "Anche le icone delle app installate dopo vengono rifatte con la nuova forma"
+      ]
+    },
+    {
       "data": "2026-11-22T19:30",
       "titolo": "Tema automatico, tastiera e grafica più veloce",
       "novita": [

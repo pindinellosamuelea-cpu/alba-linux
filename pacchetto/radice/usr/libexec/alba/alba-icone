@@ -106,21 +106,41 @@ NOMI = {
 # app famose: il marchio resta (ma va sulla tessera di vetro come le altre)
 TESSERA = {
     False: dict(da="#ffffff", da_a="0.97", a="#fbf6f1", a_a="0.86", bordo="#ffffff", bordo_a="0.95",
-                ombra="#5a2a00", ombra_a="0.10", riflesso_a="0.55"),
+                ombra="#5a2a00", ombra_a="0.16", riflesso_a="0.55"),
     True: dict(da="#4a4656", da_a="0.95", a="#2e2b38", a_a="0.92", bordo="#ffffff", bordo_a="0.14",
                ombra="#000000", ombra_a="0.25", riflesso_a="0.10"),
 }
 
 
+def squircle(cx=32.0, cy=32.0, r=28.0, n=5.0, punti=120):
+    """Forma "squircle" (superellisse, come le icone di iOS e macOS): angoli
+    arrotondati in modo continuo, senza spigoli né scalini."""
+    import math
+    pz = []
+    for i in range(punti):
+        t = 2 * math.pi * i / punti
+        c, s_ = math.cos(t), math.sin(t)
+        x = cx + r * math.copysign(abs(c) ** (2 / n), c)
+        y = cy + r * math.copysign(abs(s_) ** (2 / n), s_)
+        pz.append(f"{x:.2f} {y:.2f}")
+    return "M" + " L".join(pz) + " Z"
+
+
+FORMA = squircle()
+BORDO = squircle(r=27.5)
+
+
 def tessera(scuro):
     t = TESSERA[scuro]
-    return f'''<defs><linearGradient id="albaTv" x1="0" y1="0" x2="0.35" y2="1">
+    # una sola forma: sfumatura del vetro, riflesso dolce in alto (nella stessa
+    # sfumatura, niente rettangoli sovrapposti) e un filo di bordo chiaro
+    return f'''<defs><linearGradient id="albaTv" x1="0" y1="0" x2="0.25" y2="1">
 <stop offset="0" stop-color="{t['da']}" stop-opacity="{t['da_a']}"/><stop offset="1" stop-color="{t['a']}" stop-opacity="{t['a_a']}"/></linearGradient>
-<linearGradient id="albaTr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity="{t['riflesso_a']}"/><stop offset="0.5" stop-color="#ffffff" stop-opacity="0"/></linearGradient></defs>
-<rect x="4" y="5.5" width="56" height="56" rx="15" fill="{t['ombra']}" fill-opacity="{t['ombra_a']}"/>
-<rect x="4" y="4" width="56" height="56" rx="15" fill="url(#albaTv)"/>
-<rect x="4.5" y="4.5" width="55" height="27" rx="14.5" fill="url(#albaTr)"/>
-<rect x="4.5" y="4.5" width="55" height="55" rx="14.5" fill="none" stroke="{t['bordo']}" stroke-opacity="{t['bordo_a']}"/>'''
+<linearGradient id="albaTr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity="{t['riflesso_a']}"/><stop offset="0.55" stop-color="#ffffff" stop-opacity="0"/></linearGradient></defs>
+<path d="{FORMA}" fill="url(#albaTv)"/>
+<path d="{FORMA}" fill="url(#albaTr)"/>
+<path d="{BORDO}" fill="none" stroke="{t['bordo']}" stroke-opacity="{t['bordo_a']}" stroke-width="1"/>
+<path d="{FORMA}" fill="none" stroke="{t['ombra']}" stroke-opacity="{t['ombra_a']}" stroke-width="0.8"/>'''
 
 
 def icona_simbolo(chiave, scuro):
@@ -274,8 +294,16 @@ def nomi_icone_app():
     return nomi
 
 
+VERSIONE_TESSERA = "2"   # 2 = forma squircle (22 novembre 2026)
+
+
 def app():
     fatte = 0
+    segno = os.path.join(LOCALE, ".alba-tessera")
+    try:
+        rifai = open(segno).read().strip() != VERSIONE_TESSERA
+    except OSError:
+        rifai = True
     for tema, scuro in (("Alba", False), ("Alba-dark", True)):
         if not os.path.isdir(os.path.join("/usr/share/icons", tema)):
             continue
@@ -286,7 +314,7 @@ def app():
                 continue
             uscita = os.path.join(dest, nome + ".svg")
             src = sorgente(nome)
-            if not src or (os.path.exists(uscita) and os.path.getmtime(uscita) >= os.path.getmtime(src)):
+            if not src or (not rifai and os.path.exists(uscita) and os.path.getmtime(uscita) >= os.path.getmtime(src)):
                 continue
             try:
                 if src.endswith(".svg"):
@@ -299,6 +327,9 @@ def app():
                 with open(uscita, "w", encoding="utf-8") as f:
                     f.write(nuovo)
                 fatte += 1
+    os.makedirs(LOCALE, exist_ok=True)
+    with open(segno, "w") as f:
+        f.write(VERSIONE_TESSERA)
     print(f"alba-icone: {fatte} icone di app messe sulla tessera")
 
 

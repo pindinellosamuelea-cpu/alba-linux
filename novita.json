@@ -2,6 +2,19 @@
   "nota": "Novità di Alba mostrate in Impostazioni → Aggiornamenti. 'data' = quando la novità è entrata in Alba (UTC). Le più recenti in alto.",
   "versioni": [
     {
+      "data": "2026-11-22T19:30",
+      "titolo": "Tema automatico, tastiera e grafica più veloce",
+      "novita": [
+        "Impostazioni → Aspetto → Automatico: tema chiaro di giorno e scuro dal tramonto all'alba",
+        "Impostazioni → Tastiera: scegli se la tastiera è da PC o da Mac e vedi subito con quali tasti si scrive la @",
+        "Le notifiche compaiono in alto a destra, in vetro, e non coprono più il Dock",
+        "Gli effetti del desktop tornano sempre accesi all'avvio (niente più angoli neri sulle notifiche)",
+        "Il Dock torna al centro da solo quando cambi schermo o risoluzione",
+        "Se la grafica non è accelerata (computer lento) Alba lo dice in Impostazioni → Scheda grafica e la ripara",
+        "Riepilogo per l'assistenza più completo (grafica, tastiera, Dock)"
+      ]
+    },
+    {
       "data": "2026-10-24T12:30",
       "titolo": "Accensione e accesso con la nuova grafica",
       "novita": [

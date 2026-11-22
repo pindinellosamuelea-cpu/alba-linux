@@ -269,6 +269,11 @@ def sorgente(nome):
         f = os.path.join("/usr/share/pixmaps", nome + est)
         if os.path.isfile(f):
             return f
+    # alcune app mettono l'icona in una sottocartella (es. pixmaps/guvcview/guvcview.png)
+    for est in (".svg", ".png"):
+        trovati = glob.glob(os.path.join("/usr/share/pixmaps", "**", nome + est), recursive=True)
+        if trovati:
+            return trovati[0]
     return None
 
 

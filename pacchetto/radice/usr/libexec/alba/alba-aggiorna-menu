@@ -101,7 +101,7 @@ RINOMINA = {
     "libreoffice-calc": ("Excel · Fogli di calcolo", None),
     "libreoffice-impress": ("PowerPoint · Presentazioni", None),
     "alba-apple-music": ("Apple Music", None),
-    "guvcview": ("Fotocamera", None),
+    "guvcview": ("Fotocamera", "camera-app"),
 }
 
 

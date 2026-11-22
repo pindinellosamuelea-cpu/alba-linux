@@ -148,6 +148,23 @@ if [ ! -f "$CONF/blocco-v2" ]; then
     xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/logind-handle-lid-switch -s true 2>/dev/null
   touch "$CONF/blocco-v2"
 fi
+# 1.2.68 - Effetti del desktop sempre accesi all'avvio: se la modalità gioco
+# si era chiusa male (computer spento durante un gioco) restavano spenti, con
+# notifiche dagli angoli neri, niente vetro e finestre meno fluide.
+if [ "$(xfconf-query -c xfwm4 -p /general/use_compositing 2>/dev/null)" = false ]; then
+  xfconf-query -c xfwm4 -p /general/use_compositing -s true 2>/dev/null
+  xfconf-query -c xfce4-notifyd -p /do-not-disturb -s false 2>/dev/null
+  rm -f "$CONF/modalita-gioco.prima"
+fi
+# Notifiche in alto a destra, sotto la barra (prima coprivano il Dock), in vetro
+if [ ! -f "$CONF/notifiche-v2" ]; then
+  xfconf-query -c xfce4-notifyd -p /notify-location -n -t uint -s 2 2>/dev/null || \
+    xfconf-query -c xfce4-notifyd -p /notify-location -s 2 2>/dev/null
+  if [ "$(cat "$CONF/tema" 2>/dev/null)" = scuro ]; then TN=Alba-scuro; else TN=Alba; fi
+  xfconf-query -c xfce4-notifyd -p /theme -n -t string -s "$TN" 2>/dev/null || \
+    xfconf-query -c xfce4-notifyd -p /theme -s "$TN" 2>/dev/null
+  touch "$CONF/notifiche-v2"
+fi
 pgrep -u "$(id -u)" -f "python3 /usr/bin/alba-blocco" >/dev/null || \
   setsid -f /usr/bin/python3 /usr/bin/alba-blocco >/dev/null 2>"${XDG_RUNTIME_DIR:-/tmp}/alba-blocco.log"
 

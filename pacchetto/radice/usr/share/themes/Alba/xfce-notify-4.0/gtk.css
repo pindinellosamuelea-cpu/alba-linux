@@ -1,18 +1,20 @@
-/* Alba Linux: notifiche arrotondate, chiare da leggere */
+/* Alba Linux 1.2: notifiche in vetro chiaro, in alto a destra (sotto la barra),
+   come il resto della nuova grafica. */
 #XfceNotifyWindow {
-  background-color: rgba(28, 30, 46, 0.96);
-  color: #f2f2f7;
+  background-color: rgba(255, 252, 249, 0.92);
+  color: #2a2018;
   border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow: none;
   padding: 6px;
 }
-#XfceNotifyWindow:hover { background-color: rgba(36, 38, 58, 0.98); }
-#XfceNotifyWindow #summary { font-weight: 700; font-size: 10.5pt; color: #ffffff; }
-#XfceNotifyWindow #body { color: rgba(242, 242, 247, 0.80); }
+#XfceNotifyWindow:hover { background-color: rgba(255, 252, 249, 0.98); }
+#XfceNotifyWindow #summary { font-weight: 700; font-size: 10.5pt; color: #2a2018; }
+#XfceNotifyWindow #body { color: #5a4a3c; }
 #XfceNotifyWindow button {
-  border-radius: 9px; border: none; box-shadow: none;
-  background-image: none; background-color: rgba(255, 255, 255, 0.10); color: #ffffff;
+  border-radius: 9px; border: 1px solid #e6d9cd; box-shadow: none;
+  background-image: none; background-color: #ffffff; color: #2a2018;
 }
-#XfceNotifyWindow button:hover { background-color: rgba(255, 138, 76, 0.85); }
-#XfceNotifyWindow progressbar trough { background-color: rgba(255, 255, 255, 0.12); border-radius: 4px; min-height: 6px; }
-#XfceNotifyWindow progressbar progress { background-color: #ff8a4c; border-radius: 4px; min-height: 6px; }
+#XfceNotifyWindow button:hover { background-color: #f07a1e; border-color: #f07a1e; color: #ffffff; }
+#XfceNotifyWindow progressbar trough { background-color: rgba(90, 50, 10, 0.12); border-radius: 4px; min-height: 6px; }
+#XfceNotifyWindow progressbar progress { background-color: #f07a1e; border-radius: 4px; min-height: 6px; }

@@ -37,6 +37,10 @@ if command -v gsettings >/dev/null 2>&1; then
   gsettings set org.gnome.desktop.interface icon-theme "$ICONE" 2>/dev/null
 fi
 echo "$1" > "$CONF/tema"
+# scelta a mano (non dal tema automatico): il tema automatico si spegne
+[ -z "${ALBA_TEMA_AUTO:-}" ] && rm -f "$CONF/tema-automatico"
+# notifiche: vetro chiaro o scuro come il resto
+imposta xfce4-notifyd /theme string "$([ "$SCURO" = true ] && echo Alba-scuro || echo Alba)"
 # Barra in alto e Dock: vetro chiaro o scuro come il tema (la barra si
 # ricarica un attimo per prendere i colori nuovi)
 /usr/bin/alba-barra "$1"

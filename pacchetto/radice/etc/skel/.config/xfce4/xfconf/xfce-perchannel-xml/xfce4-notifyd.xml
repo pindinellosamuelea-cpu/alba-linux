@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Alba Linux: notifiche arrotondate in basso a destra, con registro -->
+<!-- Alba Linux: notifiche in vetro, in alto a destra sotto la barra (non coprono il Dock), con registro -->
 <channel name="xfce4-notifyd" version="1.0">
   <property name="theme" type="string" value="Alba"/>
-  <property name="notify-location" type="uint" value="3"/>
+  <property name="notify-location" type="uint" value="2"/>
   <property name="initial-opacity" type="double" value="1.000000"/>
   <property name="expire-timeout" type="int" value="6"/>
   <property name="do-fadeout" type="bool" value="true"/>

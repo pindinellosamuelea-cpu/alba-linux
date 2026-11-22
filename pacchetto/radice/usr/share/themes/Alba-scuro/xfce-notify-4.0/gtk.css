@@ -1,0 +1,19 @@
+/* Alba Linux 1.2: notifiche in vetro scuro (tema scuro) */
+#XfceNotifyWindow {
+  background-color: rgba(34, 32, 42, 0.92);
+  color: #f3eee8;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: none;
+  padding: 6px;
+}
+#XfceNotifyWindow:hover { background-color: rgba(40, 38, 50, 0.97); }
+#XfceNotifyWindow #summary { font-weight: 700; font-size: 10.5pt; color: #ffffff; }
+#XfceNotifyWindow #body { color: rgba(243, 238, 232, 0.80); }
+#XfceNotifyWindow button {
+  border-radius: 9px; border: none; box-shadow: none;
+  background-image: none; background-color: rgba(255, 255, 255, 0.10); color: #ffffff;
+}
+#XfceNotifyWindow button:hover { background-color: #f07a1e; }
+#XfceNotifyWindow progressbar trough { background-color: rgba(255, 255, 255, 0.12); border-radius: 4px; min-height: 6px; }
+#XfceNotifyWindow progressbar progress { background-color: #f07a1e; border-radius: 4px; min-height: 6px; }

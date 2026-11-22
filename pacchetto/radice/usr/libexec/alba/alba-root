@@ -109,6 +109,22 @@ case "${1:-}" in
     apt-get install -y -q "$ARG"
     [ "$ARG" = systemd-timesyncd ] && timedatectl set-ntp true
     ;;
+  ripara-grafica)
+    # Grafica non accelerata (disegna il processore: tutto lento).
+    # 1. togli "nomodeset" (modalità grafica sicura rimasta dall'installazione)
+    for f in /etc/default/grub /etc/default/grub.d/*.cfg; do
+      [ -f "$f" ] && sed -i -E 's/(^|[ "])nomodeset([ "]|$)/\1\2/g; s/  +/ /g' "$f"
+    done
+    # 2. driver e firmware della grafica (Intel, AMD) e accelerazione video
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -qq >/dev/null 2>&1 || true
+    for p in libgl1-mesa-dri mesa-vulkan-drivers libglx-mesa0 firmware-intel-graphics firmware-amd-graphics \
+             firmware-misc-nonfree intel-media-va-driver mesa-va-drivers; do
+      apt-get install -y -qq "$p" >/dev/null 2>&1 || true
+    done
+    update-grub >/dev/null 2>&1 || true
+    update-initramfs -u >/dev/null 2>&1 || true
+    ;;
   utente-nuovo)
     # Nuovo account. Argomenti: NOME_ACCOUNT standard|amministratore
     # Da stdin: nome completo, password, (facoltativa) foto.

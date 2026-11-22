@@ -349,6 +349,9 @@ class Segmentato(Gtk.Box):
             b.set_active(k == chiave)
         self._muto = False
 
+    def valore(self):
+        return next((k for k, b in self._pulsanti.items() if b.get_active()), None)
+
 
 class Pagina(Gtk.ScrolledWindow):
     nome = ""
@@ -1347,11 +1350,30 @@ class PaginaAlimentazione(Pagina):
 # Aspetto
 # ---------------------------------------------------------------------------
 class AnteprimaTema(Gtk.DrawingArea):
-    def __init__(self, scuro):
+    def __init__(self, scuro, automatico=False):
         super().__init__()
         self.scuro = scuro
+        self.automatico = automatico
         self.set_size_request(180, 110)
-        self.connect("draw", self._disegna)
+        self.connect("draw", self._disegna_tutto)
+
+    def _disegna_tutto(self, w, cr):
+        if not self.automatico:
+            return self._disegna(w, cr)
+        # automatico: metà chiaro e metà scuro, divise in diagonale
+        self.scuro = False
+        self._disegna(w, cr)
+        cr.save()
+        cr.move_to(110, 0)
+        cr.line_to(180, 0)
+        cr.line_to(180, 110)
+        cr.line_to(70, 110)
+        cr.close_path()
+        cr.clip()
+        self.scuro = True
+        self._disegna(w, cr)
+        cr.restore()
+        return False
 
     def _disegna(self, w, cr):
         # anteprima della nuova grafica: barra in alto, finestra, Dock fluttuante
@@ -1393,7 +1415,7 @@ class AnteprimaTema(Gtk.DrawingArea):
 
 class PaginaAspetto(Pagina):
     nome, titolo, icona = "aspetto", "Aspetto", "preferences-desktop-appearance-symbolic"
-    parole = "aspetto tema chiaro scuro sfondo colori barra icone desktop"
+    parole = "aspetto tema chiaro scuro modalità scura notte automatico tramonto sfondo colori barra dock icone desktop"
 
     def costruisci(self):
         self.sottotitolo.set_text("Tema, sfondo, barra in alto e Dock.")
@@ -1402,12 +1424,14 @@ class PaginaAspetto(Pagina):
         riga.set_margin_top(14)
         riga.set_margin_bottom(14)
         self.tessere = {}
-        for chiave, testo in (("chiaro", "Chiaro"), ("scuro", "Scuro")):
+        for chiave, testo in (("chiaro", "Chiaro"), ("scuro", "Scuro"), ("automatico", "Automatico")):
             t = Gtk.ToggleButton()
             t.get_style_context().add_class("tessera")
             box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-            box.pack_start(AnteprimaTema(chiave == "scuro"), False, False, 0)
+            box.pack_start(AnteprimaTema(chiave == "scuro", chiave == "automatico"), False, False, 0)
             box.pack_start(etichetta(testo, "riga-titolo", xalign=0.5), False, False, 0)
+            if chiave == "automatico":
+                box.pack_start(etichetta("Scuro dal tramonto all'alba", "riga-sottotitolo", xalign=0.5), False, False, 0)
             t.add(box)
             t.connect("toggled", self._tema, chiave)
             riga.pack_start(t, False, False, 0)
@@ -1483,7 +1507,14 @@ class PaginaAspetto(Pagina):
         for k, t in self.tessere.items():
             t.set_active(k == chiave)
         self._muto = False
-        esegui(["/usr/bin/alba-tema", chiave])
+        segno = os.path.join(CONF, "tema-automatico")
+        if chiave == "automatico":
+            os.makedirs(CONF, exist_ok=True)
+            open(segno, "w").close()
+            adesso = uscita(["/usr/bin/python3", "/usr/bin/alba-barra-alta", "--tema-adesso"]).strip() or "chiaro"
+            in_sottofondo(lambda: esegui(["/usr/bin/alba-tema", adesso], env={"ALBA_TEMA_AUTO": "1"}))
+        else:
+            in_sottofondo(lambda: esegui(["/usr/bin/alba-tema", chiave]))
 
     DOCK = {"piccolo": (52, 34), "medio": (62, 44), "grande": (74, 56)}
 
@@ -1498,6 +1529,8 @@ class PaginaAspetto(Pagina):
         tema = leggi_file(os.path.join(CONF, "tema"))
         if not tema:
             tema = "scuro" if "dark" in xfconf_leggi("xsettings", "/Net/ThemeName").lower() else "chiaro"
+        if os.path.exists(os.path.join(CONF, "tema-automatico")):
+            tema = "automatico"
         for k, t in self.tessere.items():
             t.set_active(k == tema)
         self._muto = False
@@ -1800,6 +1833,15 @@ class PaginaGrafica(Pagina):
                                           ". In OBS: Impostazioni → Uscita → Codificatore.")
 
     def _azione_avviso(self):
+        if self._azione == "ripara":
+            self._mostra_avviso("Sto sistemando la grafica…", "Ci vuole qualche minuto, puoi continuare a usare il computer.",
+                                in_corso=True)
+
+            def fatto(r):
+                self._mostra_avviso("Grafica sistemata ✓", "Riavvia il computer per renderla più veloce.", "riavvia",
+                                    "Riavvia")
+            in_sottofondo(lambda: come_amministratore("ripara-grafica"), fatto)
+            return
         if self._azione == "riavvia":
             if domanda(self.finestra, "Riavviare ora?", "Salva il tuo lavoro prima di continuare.", si="Riavvia"):
                 esegui(["systemctl", "reboot"])
@@ -1893,6 +1935,11 @@ class PaginaGrafica(Pagina):
 
     def _mostra_renderer(self, r):
         desktop, giochi = r or ("", "")
+        lento = re.search(r"llvmpipe|softpipe|software", desktop, re.I) or "nomodeset" in leggi_file("/proc/cmdline")
+        if lento and not DEMO:
+            self._mostra_avviso("La grafica non è accelerata", "Ora disegna tutto il processore e il computer è più lento "
+                                "del dovuto. Alba può sistemarlo da sola: serve Internet e poi un riavvio.", "ripara",
+                                "Ripara")
         self.uso_desktop.set_text(desktop or "—")
         self.uso_giochi.set_text((giochi + "  ✓") if giochi else "—")
 
@@ -2348,6 +2395,25 @@ class PaginaProblemi(Pagina):
                       "sede: " + os.environ.get("XDG_SEAT_PATH", "(non indicata)"),
                       leggi_file(os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "alba-blocco.log"))[-1500:],
                       leggi_file("/etc/systemd/logind.conf.d/50-alba.conf")]
+            parti += ["", "== Grafica e fluidità ==",
+                      "chi disegna: " + (renderer(False) or "?") + "  ·  giochi: " + (renderer(True) or "?"),
+                      "avvio: " + leggi_file("/proc/cmdline"),
+                      "effetti del desktop: " + xfconf_leggi("xfwm4", "/general/use_compositing")
+                      + "  ·  vblank: " + (xfconf_leggi("xfwm4", "/general/vblank_mode") or "auto"),
+                      "processore: " + (re.search(r"model name\s*:\s*(.+)", leggi_file("/proc/cpuinfo")) or [None, "?"])[1]
+                      + "  ·  frequenza: " + leggi_file("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor"),
+                      "carico: " + leggi_file("/proc/loadavg"),
+                      "kernel: " + uscita(["uname", "-r"]).strip(),
+                      uscita(["sh", "-c", "lspci -k | grep -A3 -iE 'vga|3d|display'"])]
+            parti += ["", "== Tastiera ==",
+                      uscita(["setxkbmap", "-query"]),
+                      "impostata: " + xfconf_leggi("keyboard-layout", "/Default/XkbLayout") + " / "
+                      + xfconf_leggi("keyboard-layout", "/Default/XkbVariant") + " / modello "
+                      + xfconf_leggi("keyboard-layout", "/Default/XkbModel"),
+                      leggi_file("/etc/default/keyboard")]
+            parti += ["", "== Barra e Dock ==",
+                      uscita(["sh", "-c", "xfconf-query -c xfce4-panel -l -v | grep -E 'panel-2/(position|size)|margin'; "
+                              "xfconf-query -c xfwm4 -p /general/margin_bottom; xrandr --query | grep -w connected"])]
             parti += ["", "== Driver grafico ==", leggi_file("/var/lib/alba/driver-auto.log")[-2500:]]
             parti += ["", "== Ultimo programma Windows ==", leggi_file(os.path.expanduser("~/.cache/alba/exe-ultimo.log"))[-2500:]]
             cartella = os.path.expanduser("~/Documenti") if os.path.isdir(os.path.expanduser("~/Documenti")) else os.path.expanduser("~")
@@ -2375,9 +2441,17 @@ LAYOUT = [("it", "", "Italiano"), ("it", "mac", "Italiano (Mac)"),
           ("ru", "", "Russo"), ("ua", "", "Ucraino"), ("ar", "", "Arabo"), ("cn", "", "Cinese"), ("jp", "", "Giapponese")]
 
 
+# dove si trova la chiocciola @ con ogni disposizione
+CHIOCCIOLA = {("it", ""): "AltGr + ò", ("it", "mac"): "⌥ Alt + ò", ("ch", "it"): "AltGr + 2", ("ch", ""): "AltGr + 2",
+              ("ch", "fr"): "AltGr + 2", ("us", ""): "Maiusc + 2", ("us", "intl"): "Maiusc + 2",
+              ("gb", ""): "Maiusc + ' (il tasto accanto a Invio)", ("de", ""): "AltGr + Q", ("fr", ""): "AltGr + à",
+              ("es", ""): "AltGr + 2", ("pt", ""): "AltGr + 2", ("br", ""): "Maiusc + 2", ("ro", ""): "Maiusc + 2",
+              ("pl", ""): "Maiusc + 2"}
+
+
 class PaginaTastiera(Pagina):
     nome, titolo, icona = "tastiera", "Tastiera", "input-keyboard-symbolic"
-    parole = "tastiera layout lingua lettere accenti svizzera mac inglese"
+    parole = "tastiera layout disposizione lingua lettere accenti chiocciola @ at svizzera svizzero mac windows inglese"
 
     def costruisci(self):
         self.sottotitolo.set_text("La disposizione dei tasti. Con due lingue passi dall'una all'altra con Super+Spazio, "
@@ -2389,8 +2463,11 @@ class PaginaTastiera(Pagina):
         for i, (_, _, nome) in enumerate(LAYOUT):
             self.principale.append(str(i), nome)
             self.seconda.append(str(i), nome)
-        r.aggiungi(Riga("Tastiera principale", None, self.principale))
+        self.r_principale = r.aggiungi(Riga("Tastiera principale", "", self.principale))
+        self.principale.connect("changed", lambda *_: self._suggerimento())
         r.aggiungi(Riga("Seconda tastiera", "Facoltativa: per scrivere anche in un'altra lingua", self.seconda))
+        self.tipo = Segmentato([("pc", "Windows / PC"), ("mac", "Mac (Apple)")], lambda *_: None)
+        r.aggiungi(Riga("Tipo di tastiera", "Quella che usi davvero, anche se il computer è un Mac", self.tipo))
         applica = pulsante("Applica", self._applica, principale=True)
         applica.set_halign(Gtk.Align.END)
         applica.set_margin_top(10)
@@ -2414,6 +2491,20 @@ class PaginaTastiera(Pagina):
             return None
         self.principale.set_active_id(indice(lay[0], var[0]) or "0")
         self.seconda.set_active_id(indice(lay[1], var[1]) if len(lay) > 1 else "")
+        modello = xfconf_leggi("keyboard-layout", "/Default/XkbModel") or ""
+        self.tipo.imposta("mac" if modello.startswith(("mac", "apple")) else "pc")
+        self._suggerimento()
+
+    def _suggerimento(self):
+        i = self.principale.get_active_id()
+        if i is None:
+            return
+        l, v, _ = LAYOUT[int(i)]
+        tasti = CHIOCCIOLA.get((l, v))
+        self.r_principale.imposta_sottotitolo(
+            f"La chiocciola @ si scrive con {tasti}. Se sulla tua tastiera la @ è disegnata altrove, "
+            "scegli la disposizione che corrisponde ai tasti (es. Svizzero per le tastiere svizzere)."
+            if tasti else "")
 
     def _applica(self):
         scelte = [LAYOUT[int(i)] for i in (self.principale.get_active_id(), self.seconda.get_active_id()) if i]
@@ -2425,7 +2516,11 @@ class PaginaTastiera(Pagina):
         xfconf_scrivi("keyboard-layout", "/Default/XkbLayout", "string", layout)
         xfconf_scrivi("keyboard-layout", "/Default/XkbVariant", "string", varianti)
         xfconf_scrivi("keyboard-layout", "/Default/XkbOptions/Group", "string", "grp:win_space_toggle")
-        esegui(["setxkbmap", "-layout", layout, "-variant", varianti, "-option", "", "-option", "grp:win_space_toggle"])
+        # modello: con una tastiera da PC (anche collegata a un Mac) AltGr deve funzionare da AltGr
+        modello = "macintosh" if self.tipo.valore() == "mac" else "pc105"
+        xfconf_scrivi("keyboard-layout", "/Default/XkbModel", "string", modello)
+        esegui(["setxkbmap", "-model", modello, "-layout", layout, "-variant", varianti, "-option", "",
+                "-option", "grp:win_space_toggle", "-option", "lv3:ralt_switch"])
         # anche per la schermata di accesso (senza password: è una regola di Alba)
         in_sottofondo(lambda: come_amministratore("tastiera", layout, varianti))
         self.prova.grab_focus()

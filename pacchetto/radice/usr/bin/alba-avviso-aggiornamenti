@@ -52,6 +52,15 @@ if [ -f /var/lib/alba/mac-t2-riavvio ] && ! uname -r | grep -q t2 && \
   [ "$R" = "riavvia" ] && systemctl reboot
 fi
 
+# Grafica riparata (era senza accelerazione): serve un riavvio
+if [ -f /var/lib/alba/riavvio-grafica ] && grep -qw nomodeset /proc/cmdline 2>/dev/null && \
+   [ "$(cat "$CONF/avviso-grafica" 2>/dev/null)" != "$(date +%F)" ]; then
+  date +%F > "$CONF/avviso-grafica"
+  R="$(notify-send -a "Alba" -i video-display -A riavvia="Riavvia ora" "Grafica più veloce pronta" \
+        "Riavvia: la scheda grafica disegnerà tutto lei e il computer sarà molto più fluido." 2>/dev/null)"
+  [ "$R" = "riavvia" ] && systemctl reboot
+fi
+
 # Driver NVIDIA installato in automatico: serve un riavvio
 if [ -f /var/lib/alba/driver-riavvio ] && [ ! -e /proc/driver/nvidia/version ] && \
    [ "$(cat "$CONF/avviso-driver" 2>/dev/null)" != "$(date +%F)" ]; then

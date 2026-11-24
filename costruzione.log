@@ -1,0 +1,19 @@
+>> Integro il tema WhiteSur (stile macOS)
+Cloning into '/tmp/tmp.TgjF4Djcec/whitesur-gtk'...
+>> WhiteSur costruito con l'accento arancio
+>> Integro le icone Fluent
+Cloning into '/tmp/tmp.TgjF4Djcec/fluent-icone'...
+Preparing shared base: /tmp/tmp.TgjF4Djcec/alba-sistema/usr/share/icons/.Fluent-base
+Preparing shared light base: /tmp/tmp.TgjF4Djcec/alba-sistema/usr/share/icons/.Fluent-light-base
+Preparing shared dark base: /tmp/tmp.TgjF4Djcec/alba-sistema/usr/share/icons/.Fluent-dark-base
+Installing 'Fluent'...
+Installing 'Fluent-light'...
+Installing 'Fluent-dark'...
+Done.
+Alba: 125 simboli Alba, 1277 icone su tessera, 5056 collegamenti, 0 lasciate a Fluent
+Alba-dark: 125 simboli Alba, 1277 icone su tessera, 5056 collegamenti, 0 lasciate a Fluent
+>> Icone: chiaro=Alba scuro=Alba-dark
+>> Temi: chiaro=WhiteSur-Light-orange scuro=WhiteSur-Dark-orange
+>> Canale aggiornamenti: non firmato (manca la chiave)
+dpkg-deb: building package 'alba-sistema' in '/__w/alba-linux/alba-linux/dist/alba-sistema_1.2.72_all.deb'.
+>> Pacchetto pronto: /__w/alba-linux/alba-linux/dist/alba-sistema_1.2.72_all.deb

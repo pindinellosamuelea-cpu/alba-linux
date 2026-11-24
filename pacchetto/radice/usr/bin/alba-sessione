@@ -156,6 +156,22 @@ if [ "$(xfconf-query -c xfwm4 -p /general/use_compositing 2>/dev/null)" = false 
   xfconf-query -c xfce4-notifyd -p /do-not-disturb -s false 2>/dev/null
   rm -f "$CONF/modalita-gioco.prima"
 fi
+# 1.2.72 - Tastiera: se è rimasta impostata due volte la stessa lingua (es.
+# "us,us", per cui la @ non era al suo posto) si torna a quella del sistema.
+LAY="$(xfconf-query -c keyboard-layout -p /Default/XkbLayout 2>/dev/null)"
+if [ -n "$LAY" ] && [ "${LAY%%,*}" = "${LAY#*,}" ] && [ "$LAY" != "${LAY%%,*}" ]; then
+  SIS="$(sed -n 's/^XKBLAYOUT="\([^",]*\).*/\1/p' /etc/default/keyboard 2>/dev/null)"
+  SIS="${SIS:-it}"
+  xfconf-query -c keyboard-layout -p /Default/XkbLayout -s "$SIS" 2>/dev/null
+  xfconf-query -c keyboard-layout -p /Default/XkbVariant -s "" 2>/dev/null
+  setxkbmap -model pc105 -layout "$SIS" -option "" -option grp:win_space_toggle 2>/dev/null
+fi
+# Audio: se il servizio del suono non risponde, si riavvia da solo (in sottofondo)
+( sleep 8
+  if command -v pactl >/dev/null && ! timeout 5 pactl info >/dev/null 2>&1; then
+    systemctl --user reset-failed pipewire.socket pipewire.service pipewire-pulse.socket pipewire-pulse.service wireplumber.service 2>/dev/null
+    systemctl --user restart pipewire.socket pipewire.service pipewire-pulse.socket pipewire-pulse.service wireplumber.service 2>/dev/null
+  fi ) >/dev/null 2>&1 &
 # Notifiche in alto a destra, sotto la barra (prima coprivano il Dock), in vetro
 if [ ! -f "$CONF/notifiche-v2" ]; then
   xfconf-query -c xfce4-notifyd -p /notify-location -n -t uint -s 2 2>/dev/null || \

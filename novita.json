@@ -2,6 +2,17 @@
   "nota": "Novità di Alba mostrate in Impostazioni → Aggiornamenti. 'data' = quando la novità è entrata in Alba (UTC). Le più recenti in alto.",
   "versioni": [
     {
+      "data": "2026-11-24T17:00",
+      "titolo": "Mac mini: Wi-Fi, audio e tastiera",
+      "novita": [
+        "Mac con chip T2: Alba scarica da sola i componenti di Apple per Wi-Fi e Bluetooth quando c'è Internet via cavo (anche dal pulsante in Impostazioni → Wi-Fi)",
+        "Tastiera: se era impostata due volte la stessa lingua (per cui la @ non si trovava) torna quella giusta",
+        "Audio: se il servizio del suono si blocca, riparte da solo all'accesso",
+        "Programmi «a metà»: niente più falso allarme mentre si installa qualcosa; se un modulo aggiuntivo blocca gli aggiornamenti, Alba lo toglie",
+        "Riepilogo per l'assistenza con audio, programmi e Wi-Fi del Mac"
+      ]
+    },
+    {
       "data": "2026-11-22T21:30",
       "titolo": "Icone perfettamente arrotondate",
       "novita": [

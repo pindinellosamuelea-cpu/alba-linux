@@ -45,6 +45,15 @@ apt_extra barra xfce4-genmon-plugin
 apt_extra accesso gir1.2-lightdm-1
 # 1.2: componenti della nuova grafica (Dock, barra in alto) e foto account
 apt_extra grafica12 xfce4-docklike-plugin xfce4-genmon-plugin x11-utils file
+# 1.2.72: Wi-Fi e Bluetooth dei Mac con chip T2 senza macOS: i firmware di
+# Apple si scaricano da soli (una volta, ~1 GB) appena c'è Internet via cavo.
+if lspci -nn 2>/dev/null | grep -qiE "106b:180[12]" && ! ls /lib/firmware/brcm/*apple* >/dev/null 2>&1 \
+   && [ "$(cat /var/lib/alba/wifi-mac-tentato 2>/dev/null)" != "$(date +%F)" ] \
+   && curl -fsI --max-time 15 https://swscan.apple.com >/dev/null 2>&1; then
+  date +%F > /var/lib/alba/wifi-mac-tentato
+  /usr/libexec/alba/alba-root wifi-mac && touch /var/lib/alba/wifi-mac-pronto
+fi
+
 # 1.2.68: se l'installazione è rimasta in "modalità grafica sicura" (nomodeset)
 # il computer disegna tutto col processore ed è lento. Con schede Intel o AMD
 # si toglie da solo (una volta); con NVIDIA ci pensa il driver ufficiale.

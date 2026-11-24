@@ -434,17 +434,46 @@ class PaginaWifi(Pagina):
         self.colonna.pack_start(intestazione, False, False, 0)
         self.reti = Riquadro()
         self.colonna.pack_start(self.reti, False, False, 0)
+        # Mac con chip T2 senza macOS: il Wi-Fi ha bisogno dei componenti di Apple
+        self.mac = Riquadro()
+        self.mac.set_no_show_all(True)
+        self.riga_mac = self.mac.aggiungi(Riga(
+            "Il Wi-Fi del Mac ha bisogno di un componente di Apple",
+            "Alba lo scarica da sola (circa 1 GB) dall'immagine di ripristino di macOS. Collega Internet con un cavo "
+            "o col telefono (cavo USB → Hotspot personale), poi premi Scarica. Ci vogliono 10-20 minuti.",
+            pulsante("Scarica", self._wifi_mac)))
+        self.riga_mac.show_all()
+        self.colonna.pack_start(self.mac, False, False, 0)
         avanzate = pulsante("Impostazioni di rete avanzate…",
                             lambda: avvia(["nm-connection-editor"]))
         avanzate.set_halign(Gtk.Align.START)
         avanzate.set_margin_top(10)
         self.colonna.pack_start(avanzate, False, False, 0)
 
+    @staticmethod
+    def manca_firmware_mac():
+        return bool(re.search(r"106b:180[12]", uscita(["lspci", "-nn"]))) and \
+            not glob.glob("/lib/firmware/brcm/*apple*")
+
+    def _wifi_mac(self):
+        self.riga_mac.imposta_sottotitolo("Sto scaricando e installando il componente di Apple… "
+                                          "puoi continuare a usare il computer (10-20 minuti).")
+
+        def fatto(_r):
+            if self.manca_firmware_mac():
+                self.riga_mac.imposta_sottotitolo("Non è riuscito. Controlla che Internet funzioni (cavo o telefono) "
+                                                  "e riprova.")
+            else:
+                self.mac.hide()
+                self.aggiorna(cerca=True)
+        in_sottofondo(lambda: come_amministratore("wifi-mac"), fatto)
+
     def accendi(self, acceso):
         esegui(["nmcli", "radio", "wifi", "on" if acceso else "off"])
         GLib.timeout_add(1500, lambda: (self.aggiorna(), False)[1])
 
     def aggiorna(self, cerca=False):
+        self.mac.set_visible(not DEMO and self.manca_firmware_mac())
         if not esiste("nmcli"):
             self.riga_stato.imposta_sottotitolo("Gestione della rete non disponibile")
             self.interruttore.set_sensitive(False)
@@ -2406,6 +2435,17 @@ class PaginaProblemi(Pagina):
                       "carico: " + leggi_file("/proc/loadavg"),
                       "kernel: " + uscita(["uname", "-r"]).strip(),
                       uscita(["sh", "-c", "lspci -k | grep -A3 -iE 'vga|3d|display'"])]
+            parti += ["", "== Audio ==",
+                      uscita(["sh", "-c", "systemctl --user --no-pager --plain list-units 'pipewire*' 'wireplumber*' --all; "
+                              "timeout 5 pactl info 2>&1 | head -5; aplay -l 2>&1 | head -12; "
+                              "lsmod | grep -iE 'snd_|t2|aaudio|bce' | head -15; "
+                              "journalctl --user -b -u pipewire -u wireplumber --no-pager -n 25 -o short 2>&1"])]
+            parti += ["", "== Programmi a metà ==",
+                      uscita(["sh", "-c", "dpkg --audit 2>&1 | head -20; echo ---; "
+                              "grep -B2 -A12 'Errors were encountered\\|dkms\\|Error!' /var/log/apt/term.log 2>/dev/null | tail -40"])]
+            parti += ["", "== Wi-Fi del Mac ==",
+                      uscita(["sh", "-c", "ls /lib/firmware/brcm 2>/dev/null | grep -i apple | head -5; "
+                              "tail -15 /var/log/alba-wifi-mac.log 2>/dev/null"])]
             parti += ["", "== Tastiera ==",
                       uscita(["setxkbmap", "-query"]),
                       "impostata: " + xfconf_leggi("keyboard-layout", "/Default/XkbLayout") + " / "
@@ -2509,6 +2549,8 @@ class PaginaTastiera(Pagina):
 
     def _applica(self):
         scelte = [LAYOUT[int(i)] for i in (self.principale.get_active_id(), self.seconda.get_active_id()) if i]
+        if len(scelte) == 2 and scelte[0][:2] == scelte[1][:2]:
+            scelte = scelte[:1]          # la stessa tastiera due volte non serve
         if not scelte:
             return
         layout = ",".join(l for l, _, _ in scelte)

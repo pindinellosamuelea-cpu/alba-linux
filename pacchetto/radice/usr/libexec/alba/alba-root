@@ -109,6 +109,40 @@ case "${1:-}" in
     apt-get install -y -q "$ARG"
     [ "$ARG" = systemd-timesyncd ] && timedatectl set-ntp true
     ;;
+  wifi-mac)
+    # Wi-Fi e Bluetooth dei Mac con chip T2: servono i "firmware" di Apple, che
+    # stanno dentro macOS. Se macOS non c'è più, si prendono dall'immagine di
+    # ripristino di macOS che Apple mette a disposizione (circa 1 GB).
+    # Serve Internet via cavo o col telefono collegato con USB.
+    LOG=/var/log/alba-wifi-mac.log
+    exec >>"$LOG" 2>&1
+    echo "== $(date) Wi-Fi del Mac"
+    if ls /lib/firmware/brcm/*apple* >/dev/null 2>&1; then echo "firmware già presente"; exit 0; fi
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get install -y -q dmg2img curl python3 sudo || true
+    LAV="$(mktemp -d /var/tmp/alba-wifi-mac.XXXXXX)"
+    trap 'rm -rf "$LAV"' EXIT
+    SCRIPT=/usr/bin/get-apple-firmware
+    if [ ! -x "$SCRIPT" ]; then
+      curl -fsSL -o "$LAV/firmware.sh" https://raw.githubusercontent.com/t2linux/wiki/master/docs/tools/firmware.sh || exit 4
+      SCRIPT="$LAV/firmware.sh"
+    fi
+    # scelta automatica di macOS Sonoma (quella consigliata) invece della domanda
+    mkdir -p "$LAV/bin"
+    cat > "$LAV/bin/python3" <<'EOP'
+#!/bin/sh
+case "$1" in *fetch-macOS-v2.py) exec /usr/bin/python3 "$@" -s sonoma ;; esac
+exec /usr/bin/python3 "$@"
+EOP
+    chmod +x "$LAV/bin/python3"
+    ( cd "$LAV" && HOME="$LAV" PATH="$LAV/bin:$PATH" timeout 3600 bash "$SCRIPT" -i get_from_online ) </dev/null
+    if ls /lib/firmware/brcm/*apple* >/dev/null 2>&1; then
+      modprobe -r brcmfmac_wcc brcmfmac 2>/dev/null; modprobe brcmfmac 2>/dev/null
+      modprobe -r hci_bcm4377 2>/dev/null; modprobe hci_bcm4377 2>/dev/null
+      echo "fatto"; exit 0
+    fi
+    echo "non riuscito"; exit 5
+    ;;
   ripara-grafica)
     # Grafica non accelerata (disegna il processore: tutto lento).
     # 1. togli "nomodeset" (modalità grafica sicura rimasta dall'installazione)

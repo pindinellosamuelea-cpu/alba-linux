@@ -166,9 +166,14 @@ class Disco:
 class Pacchetti:
     @staticmethod
     def controllo():
+        # mentre un'installazione è in corso i pacchetti sono "a metà" per forza:
+        # non è un problema (prima risultava un errore falso)
+        if esegui(["pgrep", "-x", "(dpkg|apt-get|apt|unattended-upgr)"])[0] == 0:
+            return False, ""
         audit = esegui(["dpkg", "--audit"])[1].strip()
         if audit:
-            return True, "ci sono pacchetti installati a metà"
+            nomi = sorted(set(re.findall(r"^ ([a-z0-9][a-z0-9+.-]+)\s", audit, re.M)))
+            return True, "ci sono pacchetti installati a metà" + (": " + ", ".join(nomi[:6]) if nomi else "")
         if os.listdir("/var/lib/dpkg/updates") if os.path.isdir("/var/lib/dpkg/updates") else False:
             return True, "un aggiornamento è stato interrotto"
         codice, testo = esegui(["apt-get", "check"], 120)
@@ -180,6 +185,23 @@ class Pacchetti:
     def ripara():
         esegui(["dpkg", "--configure", "-a"], 1800)
         esegui(APT + ["-f", "install"], 1800)
+        # Se è ancora bloccato, quasi sempre è un "modulo aggiuntivo" (pacchetto
+        # -dkms, es. la webcam virtuale di OBS) che non si compila per il kernel
+        # dei Mac T2 o per un kernel nuovo, e blocca tutti gli aggiornamenti.
+        # Non serve al sistema: si toglie e tutto riparte.
+        audit = esegui(["dpkg", "--audit"])[1]
+        bloccati = set(re.findall(r"^ ([a-z0-9][a-z0-9+.-]*-dkms)\s", audit, re.M))
+        log = ""
+        try:
+            log = open("/var/log/apt/term.log", errors="replace").read()[-60000:]
+        except OSError:
+            pass
+        bloccati |= set(re.findall(r"Errors were encountered while processing:\s*\n((?:\s+[a-z0-9+.-]+-dkms\s*\n)+)", log) and
+                        re.findall(r"^\s+([a-z0-9+.-]+-dkms)\s*$", log, re.M))
+        if bloccati:
+            esegui(APT + ["purge"] + sorted(bloccati), 1800)
+            esegui(["dpkg", "--configure", "-a"], 1800)
+            esegui(APT + ["-f", "install"], 1800)
 
 
 @problema("fonti", "Elenco delle fonti dei programmi danneggiato",

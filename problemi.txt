@@ -1,0 +1,11 @@
+13544:/usr/sbin/grub-probe: error: cannot find a device for / (is /dev mounted?).
+16558:E: Unable to locate package realtek-rtl88xxau-dkms
+16559:ATTENZIONE: pacchetto opzionale non disponibile: realtek-rtl88xxau-dkms
+16829:E: Unable to locate package intel-opencl-icd
+16830:ATTENZIONE: pacchetto opzionale non disponibile: intel-opencl-icd
+17144:E: Package 'game-devices-udev' has no installation candidate
+17145:ATTENZIONE: pacchetto opzionale non disponibile: game-devices-udev
+17257:E: Unable to locate package gnome-exe-thumbnailer
+17258:ATTENZIONE: pacchetto opzionale non disponibile: gnome-exe-thumbnailer
+17415:ATTENZIONE: linux-headers-7.0.0-1020-azure non disponibile
+18373:W: Skipping removal of chroot_debianchroot, it is not applied
